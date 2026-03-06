@@ -1,0 +1,37 @@
+
+
+
+MAIN LOOP
+    - dispatches messages
+
+NETMAN
+    - manages sockets and encrypted streams
+
+SOCIAL
+    - handles all social queries
+    - whether to accept a connection
+    - or create an expectation or notify a user
+
+    it needs to be able to create track of behaviour
+    and punish(shutdown) if bad enough
+
+
+PACKET SYNCHRONIZATION::
+    SENDING
+        when writing to a socket from a file.
+        this need FS to read to and send to NET
+            but you dont want to overload NET
+            so NET needs to notify FS of the successful chunk
+            then FS can reuse that same buffer...
+        Maybe you can do even two chunks at once...
+
+    RECIEVING
+        FS notifies NET of failed write
+        NET then has to mark some boolean as false.
+        from there no more chunks relating to that file are sent.
+        and an error message is sent to sender notifying them of it.
+
+WE ARE MOVING AWAY FROM RUST
+No doubt in my mind.
+its just way too fucking messy...
+I cant handle it...
