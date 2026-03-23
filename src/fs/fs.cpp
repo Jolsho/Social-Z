@@ -1,27 +1,81 @@
-#include "fs.h"
+#include "fs/fs.h"
 #include <cstdio>
+#include <ctime>
+#include <vector>
 #include <sys/epoll.h>
 
-fs::FileManager::FileManager(msging::ChannelPair& chan)
-    : incoming_queue_(chan.to), outgoing_queue_(chan.from) 
+fs::Manager::Manager(msg::ChannelPair& chan, const char* path, size_t map_size) : 
+    from_main_(chan.to), 
+    too_main_(chan.from), 
+    db_(path, map_size)
 {
+    msgs_.reserve(64);
+    open_files_.reserve(64);
+    sessions_.reserve(64);
+
+
     epoll_fd_ = epoll_create1(0);
     if (epoll_fd_ < 0) perror("epoll_create1");
 }
 
 
-void fs::FileManager::poll_loop() {
+void fs::Manager::poll_loop() {
     const int MAX_EVENTS = 64;
     epoll_event events[MAX_EVENTS];
     while (true) {
         // short timeout
-        int n = epoll_wait(epoll_fd_, events, MAX_EVENTS, 1); 
+        int n = epoll_wait(epoll_fd_, events, MAX_EVENTS, 0); 
+        time_t now = std::time(nullptr);
 
         for (int i = 0; i < n; ++i) {
-            incoming_queue_.clear_event();
-            while (auto* pkt = incoming_queue_.pop()) {
+            int fd = events[i].data.fd;
+            if (fd == from_main_.get_event_fd()) {
+                from_main_.clear_event();
 
+                int k = 0;
+                while (auto* msg = from_main_.pop()) {
+                    if (!msg->is_wiped && 
+                        msg->code > CODE::FS &&
+                        msg->code < CODE::RPC
+                    ) {
+                        this->handle_msg(msg);
+                    }
+
+                    if (!msg->is_wiped) msg->wipe();
+
+                    if (msg->from == Actors::FILESYS) {
+                        if (msgs_.size() < msgs_.capacity()) {
+                            msgs_.push_back(msg);
+                        } else {
+                            delete msg;
+                        }
+                    } else {
+                        if (!too_main_.push(msg)) {
+                            delete msg;
+                        }
+                    }
+                    if (++k > 32) break;
+
+                }
+            } else {
+                // OTHER FD
             }
         }
+
+        // AFTER PROCESSING EVENTS
+
+    }
+}
+
+void fs::Manager::handle_msg(msg::Msg* msg) {
+    switch (msg->code) {
+        case CODE::NEW_BLOB:
+        case CODE::GIVE:
+        case CODE::SETTLE_GIVE:
+        case CODE::ASK:
+        case CODE::REVOKE:
+        case CODE::REQUEST:
+        case CODE::RESPONSE:
+        default: return;
     }
 }

@@ -1,21 +1,4 @@
 
-
-
-MAIN LOOP
-    - dispatches messages
-
-NETMAN
-    - manages sockets and encrypted streams
-
-SOCIAL
-    - handles all social queries
-    - whether to accept a connection
-    - or create an expectation or notify a user
-
-    it needs to be able to create track of behaviour
-    and punish(shutdown) if bad enough
-
-
 PACKET SYNCHRONIZATION::
     SENDING
         when writing to a socket from a file.
@@ -31,7 +14,15 @@ PACKET SYNCHRONIZATION::
         from there no more chunks relating to that file are sent.
         and an error message is sent to sender notifying them of it.
 
-WE ARE MOVING AWAY FROM RUST
-No doubt in my mind.
-its just way too fucking messy...
-I cant handle it...
+
+TODO --
+    DoS prevention by rate limiting incoming connections
+    I thought behaviour tracking did this though.
+    I mean unless you use legal paths to do this sort of thing.
+        But even then its like there isnt a case that happens.
+    Even when you post to someones feed they have to request it.
+        You can just post as much as you want.
+        You notify them of a new post and then they can request it.
+
+    So I suppose you could overload with those notis, but those are tiny.
+    That would be incredibly difficult.

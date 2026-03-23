@@ -1,74 +1,60 @@
+#include <array>
 #include <cassert>
 #include <sodium/crypto_auth.h>
 #include <sys/epoll.h>
 #include <thread>
 #include <sodium.h>
+#include <array>
 
-#include "net/netman.h"
-#include "social/social.h"
+#include "net/net.h"
 #include "fs/fs.h"
-
-bool dispatch_packet_event(
-    epoll_event& event,
-    msging::ChannelPair& net,
-    msging::ChannelPair& social,
-    msging::ChannelPair& filesys
-) {
-    msging::ChannelPair* chan;
-
-    int fd = event.data.fd;
-    if (fd == net.from.get_event_fd()) {
-        net.from.clear_event(); 
-        chan = &net;
-    } else if (fd == social.from.get_event_fd()) {
-        social.from.clear_event(); 
-        chan = &social;
-    } else if (fd == filesys.from.get_event_fd()) {
-        filesys.from.clear_event(); 
-        chan = &filesys;
-    } else {
-        return false;
-    }
-
-    while (auto* pkt = chan->from.pop()) {
-        if (pkt->too == net::Actors::Networker) {
-            net.to.push(pkt);
-        } else if (pkt->too == net::Actors::Social) {
-            social.to.push(pkt);
-        } else if (pkt->too == net::Actors::FileSys) {
-            filesys.to.push(pkt);
-        } else {
-            net::wipe_packet(pkt);
-            chan->to.push(pkt);
-        }
-    }
-    return true;
-}
-
 
 int main() {
     assert(sodium_init() != -1); 
 
     int main_epoll_fd = epoll_create1(0);
 
-    msging::ChannelPair net = msging::new_channel(1024);
-    msging::register_queue(main_epoll_fd, net.from);
+    std::array<msg::ChannelPair, Actors::COUNT> actors{
+        msg::ChannelPair{    // NETWORKER
+            .from   = msg::SPSCQueue{256}, 
+            .to     = msg::SPSCQueue{256}
+        },
+        msg::ChannelPair{    // FILE SYSTEM
+            .from   = msg::SPSCQueue{256}, 
+            .to     = msg::SPSCQueue{256}
+        },
+        msg::ChannelPair{    // RPC
+            .from   = msg::SPSCQueue{256}, 
+            .to     = msg::SPSCQueue{256}
+        },
+        msg::ChannelPair{    // BLOCKCHAIN
+            .from   = msg::SPSCQueue{256}, 
+            .to     = msg::SPSCQueue{256}
+        },
+    };
+
+    auto &net = actors[Actors::NETWORKER];
+    msg::register_queue(main_epoll_fd, net.from);
     std::thread net_thread([&]{
-        netman::NetworkManager net_mgr(net);
+
+        size_t msgs_cap{ 32 };
+        size_t pkts_cap{ 32 };
+        uint16_t port{ 8080 };
+        const char* ip = "127.0.0.1";
+
+        net::Manager net_mgr(net, msgs_cap, pkts_cap);
+        assert(net_mgr.start_server(ip, port) == 0);
         net_mgr.poll_loop(); 
     });
 
-    msging::ChannelPair social = msging::new_channel(1024);
-    register_queue(main_epoll_fd, social.from);
-    std::thread social_thread([&]{
-        socializer::Socializer social_mgr(social);
-        social_mgr.poll_loop(); 
-    });
-
-    msging::ChannelPair filesys = msging::new_channel(1024);
+    auto &filesys = actors[Actors::FILESYS];
     register_queue(main_epoll_fd, filesys.from);
     std::thread filesys_thread([&]{
-        fs::FileManager file_mgr(filesys);
+
+        const char* db_path = "./db";
+        size_t map_size = 10 * 1024 * 1024;
+
+        fs::Manager file_mgr(filesys, db_path, map_size);
         file_mgr.poll_loop(); 
     });
 
@@ -77,12 +63,30 @@ int main() {
         int n = epoll_wait(main_epoll_fd, events, 16, -1);
 
         for (int i = 0; i < n; ++i) {
-            if (dispatch_packet_event(events[i], net, social, filesys)) 
-                continue;
+            int fd = events[i].data.fd;
+
+            // DISPATCH MESSAGES AMONG ACTORS
+            for (auto &actor: actors) {
+                if (fd == actor.from.get_event_fd()) {
+                    actor.from.clear_event();
+                    while (auto* pkt = actor.from.pop()) {
+                        if (pkt->too < Actors::COUNT) {
+                            actors[pkt->too].to.push(pkt);
+                        } else if (pkt->too < Actors::COUNT) {
+                            pkt->wipe();
+                            actors[pkt->from].to.push(pkt);
+                        } else {
+                            delete pkt;
+                        }
+                    }
+                }
+            }
+
+
 
         }
     }
 
     net_thread.join();
-    social_thread.join();
+    filesys_thread.join();
 }

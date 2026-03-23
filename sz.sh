@@ -1,12 +1,18 @@
 #!/bin/bash
 set -e
 
-DEPS=./deps
+DEPS=./dep_src
+mkdir -p "$DEPS"
+
+LIB_DST="$(pwd)/lib"
+mkdir -p "$LIB_DST"
 
 # libSodium
 SODIUM=libsodium-stable
+LIB_SODIUM=libsodium
 SODIUM_VERSION=1.0.21
-if [[ ! -d "$DEPS/$SODIUM" ]]; then
+if [[ ! -d "$LIB_DST/$LIB_SODIUM" ]]; then
+    mkdir -p "$LIB_DST/$LIB_SODIUM"
     TAR=sodium.tar.xz 
     (
         echo "Downloading libSodium v$SODIUM_VERSION..."
@@ -16,14 +22,36 @@ if [[ ! -d "$DEPS/$SODIUM" ]]; then
         rm $TAR
 
         cd "$SODIUM"
-        ./configure
+        ./configure --prefix="$LIB_DST/$LIB_SODIUM"
         make && make check
-        sudo make install
+        make install
+    )
+fi
+
+# lmdb
+LMDB=lmdb
+if [[ ! -d "$LIB_DST/$LMDB" ]]; then
+    mkdir -p "$LIB_DST/$LMDB/lib"
+    mkdir -p "$LIB_DST/$LMDB/include"
+    (
+        echo "Downloading liblmdb..."
+        git clone https://github.com/LMDB/lmdb.git "$DEPS/$LMDB"
+
+        echo "Building liblmdb..."
+        cd "$DEPS/$LMDB/libraries/liblmdb"
+        make
+        cp liblmdb.a "$LIB_DST/$LMDB/lib"
+        cp lmdb.h "$LIB_DST/$LMDB/include"
     )
 fi
 
 
-export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
+# CLEAN UP DEPS SOURCE DIR AFTER BUILDING
+if [[ -d "$DEPS" ]]; then
+    rm -rf "$DEPS"
+fi
+
+
 if [[ ! -d "./build" ]]; then 
     cmake -B build
 fi
