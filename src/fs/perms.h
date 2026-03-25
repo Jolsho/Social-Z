@@ -1,76 +1,62 @@
+#pragma once
+#include "utils/keys.h"
+#include <cstring>
 
+struct Perm {
+    static constexpr size_t DATA_SZ = 256;
 
-/*
- *   decode give request
- *   GIVE = {
- *       hash,
- *       to: string,
- *       to_cid: bytes,
- *       giver: String,
- *       giver_cid: bytes
- *       nonce: bytes
- *       signature: bytes
- *   }
- *
- *   give.to exists locally
- *
- *   give.giver == sender
- *   && is allowed to communicate
- *
- *   save the permission??
- *       SOMEHOW??
- *
- *   send notification to user if alive??
- */
+    Key         giver;
+    Key         recipient;
+    Nonce       nonce;
+    std::array<std::byte, DATA_SZ>   data;
+    Signature   signature;
 
-/*
- *   decode settlegive
- *   settle_give = {
- *       hash,
- *       accepted: bool
- *   }
- *
- *   if not settle_give.accepted
- *       delete the pending give??
- *       return
- *
- *   set permission as active
- *
- *   send the notification
- */
+    Hash hash() {
+        Hasher h{};
+        h.update(reinterpret_cast<const std::byte*>(giver.data()), KEY_SIZE);
+        h.update(reinterpret_cast<const std::byte*>(recipient.data()), KEY_SIZE);
+        h.update(reinterpret_cast<const std::byte*>(nonce.data()), NONCE_SIZE);
+        h.update(data.data(), DATA_SZ);
+        return h.finalize();
+    }
 
-/*
- *   decode ask
- *   ask = {
- *       asker: string,
- *       asked: string,
- *       asker_cid: bytes,
- *       local_cid: bytes
- *   }
- *
- *   validate ask.asker == sender
- *
- *   validate ask.asked exists locally
- *
- *   Send the notification...
- *       find a way to store these?
- *       or do that in the go server
- *
- */
+    std::byte* unmarshal(std::byte* cursor) {
+        memcpy(giver.data(), cursor, KEY_SIZE);
+        cursor += KEY_SIZE;
 
-/*
- *   decode revoke
- *   revoke = {
- *       hash,
- *       signature,
- *   }
- *
- *   verify revoke_signature = H("revoke" + revoke.hash)
- *   came from sender
- *
- *   retrieve the permission being revoked local signature
- *   if it matches with sender we delete it
- *
- *   somehow get the person who had the permissions address...
- *   then we can notify them...
- */
+        memcpy(recipient.data(), cursor, KEY_SIZE);
+        cursor += KEY_SIZE;
+
+        memcpy(nonce.data(), cursor, NONCE_SIZE);
+        cursor += NONCE_SIZE;
+
+        memcpy(data.data(), cursor, DATA_SZ);
+        cursor += DATA_SZ;
+
+        memcpy(signature.data(), cursor, SIG_SIZE);
+        cursor += SIG_SIZE;
+
+        return cursor;
+    }
+
+    std::byte* marshal(std::byte* cursor) {
+        memcpy(cursor, giver.data(), KEY_SIZE);
+        cursor += KEY_SIZE;
+
+        memcpy(cursor, recipient.data(), KEY_SIZE);
+        cursor += KEY_SIZE;
+
+        memcpy(cursor, nonce.data(), NONCE_SIZE);
+        cursor += NONCE_SIZE;
+
+        memcpy(cursor, data.data(), DATA_SZ);
+        cursor += DATA_SZ;
+
+        memcpy(cursor, signature.data(), SIG_SIZE);
+        cursor += SIG_SIZE;
+
+        return cursor;
+    }
+
+};
+static constexpr size_t PERM_SZ = sizeof(Perm);

@@ -6,8 +6,8 @@
 #include <sodium.h>
 #include <array>
 
-#include "net/net.h"
 #include "fs/fs.h"
+#include "p2p/p2p.h"
 
 int main() {
     assert(sodium_init() != -1); 
@@ -33,18 +33,18 @@ int main() {
         },
     };
 
-    auto &net = actors[Actors::NETWORKER];
+    auto &net = actors[Actors::PEERNET];
     msg::register_queue(main_epoll_fd, net.from);
-    std::thread net_thread([&]{
+    std::thread p2p_thread([&]{
 
         size_t msgs_cap{ 32 };
         size_t pkts_cap{ 32 };
         uint16_t port{ 8080 };
         const char* ip = "127.0.0.1";
 
-        net::Manager net_mgr(net, msgs_cap, pkts_cap);
-        assert(net_mgr.start_server(ip, port) == 0);
-        net_mgr.poll_loop(); 
+        p2p::Manager p2p_mgr(net, msgs_cap, pkts_cap);
+        assert(p2p_mgr.start_server(ip, port) == 0);
+        p2p_mgr.poll_loop(); 
     });
 
     auto &filesys = actors[Actors::FILESYS];
@@ -87,6 +87,6 @@ int main() {
         }
     }
 
-    net_thread.join();
+    p2p_thread.join();
     filesys_thread.join();
 }

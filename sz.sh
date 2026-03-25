@@ -33,10 +33,10 @@ LMDB=lmdb
 if [[ ! -d "$LIB_DST/$LMDB" ]]; then
     mkdir -p "$LIB_DST/$LMDB/lib"
     mkdir -p "$LIB_DST/$LMDB/include"
-    (
-        echo "Downloading liblmdb..."
-        git clone https://github.com/LMDB/lmdb.git "$DEPS/$LMDB"
 
+    echo "Downloading liblmdb..."
+    git clone https://github.com/LMDB/lmdb.git "$DEPS/$LMDB"
+    (
         echo "Building liblmdb..."
         cd "$DEPS/$LMDB/libraries/liblmdb"
         make
@@ -44,6 +44,24 @@ if [[ ! -d "$LIB_DST/$LMDB" ]]; then
         cp lmdb.h "$LIB_DST/$LMDB/include"
     )
 fi
+
+BLAKE3="blake3"
+if [ ! -d "$LIB_DST/$BLAKE3" ]; then
+    mkdir -p "$LIB_DST/$BLAKE3/include"
+    mkdir -p "$LIB_DST/$BLAKE3/lib"
+
+    echo "Downloading blake3..."
+    git clone https://github.com/BLAKE3-team/BLAKE3.git "$DEPS/$BLAKE3"
+    (
+        echo "Building blake3..."
+        cd "$DEPS/$BLAKE3/c"
+        cmake -B build
+        cmake --build build
+        cp build/libblake3.a "$LIB_DST/$BLAKE3/lib"
+        cp blake3.h "$LIB_DST/$BLAKE3/include"
+    )
+fi
+
 
 
 # CLEAN UP DEPS SOURCE DIR AFTER BUILDING

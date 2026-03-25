@@ -1,8 +1,4 @@
 #include "fs/fs.h"
-#include <cstdio>
-#include <ctime>
-#include <vector>
-#include <sys/epoll.h>
 
 fs::Manager::Manager(msg::ChannelPair& chan, const char* path, size_t map_size) : 
     from_main_(chan.to), 
@@ -25,7 +21,7 @@ void fs::Manager::poll_loop() {
     while (true) {
         // short timeout
         int n = epoll_wait(epoll_fd_, events, MAX_EVENTS, 0); 
-        time_t now = std::time(nullptr);
+        time_t now = time(nullptr);
 
         for (int i = 0; i < n; ++i) {
             int fd = events[i].data.fd;
@@ -34,11 +30,18 @@ void fs::Manager::poll_loop() {
 
                 int k = 0;
                 while (auto* msg = from_main_.pop()) {
-                    if (!msg->is_wiped && 
-                        msg->code > CODE::FS &&
-                        msg->code < CODE::RPC
-                    ) {
-                        this->handle_msg(msg);
+                    if (!msg->is_wiped) {
+                        switch (msg->code) {
+                            case CODE::VOUCHER:     voucher(msg);    break;
+                            case CODE::REDEEM:      redeem(msg);   break;
+                            case CODE::REWARD:      reward(msg);  break;
+
+                            case CODE::GIVE:        give(msg);      break;
+                            case CODE::ACCEPT:      accept(msg);    break;
+                            case CODE::ASK:         ask(msg);       break;
+                            case CODE::REVOKE:      revoke(msg);    break;
+                            default: break;
+                        }
                     }
 
                     if (!msg->is_wiped) msg->wipe();
@@ -64,18 +67,5 @@ void fs::Manager::poll_loop() {
 
         // AFTER PROCESSING EVENTS
 
-    }
-}
-
-void fs::Manager::handle_msg(msg::Msg* msg) {
-    switch (msg->code) {
-        case CODE::NEW_BLOB:
-        case CODE::GIVE:
-        case CODE::SETTLE_GIVE:
-        case CODE::ASK:
-        case CODE::REVOKE:
-        case CODE::REQUEST:
-        case CODE::RESPONSE:
-        default: return;
     }
 }

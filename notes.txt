@@ -26,3 +26,31 @@ TODO --
 
     So I suppose you could overload with those notis, but those are tiny.
     That would be incredibly difficult.
+
+
+TODO --> I THINK THIS NEEDS A DATA FIELD
+that could include specific feed related things...
+    forward that to RPC
+    and do the same for PERMS
+
+send them both to the front end...
+wholly...
+
+you know what maybe perm stuff should be in the RPC anyway...
+Maybe that is not useful in social/fs
+Because there isnt any real data...
+    And we switched to vouchers instead.
+    So there is no such thing as validating permissions.
+    its just validating signature of the voucher.
+
+So I think we can just forward that stuff directly to RPC.
+    and maybe RPC has ordered views of that shit.
+    has ordered views of permissions, and files and shit.
+    Somehow it can parse the data related to them.
+    Or something I dont really know.
+
+I THINK WE CAN KEEP PERM HASHES with fs...
+BUT we dont need
+
+mbedTLS && llhttp && sqlite3
+
