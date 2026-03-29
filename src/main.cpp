@@ -27,6 +27,10 @@ int main() {
             .from   = msg::SPSCQueue{256}, 
             .to     = msg::SPSCQueue{256}
         },
+        msg::ChannelPair{    // SOCIALIZER
+            .from   = msg::SPSCQueue{256}, 
+            .to     = msg::SPSCQueue{256}
+        },
         msg::ChannelPair{    // BLOCKCHAIN
             .from   = msg::SPSCQueue{256}, 
             .to     = msg::SPSCQueue{256}
@@ -58,9 +62,10 @@ int main() {
         file_mgr.poll_loop(); 
     });
 
+    const size_t MAX_EVENTS = 64;
     while (true) {
-        epoll_event events[16];
-        int n = epoll_wait(main_epoll_fd, events, 16, -1);
+        epoll_event events[MAX_EVENTS];
+        int n = epoll_wait(main_epoll_fd, events, MAX_EVENTS, -1);
 
         for (int i = 0; i < n; ++i) {
             int fd = events[i].data.fd;
@@ -69,14 +74,18 @@ int main() {
             for (auto &actor: actors) {
                 if (fd == actor.from.get_event_fd()) {
                     actor.from.clear_event();
-                    while (auto* pkt = actor.from.pop()) {
-                        if (pkt->too < Actors::COUNT) {
-                            actors[pkt->too].to.push(pkt);
-                        } else if (pkt->too < Actors::COUNT) {
-                            pkt->wipe();
-                            actors[pkt->from].to.push(pkt);
+                    while (msg::Msg* msg = actor.from.pop()) {
+                        if (msg->too < Actors::COUNT) {
+                            if (!actors[msg->too].to.push(msg)) {
+                                // TODO
+                            }
+                        } else if (msg->from < Actors::COUNT) {
+                            msg->wipe();
+                            if (!actors[msg->from].to.push(msg)) {
+                                delete msg;
+                            }
                         } else {
-                            delete pkt;
+                            delete msg;
                         }
                     }
                 }

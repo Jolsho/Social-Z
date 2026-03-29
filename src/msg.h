@@ -20,6 +20,7 @@ public:
     Actors      from;
 
     ConnID      id;
+    int         mid;
     CODE        code;
 
     std::vector<std::byte> data;
@@ -101,6 +102,8 @@ public:
         uint64_t val;
         read(event_fd_, &val, sizeof(val));
     }
+
+    size_t cap() { return capacity_; }
 };
 
 struct ChannelPair {

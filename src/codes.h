@@ -2,10 +2,11 @@
 #include <cstdint>
 
 enum Actors : uint8_t {
-    PEERNET     = 0,
-    FILESYS     = 1,
-    RPC_SERVER  = 2,
-    BLOCKCHAIN  = 3,
+    PEERNET,
+    FILESYS,
+    RPC_SERVER,
+    SOCIALIZER,
+    BLOCKCHAIN,
 
     COUNT,
     NONE,
@@ -39,8 +40,12 @@ enum CODE : uint16_t {
 
 
     RPC         = 2000,
+    INDEX       = 2001,
 
-    BLOCK       = 2500,
+    SOCIAL      = 2500,
+    CHATS       = 2501,
+
+    BLOCK       = 3000,
 
     ERRORS              = 3500,
     E_OVERSIZED         = 3501,

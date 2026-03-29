@@ -15,7 +15,7 @@ struct Voucher {
     Signature   signature;
 
     Hash hash() {
-        Hasher h{};
+        Hasher h {};
         h.update(file_hash.data(), HASH_SIZE);
 
         auto raw = reinterpret_cast<const std::byte*>(&expiration);

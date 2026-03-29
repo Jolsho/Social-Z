@@ -36,6 +36,7 @@ void p2p::Manager::poll_loop() {
                         continue;
                     }
                 }
+                continue;
 
             } else if (fd == from_main_.get_event_fd()) {
                 // INTERNAL MSGS
@@ -82,45 +83,39 @@ void p2p::Manager::poll_loop() {
 
                     if (++k > 32) break;
                 }
+                continue;
 
-            } else {
+            }
 
-                // OPEN CONNECTIONS WITH WORK TO DO
-                auto it = sock_ids_.find(fd);
-                if (it != sock_ids_.end()) {
+            // OPEN CONNECTIONS WITH WORK TO DO
+            ConnID id = sock_ids_[fd];
+            conn::Connection& conn = connections_[id];
+            expirations_[id] = now + CONNECTION_TIMEOUT;
 
-                    uint32_t ev = events[i].events;
-                    ConnID id = it->second;
+            if (conn.status_ == conn::Status::Failed || 
+                conn.status_ == conn::Status::Dead
+            ) continue;
 
-                    conn::Connection& conn = connections_[id];
-                    expirations_[id] = now + CONNECTION_TIMEOUT;
-
-                    if (conn.status_ == conn::Status::Failed || 
-                        conn.status_ == conn::Status::Dead
-                    ) continue;
-
-                    if (ev & EPOLLIN) {
-                        net_msg::Error e = conn.read_(*this);
-                        if (e.is_err()) {
-                            handlers::handle_error(*this, e);
-                        }
-                    }
-                    if (ev & EPOLLOUT) {
-                        if (Packet* pkt = conn.write_()) {
-                            pkts_.push_back(pkt);
-                        }
-                        if (!conn.has_data_to_write()) 
-                            conn.disable_epollout(epoll_fd_);
-                    }
+            if (events[i].events & EPOLLIN) {
+                net_msg::Error e = conn.read_(*this);
+                if (e.is_err()) {
+                    handlers::handle_error(*this, e);
                 }
             }
+            if (events[i].events & EPOLLOUT) {
+                if (Packet* pkt = conn.write_()) {
+                    pkts_.push_back(pkt);
+                }
+                if (!conn.has_data_to_write()) 
+                    conn.disable_epollout(epoll_fd_);
+            }
+            
         }
-        
+
         // HANDLE EXPIRED CONNECTIONS
         for (int i{ 0 }; i < expirations_.size(); i++) {
             if (expirations_[i] < now) remove_socket(i);
         }
-
     }
 }
 
