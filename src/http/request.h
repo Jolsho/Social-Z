@@ -1,6 +1,6 @@
 #pragma once
-#include "http/types.h"
-#include <cstddef>
+#include "http/buff.h"
+#include "http/misc.h"
 
 static constexpr size_t QUERY_LEN = 256;
 static constexpr size_t MX_URL_LEN = QUERY_LEN + 64;

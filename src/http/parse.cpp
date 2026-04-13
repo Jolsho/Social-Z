@@ -1,10 +1,6 @@
 #include "http/parse.h"
 #include "http/server.h"
-#include <cctype>
-#include <cstdlib>
-#include <cstring>
 #include <charconv>
-#include <string_view>
 
 //////////////////////////////////////////////////////////////
 
@@ -21,6 +17,7 @@ int parse::on_method(llhttp_t* parser, const char* method, size_t length) {
     memcpy(s.data() + old_size, method, length);
     return 0;
 }
+
 int parse::on_method_complete(llhttp_t* parser) {
     auto [server, conn] = cast_data(parser);
     return 0;

@@ -1,6 +1,5 @@
 #pragma once
-#include "sodium/crypto_aead_chacha20poly1305.h"
-#include "utils/keys.h"
+#include "crypto.h"
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>

@@ -1,5 +1,6 @@
 #pragma once
-#include "utils/keys.h"
+#include "utils/hash.h"
+#include "utils/sig.h"
 #include <cstring>
 #include <ctime>
 

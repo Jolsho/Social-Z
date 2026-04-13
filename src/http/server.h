@@ -1,46 +1,65 @@
 #pragma once
-#include "msg.h"
 #include "http/conns.h"
-#include "p2p/msgs.h"
+#include "chans.h"
+#include "init.h"
+#include "log/accumulator.h"
+#include "msg.h"
+#include "utils/lru.h"
+#include <array>
 #include <set>
 #include <unordered_map>
 
 struct Destination {
     std::string path;
     std::string method;
-    CODE        code;
+    Code        code;
     Actors      to;
 };
 
 const std::initializer_list<Destination> PATHS = {
     Destination {
-        .path = "/",
+        .path   = "/",
         .method = "GET",
-        .code = CODE::INDEX,
-        .to = Actors::FILESYS,
+        .code   = Code::INDEX,
+        .to     = Actors::FILESYS,
     },
-
     Destination {
-        .path = "/chats",
-        .method = "GET",
-        .code = CODE::CHATS,
-        .to = Actors::SOCIALIZER,
+        .path   = "/login",
+        .method = "POST",
+        .code   = Code::LOGIN,
+        .to     = Actors::SOCIALIZER,
     },
+    Destination {
+        .path   = "/chats",
+        .method = "GET",
+        .code   = Code::GET_CHATS,
+        .to     = Actors::SOCIALIZER,
+    },
+    Destination {
+        .path   = "/chats",
+        .method = "POST",
+        .code   = Code::PUT_CHAT,
+        .to     = Actors::SOCIALIZER,
+    }
 };
 
 
 
 static constexpr size_t MAX_CONNECTIONS = 32;
+static constexpr time_t CONN_EXPIRATION = 5;
 
 using Token = std::array<unsigned char, 16>;
 static constexpr size_t TOKEN_SIZE = sizeof(Token);
 
 class Server {
 
+    LogAccumulator*             logr_;
+
+
     // MSGING
     int                         epoll_fd_;
-    msg::SPSCQueue&             from_main_;
-    msg::SPSCQueue&             to_main_;
+    MsgChan&                    from_main_;
+    MsgChan&                    to_main_;
     std::vector<msg::Msg*>      msgs_;
 
     int                         listen_fd_;
@@ -51,6 +70,7 @@ class Server {
     std::vector<ConnID>                 free_ids_;
     std::unordered_map<int, ConnID>     conn_ids_;
 
+    ConnLRU<MAX_CONNECTIONS, CONN_EXPIRATION>   lru_;
     std::vector<conn_t>                 conns_;
     std::set<Token>                     tokens_;
 
@@ -63,20 +83,21 @@ class Server {
             msg = msgs_.back();
             msgs_.pop_back();
         } else {
-            msg = new msg::Msg;
+            msg = new msg::Msg { Actors::RPC_SERVER };
         }
+        msg->is_wiped = false;
         return msg;
     }
 
 public:
 
-    Server(msg::ChannelPair& chan, size_t msgs_cap, size_t pkts_cap);
-    void poll_loop();
-    int start_server(
-        const char* ip, ConnID port, 
-        const char* cert, const char* key
+    Server(
+        ActorChannels& chan, 
+        RPCConfig& config
     );
-    void handle_error(net_msg::Error e);
+    void poll_loop();
+    int start_server(RPCConfig& conf);
+    void handle_error(msg::Error e);
     void handle_msg(msg::Msg* m);
 
     void accept_new_connections(int listen_fd, int epfd, SSL_CTX *ctx);

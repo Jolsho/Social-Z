@@ -1,9 +1,13 @@
 #include <arpa/inet.h>
 #include <cassert>
 #include <cstdio>
+#include <cstring>
 #include <fcntl.h>
+#include <format>
+#include <sodium/crypto_box.h>
 #include <sodium/crypto_kx.h>
 #include "p2p/p2p.h"
+#include "utils/lru.h"
 
 ConnID p2p::Manager::add_socket(int sock_fd, const Key pubkey, bool is_inbound) {
 
@@ -36,20 +40,24 @@ ConnID p2p::Manager::add_socket(int sock_fd, const Key pubkey, bool is_inbound) 
 
     KeyPair session{};
     crypto_kx_keypair(session.pub.data(), session.priv.data());
+    conn::Connection& c = connections_[id];
 
     // Store connection
-    conn::Connection c = {
-        .fd_        = sock_fd,
-        .id_        = id,
-        .session_keys_ = session,
-        .events_    = ev.events,
-        .status_    = (is_inbound) ? 
-                        conn::Status::CryptoSynAck : 
-                        conn::Status::CryptoSyn,
-        .rpkt_      = {}
-    };
+    c.fd_               = sock_fd;
+    c.id_               = id;
+    c.lru_node_->key    = id;
+    c.session_keys_     = session;
+    c.events_           = ev.events;
+    c.status_           = (is_inbound) ? 
+                            conn::Status::CryptoSynAck : 
+                            conn::Status::CryptoSyn;
+    c.rpkt_.cursor_     = 0;
 
-    expirations_[id] = time(nullptr);
+    int evicted = lru_.use(c.lru_node_);
+    if (evicted > 0) {
+        remove_socket(evicted);
+    }
+
     if (pubkey != ZERO_KEY) {
         memcpy(c.remote_auth_key_.data(), pubkey.data(), pubkey.size());
 
@@ -61,11 +69,6 @@ ConnID p2p::Manager::add_socket(int sock_fd, const Key pubkey, bool is_inbound) 
             c.remote_auth_key_.data()
         );
         if (r != 0) return 0;
-
-        expirations_[id] += CONNECTION_TIMEOUT;
-
-    } else {
-        expirations_[id] += REVEAL_KEY_TIMEOUT;
     }
 
     connections_[id] = c;
@@ -76,6 +79,10 @@ ConnID p2p::Manager::add_socket(int sock_fd, const Key pubkey, bool is_inbound) 
 
 void p2p::Manager::remove_socket(ConnID id) {
     conn::Connection &conn = connections_[id];
+    if (conn.status_ == conn::Status::Dead) return;
+
+    conn.status_ = conn::Status::Dead;
+    lru_.remove(conn.lru_node_);
     close(conn.fd_);
     conn.clear();
     sock_ids_.erase(conn.fd_);
@@ -83,10 +90,45 @@ void p2p::Manager::remove_socket(ConnID id) {
 }
 
 
-int p2p::Manager::start_server(const char* ip, ConnID port) {
+int p2p::Manager::start_server(P2PConfig& conf) {
+
+    // TODO -- load in citizen list
+    // citizens.reserve(count + some_buffer_count);
+
+    if (memcmp(conf.key.data(), ZERO_KEY.data(), KEY_SIZE) == 0) {
+        int key_fd = open(conf.key_path, O_RDWR | O_CREAT, 0600);
+        if (key_fd < 0) {
+            logr_->log(std::format("OPEN KEY_FILE FAILED %d", key_fd));
+            return -1;
+        }
+
+        lseek(key_fd, 0, SEEK_SET);
+        if (read(key_fd, keys_.priv.data(), KEY_SIZE) < KEY_SIZE) {
+
+            int r = crypto_box_keypair(keys_.pub.data(), keys_.priv.data());
+            if (r < 0) {
+                logr_->log(std::format("GENERATING KEYS FAILED %d", r));
+                close(key_fd);
+                remove(conf.key_path);
+                return -1;
+            }
+
+            lseek(key_fd, 0, SEEK_SET);
+            if (write(key_fd, keys_.priv.data(), KEY_SIZE) < KEY_SIZE) {
+                close(key_fd);
+                remove(conf.key_path);
+                logr_->log("PERSISTING KEYS FAILED");
+                return -1;
+            }
+        }
+    } else {
+        memcpy(keys_.priv.data(), conf.key.data(), KEY_SIZE);
+    }
+
+
     epoll_fd_ = epoll_create1(0);
     if (epoll_fd_ < 0) {
-        perror("epoll_create1");
+        logr_->log(std::format("EPOLL_CREATE1 FAILED %d", epoll_fd_));
         return -1;
     }
 
@@ -94,41 +136,46 @@ int p2p::Manager::start_server(const char* ip, ConnID port) {
 
     int opt = 1;
     int r = setsockopt(listen_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-    if (r <= 0) {
-        printf("BAD SOCKET OPT :: %d\n", r);
+    if (r < 0) {
+        logr_->log(std::format("SOCKET OPT FAILED: %d", r));
         return r;
     }
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    if (ip == nullptr) {
+    addr.sin_port = htons(conf.port);
+    if (conf.ip == nullptr) {
         addr.sin_addr.s_addr = INADDR_ANY;
     } else {
-        r = inet_pton(AF_INET, ip, &addr.sin_addr);
-        if (r <= 0) {
+        r = inet_pton(AF_INET, conf.ip, &addr.sin_addr);
+        if (r < 0) {
             close(listen_fd_);
-            printf("NOT VALID IP :: %d\n", r);
+            logr_->log(std::format("INVALID IP: %d", r));
             return r;
         }
     }
 
     r = bind(listen_fd_, (sockaddr*)&addr, sizeof(addr));
-    if (r <= 0) {
-        printf("FAILED BIND :: %d\n", r);
+    if (r < 0) {
+        logr_->log(std::format("BIND FAILED: %d", r));
         return r;
     }
 
     r = listen(listen_fd_, SOMAXCONN);
-    if (r <= 0) {
-        printf("FAILED LISTEN :: %d\n", r);
+    if (r < 0) {
+        logr_->log(std::format("LISTEN FAILED: %d", r));
         return r;
     }
     
     int flags = fcntl(listen_fd_, F_GETFL, 0);
+    if (flags < 0) {
+        logr_->log(std::format("FCNTL FAILED: %d", r));
+        return r;
+    }
+
     r = fcntl(listen_fd_, F_SETFL, flags | O_NONBLOCK);
-    if (r <= 0) {
-        printf("FAILED FLAG SETTING :: %d\n", r);
+    if (r < 0) {
+        logr_->log(std::format("SET FLAGS FAILED: %d", r));
         return r;
     }
 
@@ -137,8 +184,8 @@ int p2p::Manager::start_server(const char* ip, ConnID port) {
     ev.data.fd = listen_fd_;
 
     r = epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, listen_fd_, &ev);
-    if (r <= 0) {
-        printf("FAILED ADDING LIST TO EPOLL :: %d\n", r);
+    if (r < 0) {
+        logr_->log(std::format("EPOLL ADDING FAILED: %d", r));
         return r;
     }
     return 0;

@@ -1,6 +1,7 @@
 #pragma once
 #include "p2p/pkt.h"
-#include "p2p/msgs.h"
+#include "msg.h"
+#include "utils/lru.h"
 #include <sys/epoll.h>
 #include <vector>
 
@@ -24,6 +25,11 @@ public:
     uint8_t     version_;
     int         fd_;
     ConnID      id_;
+    ConnNode*   lru_node_;
+    uint32_t        events_;
+    uint8_t         failure_count_;
+    conn::Status    status_;
+
 
     Key         remote_auth_key_;
     Key         remote_session_key_;
@@ -31,21 +37,17 @@ public:
     Key         tx_key_;
     KeyPair     session_keys_;
 
-    uint32_t    events_;
-    uint8_t     failure_count_;
 
-    conn::Status    status_;
+    std::vector<Packet*>    wpkts_;
+    Packet                  rpkt_;
 
-    std::vector<Packet*>     wpkts_;
-    Packet     rpkt_;
-
-    net_msg::Error marshal_n_enqueue_msg(
+    msg::Error marshal_n_enqueue_msg(
         Packet* pkt, const Key& key, uint16_t code,
         std::byte* data, size_t len
     );
 
     Packet* write_();
-    net_msg::Error read_(p2p::Manager& netman);
+    msg::Error read_(p2p::Manager& netman);
 
     inline bool is_epollout_enabled() { 
         return (events_ & EPOLLOUT) != 0; 
@@ -56,9 +58,9 @@ public:
     bool disable_epollout(int epfd);
     bool enable_epollout(int epfd);
 
-    net_msg::Error syn(p2p::Manager& man);
-    net_msg::Error syn_ack(p2p::Manager& man);
-    net_msg::Error ack(p2p::Manager& man);
+    msg::Error syn(p2p::Manager& man);
+    msg::Error syn_ack(p2p::Manager& man);
+    msg::Error ack(p2p::Manager& man);
 
     void clear();
 };

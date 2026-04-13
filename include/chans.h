@@ -1,45 +1,14 @@
+
 #pragma once
-#include "codes.h"
+#include "msg.h"
 #include <sys/epoll.h>
 #include <atomic>
-#include <vector>
 #include <sys/eventfd.h>
 #include <unistd.h>
 
-using ConnID = uint16_t;
-
-namespace msg {
-
-static constexpr size_t MAX_BUFFER_SIZE = 1024 * 4;
-
-class Msg {
-
-public:
-    bool        is_wiped;
-    Actors      too;
-    Actors      from;
-
-    ConnID      id;
-    int         mid;
-    CODE        code;
-
-    std::vector<std::byte> data;
-
-    Msg(size_t cap = MAX_BUFFER_SIZE) {
-        data.reserve(cap);
-    }
-
-    void wipe() {
-        is_wiped = true;
-        id = 0;
-        code = CODE::CTRL;
-        data.resize(0);
-    }
-};
-
 class SPSCQueue {
 private:
-    std::vector<Msg*> buffer_;
+    std::vector<msg::Msg*> buffer_;
     size_t capacity_;
 
     alignas(64) std::atomic<size_t> head_{0};
@@ -59,7 +28,7 @@ public:
         close(event_fd_);
     }
 
-    bool push(Msg* item) {
+    bool push(msg::Msg* item) {
         size_t tail = tail_.load(std::memory_order_relaxed);
         size_t next_tail = (tail + 1) % capacity_;
 
@@ -80,14 +49,14 @@ public:
         return true;
     }
 
-    Msg* pop() {
+    msg::Msg* pop() {
         size_t head = head_.load(std::memory_order_relaxed);
 
         if (head == tail_.load(std::memory_order_acquire)) {
             return nullptr;
         }
 
-        Msg* item = buffer_[head];
+        msg::Msg* item = buffer_[head];
         buffer_[head] = nullptr;
 
         head_.store((head + 1) % capacity_, std::memory_order_release);
@@ -106,13 +75,17 @@ public:
     size_t cap() { return capacity_; }
 };
 
-struct ChannelPair {
-    SPSCQueue from;
-    SPSCQueue to;
+
+using MsgChan = SPSCQueue;
+
+struct ActorChannels {
+    MsgChan from    { 256 };
+    MsgChan to      { 256 };
+    MsgChan logs    { 256 };
 };
 
 inline void register_queue(
-    int epoll_fd, SPSCQueue& q
+    int epoll_fd, MsgChan& q
 ) {
     epoll_event ev{
         .events = EPOLLIN, 
@@ -121,5 +94,4 @@ inline void register_queue(
         },
     };
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, q.get_event_fd(), &ev);
-}
 }

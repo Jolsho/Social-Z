@@ -32,7 +32,7 @@ bool conn::Connection::disable_epollout(int epfd) {
     return epoll_ctl(epfd, EPOLL_CTL_MOD, fd_, &ev) == -1;
 }
 
-net_msg::Error conn::Connection::read_(
+msg::Error conn::Connection::read_(
     p2p::Manager& man
 ) {
     while (true) {
@@ -48,7 +48,7 @@ net_msg::Error conn::Connection::read_(
                     rpkt_.wipe();
                     status_ = conn::Status::Failed;
                     return { -1, id_, 
-                        CODE::E_OVERSIZED, 
+                        Code::E_OVERSIZED, 
                         std::format("read_() :: MAX Pkt size :: {}",
                             key_to_str(remote_auth_key_)
                         )
@@ -86,7 +86,7 @@ net_msg::Error conn::Connection::read_(
             failure_count_++;
 
             return { r, id_, 
-                CODE::E_MALFORMED, 
+                Code::E_MALFORMED, 
                 std::format("read_() :: decrypt :: {}", 
                     key_to_str(remote_auth_key_)
                 )
@@ -96,8 +96,8 @@ net_msg::Error conn::Connection::read_(
         if (status_ == conn::Status::Live) {
             msg::Msg* msg = man.get_msg();
 
-            // MAKE SURE ITS NOT A (CTRL || INTERNAL) CODE
-            msg->code = (CODE)rpkt_.get_code();
+            // MAKE SURE ITS NOT A (CTRL || INTERNAL) Code
+            msg->code = (Code)rpkt_.get_code();
             msg->too = code_too_too(msg->code);
 
             if (msg->too == Actors::NONE) {
@@ -105,16 +105,14 @@ net_msg::Error conn::Connection::read_(
                 man.msgs_.push_back(msg);
                 return { 
                     -1, id_, 
-                    CODE::E_UNAUTHORIZED, 
+                    Code::E_UNAUTHORIZED, 
                     std::format("read_() :: bad code :: {} :: {}", 
                          (uint16_t)msg->code , key_to_str(remote_auth_key_)
                     )
                 };
             }
 
-            msg->from = Actors::PEERNET;
             msg->id = id_;
-            msg->is_wiped = false;
             msg->data.insert(msg->data.end(), rpkt_.body(), rpkt_.get_cursor());
             if (!man.to_main_.push(msg)) {
                 // TODO 
@@ -122,13 +120,13 @@ net_msg::Error conn::Connection::read_(
             rpkt_.wipe();
 
         } else if (status_ == conn::Status::CryptoSynAck) {
-            syn_ack(man);
+            return syn_ack(man);
         } else if (status_ == conn::Status::CryptoAck) {
-            ack(man);
+            return ack(man);
         }
     }
 
-    return net_msg::SUCCESS;
+    return msg::SUCCESS;
 }
 
 Packet* conn::Connection::write_() {
@@ -149,7 +147,7 @@ Packet* conn::Connection::write_() {
     return nullptr;
 }
 
-net_msg::Error conn::Connection::marshal_n_enqueue_msg(
+msg::Error conn::Connection::marshal_n_enqueue_msg(
     Packet* pkt, 
     const Key& key,
     uint16_t code,
@@ -157,7 +155,7 @@ net_msg::Error conn::Connection::marshal_n_enqueue_msg(
     size_t len
 ) {
     if (wpkts_.size() >= wpkts_.capacity()) 
-        return {-1, id_, CODE::E_INTERNAL, "Write Buffer CAP reached."};
+        return {-1, id_, Code::E_INTERNAL, "Write Buffer CAP reached."};
 
     pkt->set_len(len);
     pkt->set_version(version_);
@@ -168,12 +166,12 @@ net_msg::Error conn::Connection::marshal_n_enqueue_msg(
     // ENCRYPT BODY
     int r = pkt->encrypt_body(tx_key_);
     if (r != 0) {
-        return {r, id_, CODE::E_INTERNAL, "marshal_n_enqueue(), encrypt"};
+        return {r, id_, Code::E_INTERNAL, "marshal_n_enqueue(), encrypt"};
     }
 
     wpkts_.push_back(pkt);
 
-    return net_msg::SUCCESS;
+    return msg::SUCCESS;
 }
 
 

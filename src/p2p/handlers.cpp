@@ -39,7 +39,7 @@ int dial(const std::string& ip, uint16_t port) {
     return -1;
 }
 
-void handlers::handle_error(p2p::Manager& man, net_msg::Error e) {
+void handlers::handle_error(p2p::Manager& man, msg::Error e) {
     conn::Connection& conn = man.connections_[e.id];
 
     if (conn.remote_auth_key_ != ZERO_KEY) {
@@ -49,31 +49,30 @@ void handlers::handle_error(p2p::Manager& man, net_msg::Error e) {
         if (!citizen.is_trustworthy())
             man.remove_socket(e.id);
     }
+
+    man.logr_->log(e.msg);
 }
 
-void handlers::handle_msg(p2p::Manager& man, msg::Msg* msg) {
+msg::Error handlers::handle_msg(p2p::Manager& man, msg::Msg* msg) {
     switch (msg->code) {
-        case CODE::WRITE: {
+
+        case Code::WRITE: {
             conn::Connection &conn = man.connections_[msg->id];
             if (!conn.is_epollout_enabled()) {
                 conn.events_ = conn.enable_epollout(man.epoll_fd_);
             }
 
-            net_msg::Error e = conn.marshal_n_enqueue_msg(man.get_pkt(), man.keys_.pub, msg->code, msg->data.data(), msg->data.size());
-            if (e.is_err()) {
-                handle_error(man, e);
-            }
+            msg::Error e = conn.marshal_n_enqueue_msg(man.get_pkt(), man.keys_.pub, msg->code, msg->data.data(), msg->data.size());
+            if (e.is_err()) return e;
             break;
         }
 
-        case CODE::CLOSE_CONN: {
+        case Code::CLOSE_CONN: {
             conn::Connection &conn = man.connections_[msg->id];
 
             if (conn.status_ == conn::Status::Live && msg->data.size() > 0) {
-                net_msg::Error e = conn.marshal_n_enqueue_msg(man.get_pkt(), man.keys_.pub, msg->code, msg->data.data(), msg->data.size());
-                if (e.is_err()) {
-                    handle_error(man, e);
-                }
+                msg::Error e = conn.marshal_n_enqueue_msg(man.get_pkt(), man.keys_.pub, msg->code, msg->data.data(), msg->data.size());
+                if (e.is_err()) return e;
 
                 // Force write now
                 if (Packet* pack = conn.write_()) {
@@ -90,7 +89,7 @@ void handlers::handle_msg(p2p::Manager& man, msg::Msg* msg) {
             break;
         }
 
-        case CODE::NEW_CONN: {
+        case Code::NEW_CONN: {
             std::byte* cursor = msg->data.data();
 
             std::string ip{(char*)cursor};
@@ -100,47 +99,43 @@ void handlers::handle_msg(p2p::Manager& man, msg::Msg* msg) {
             memcpy(&port, cursor, sizeof(uint16_t));
 
             Key pubkey;
-            cursor += str_to_key(reinterpret_cast<const char*>(cursor), pubkey);
+            memcpy(pubkey.data(), cursor, KEY_SIZE);
+            cursor += KEY_SIZE;
             
 
             auto it = man.citizens_.find(pubkey);
             if (it == man.citizens_.end()) {
-                handle_error(man, { .msg = std::format("Not a citizen {}.", key_to_str(pubkey)) });
-                return;
+                return { .msg = std::format("Not a citizen {}.", key_to_str(pubkey)) };
             }
             Citizen& citizen = it->second;
 
             if (!citizen.is_trustworthy()) {
-                handle_error(man, { .msg = std::format("Not Trustworth Citizen {}.", key_to_str(pubkey)) });
-                return;
+                return { .msg = std::format("Not Trustworth Citizen {}.", key_to_str(pubkey)) };
             }
 
             int fd = dial(ip, port);
             if (fd == -1) {
-                handle_error(man, { .msg = std::format("Failed Dial {}.", key_to_str(pubkey)) });
-                return;
+                return { .msg = std::format("Failed Dial {}.", key_to_str(pubkey)) };
             }
 
             ConnID id = man.add_socket(fd, pubkey, false);
             if (id == 0) {
-                handle_error(man, { .msg = std::format("Failed Add Socket {}.", key_to_str(pubkey)) });
-                return;
+                return { .msg = std::format("Failed Add Socket {}.", key_to_str(pubkey)) };
             }
 
             // START NEGOTIATION PROCESS
-            net_msg::Error e = man.connections_[id].syn(man);
-            if (e.is_err()) {
-                handle_error(man, e);
-            }
+            msg::Error e = man.connections_[id].syn(man);
+            if (e.is_err()) return e;
 
             break;
         }
 
-        case CODE::SHUTDOWN: {
+        case Code::SHUTDOWN: {
             // TODO -- shutdown server
         }
 
-        default: return;
+        default: break;
     }
+    return msg::SUCCESS;
 }
 

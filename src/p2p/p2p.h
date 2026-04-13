@@ -1,8 +1,13 @@
 #pragma once
+#include "log/accumulator.h"
 #include "msg.h"
 #include "p2p/connection.h"
 #include "p2p/citizens.h"
+#include "utils/lru.h"
+#include <fcntl.h>
+#include <functional>
 #include <unordered_map>
+#include "init.h"
 
 namespace p2p {
 
@@ -12,11 +17,12 @@ static constexpr size_t REVEAL_KEY_TIMEOUT  = 5;
 
 class Manager {
 public:
+    LogAccumulator*             logr_;
 
     // MSGING
     int                         epoll_fd_;
-    msg::SPSCQueue&             from_main_;
-    msg::SPSCQueue&             to_main_;
+    MsgChan&                    from_main_;
+    MsgChan&                    to_main_;
     std::vector<msg::Msg*>      msgs_;
 
     // TCP SERVER
@@ -24,7 +30,12 @@ public:
     KeyPair                             keys_;
     std::vector<Packet*>                pkts_;
     std::vector<conn::Connection>       connections_;
-    std::vector<time_t> expirations_;
+
+    ConnLRU<MAX_CONNECTIONS, CONNECTION_TIMEOUT>   lru_;
+    // TODO -- there is an issue here where we dont diffentiate timeouts
+    // between live connections and negotiating ones.
+    // so incoming connections failing to reveal their key still get the full time
+    // they should have much less time than negotiated connections.
 
     ConnID                              next_id_;
     std::vector<ConnID>                 free_ids_;
@@ -32,20 +43,27 @@ public:
 
     std::unordered_map<Key, Citizen, KeyHash> citizens_;
 
-    Manager(msg::ChannelPair& chan, size_t msgs_cap, size_t pkts_cap) : 
+    Manager(
+        ActorChannels& chan, 
+        P2PConfig& conf
+    ) : 
         from_main_(chan.to), 
         to_main_(chan.from),
-        msgs_(msgs_cap),
-        pkts_(pkts_cap),
-        expirations_(MAX_CONNECTIONS)
+        msgs_(conf.msgs_cap, new msg::Msg{Actors::PEERNET}),
+        pkts_(conf.pkts_cap)
     {
         connections_.reserve(MAX_CONNECTIONS);
         free_ids_.reserve(MAX_CONNECTIONS);
         sock_ids_.reserve(MAX_CONNECTIONS);
+
+        static constexpr time_t LOG_FLUSH_INTERVAL = 500; // ms
+        logr_ = new LogAccumulator{"P2P", LOG_FLUSH_INTERVAL, [&](){ return get_msg(); }};
     }
 
     void poll_loop();
-    int start_server(const char* ip, ConnID port);
+    int start_server(P2PConfig &config);
+
+
     void remove_socket(ConnID id);
     ConnID add_socket(int sock_fd, const Key pubkey, bool is_inbound);
 
@@ -66,8 +84,9 @@ public:
             msg = msgs_.back();
             msgs_.pop_back();
         } else {
-            msg = new msg::Msg;
+            msg = new msg::Msg { Actors::PEERNET };
         }
+        msg->is_wiped = false;
         return msg;
     }
 };

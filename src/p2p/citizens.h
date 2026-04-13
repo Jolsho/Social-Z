@@ -9,12 +9,12 @@ public:
     uint64_t    reputation_;
     time_t      rep_reset_;
 
-    void record_infringement(CODE error) {
+    void record_infringement(Code error) {
         uint64_t score;
         switch (error) {
-            case CODE::E_OVERSIZED: score = 50;
-            case CODE::E_MALFORMED: score = 10;
-            case CODE::E_UNAUTHORIZED: score = 30;
+            case Code::E_OVERSIZED: score = 50;
+            case Code::E_MALFORMED: score = 10;
+            case Code::E_UNAUTHORIZED: score = 30;
             default: score = 0;
         }
         if (score == 0) return;

@@ -1,19 +1,19 @@
 #include "codes.h"
 
-Actors code_too_too(CODE c) {
-    if (c < CODE::P2P) 
+Actors code_too_too(Code c) {
+    if (c < Code::P2P) 
         return Actors::NONE;
 
-    else if (c < CODE::FS)
+    else if (c < Code::FS)
         return Actors::PEERNET;
 
-    else if (c < CODE::RPC)
+    else if (c < Code::RPC)
         return Actors::FILESYS;
 
-    else if (c < CODE::BLOCK)
+    else if (c < Code::BLOCK)
         return Actors::RPC_SERVER;
 
-    else if (c < CODE::ERRORS)
+    else if (c < Code::ERRORS)
         return Actors::BLOCKCHAIN;
 
     else return Actors::NONE;

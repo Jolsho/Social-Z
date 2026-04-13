@@ -7,7 +7,8 @@ mkdir -p "$DEPS"
 LIB_DST="$(pwd)/lib"
 mkdir -p "$LIB_DST"
 
-INCLUDE="$(pwd)/include"
+INCLUDE="$LIB_DST/include"
+mkdir -p "$INCLUDE"
 
 # libSodium
 SODIUM=libsodium-stable

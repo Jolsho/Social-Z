@@ -1,7 +1,7 @@
 #include "fs/fs.h"
 #include "fs/perms.h"
 #include "msg.h"
-#include "utils/keys.h"
+#include "utils/sig.h"
 #include <format>
 
 /// We receive a permission to post to a remote node.
@@ -9,7 +9,7 @@ void fs::Manager::give(msg::Msg* msg) {
     if (msg->data.size() < PERM_SZ) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_MALFORMED,
+            .code = Code::E_MALFORMED,
             .msg = "msg size small for give()"
         });
         return;
@@ -21,7 +21,7 @@ void fs::Manager::give(msg::Msg* msg) {
     if (!locals_.contains(p.recipient)) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_NOTLOCAL,
+            .code = Code::E_NOTLOCAL,
             .msg = std::format("{} :: give() :: Not Local", key_to_str(p.recipient))
         });
         return;
@@ -31,7 +31,7 @@ void fs::Manager::give(msg::Msg* msg) {
     if (!valid_signature(p.giver, p.signature, p_hash)) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_UNAUTHORIZED,
+            .code = Code::E_UNAUTHORIZED,
             .msg = "give() :: Fake Signature"
         });
         return;
@@ -44,7 +44,7 @@ void fs::Manager::give(msg::Msg* msg) {
         handle_err({
             .r = r,
             .id = msg->id,
-            .code = CODE::E_INTERNAL,
+            .code = Code::E_INTERNAL,
             .msg = "give() :: Put perm hash"
         });
         return;
@@ -59,7 +59,7 @@ void fs::Manager::accept(msg::Msg* msg) {
     if (msg->data.size() < PERM_SZ + 1 + SIG_SIZE) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_MALFORMED,
+            .code = Code::E_MALFORMED,
             .msg = "msg size small for accept()"
         });
         return;
@@ -73,7 +73,7 @@ void fs::Manager::accept(msg::Msg* msg) {
     if (!locals_.contains(p.giver)) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_NOTLOCAL,
+            .code = Code::E_NOTLOCAL,
             .msg = std::format("{} :: accept() :: Not Local", key_to_str(p.giver))
         });
         return;
@@ -82,7 +82,7 @@ void fs::Manager::accept(msg::Msg* msg) {
     if (!valid_signature(p.giver, p.signature, p_hash)) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_UNAUTHORIZED,
+            .code = Code::E_UNAUTHORIZED,
             .msg = "accept() :: Fake Signature"
         });
         return;
@@ -95,7 +95,7 @@ void fs::Manager::accept(msg::Msg* msg) {
         handle_err({
             .r = r,
             .id = msg->id,
-            .code = CODE::E_PERM_NOT_EXIST,
+            .code = Code::E_PERM_NOT_EXIST,
             .msg = "accept() :: Perm Not Exists"
         });
         return;
@@ -117,7 +117,7 @@ void fs::Manager::accept(msg::Msg* msg) {
     if (!valid_signature(p.recipient, sig, accept_hash)) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_UNAUTHORIZED,
+            .code = Code::E_UNAUTHORIZED,
             .msg = "accept() :: Fake Signature"
         });
         return;
@@ -133,7 +133,7 @@ void fs::Manager::accept(msg::Msg* msg) {
             handle_err({
                 .r = r,
                 .id = msg->id,
-                .code = CODE::E_INTERNAL,
+                .code = Code::E_INTERNAL,
                 .msg = "accept() :: Del perm hash"
             });
         }
@@ -152,7 +152,7 @@ void fs::Manager::ask(msg::Msg* msg) {
     if (msg->data.size() < PERM_SZ) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_MALFORMED,
+            .code = Code::E_MALFORMED,
             .msg = "msg size small for ask()"
         });
         return;
@@ -165,7 +165,7 @@ void fs::Manager::ask(msg::Msg* msg) {
     if (!locals_.contains(p.giver)) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_NOTLOCAL,
+            .code = Code::E_NOTLOCAL,
             .msg = std::format("{} :: ask() :: Not Local", key_to_str(p.giver))
         });
         return;
@@ -174,7 +174,7 @@ void fs::Manager::ask(msg::Msg* msg) {
     if (!valid_signature(p.recipient, p.signature, p_hash)) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_UNAUTHORIZED,
+            .code = Code::E_UNAUTHORIZED,
             .msg = "ask() :: Fake Signature"
         });
         return;
@@ -199,7 +199,7 @@ void fs::Manager::revoke(msg::Msg* msg) {
     if (msg->data.size() < PERM_SZ + SIG_SIZE) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_MALFORMED,
+            .code = Code::E_MALFORMED,
             .msg = "msg size small for revoke()"
         });
         return;
@@ -212,7 +212,7 @@ void fs::Manager::revoke(msg::Msg* msg) {
     if (!locals_.contains(p.recipient)) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_NOTLOCAL,
+            .code = Code::E_NOTLOCAL,
             .msg = std::format("{} :: revoke() :: Not Local", key_to_str(p.recipient))
         });
         return;
@@ -231,7 +231,7 @@ void fs::Manager::revoke(msg::Msg* msg) {
     if (!valid_signature(p.giver, sig, revoke_hash)) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_UNAUTHORIZED,
+            .code = Code::E_UNAUTHORIZED,
             .msg = "revoke() :: Fake Signature"
         });
         return;
@@ -244,7 +244,7 @@ void fs::Manager::revoke(msg::Msg* msg) {
         handle_err({
             .r = r,
             .id = msg->id,
-            .code = CODE::E_INTERNAL,
+            .code = Code::E_INTERNAL,
             .msg = "revoke() :: Del perm hash"
         });
     }

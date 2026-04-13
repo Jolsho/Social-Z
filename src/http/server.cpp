@@ -1,21 +1,15 @@
 #include "http/server.h"
-#include "codes.h"
 #include "http/parse.h"
-#include "llhttp.h"
-#include "openssl/ssl.h"
 #include <arpa/inet.h>
-#include <cassert>
-#include <cstdio>
-#include <cstring>
 #include <fcntl.h>
-#include <netinet/in.h>
-#include <sys/epoll.h>
-#include <sys/socket.h>
+#include <format>
 
-Server::Server(msg::ChannelPair& chan, size_t msgs_cap, size_t pkts_cap) : 
-    from_main_(chan.to), to_main_(chan.from), msgs_(msgs_cap)
+Server::Server(ActorChannels& chan, RPCConfig& conf) : 
+    from_main_(chan.to), 
+    to_main_(chan.from), 
+    msgs_(conf.msgs_cap, new msg::Msg{ Actors::RPC_SERVER }),
+    conns_(MAX_CONNECTIONS)
 {
-    conns_.reserve(MAX_CONNECTIONS);
 
     settings_.on_message_begin = parse::on_message_begin;
 
@@ -34,91 +28,99 @@ Server::Server(msg::ChannelPair& chan, size_t msgs_cap, size_t pkts_cap) :
     settings_.on_body = parse::on_body;
 
     settings_.on_message_complete = parse::on_message_complete;
+
+    static constexpr time_t LOG_FLUSH_INTERVAL = 500; // ms
+    logr_ = new LogAccumulator{"HTTP", LOG_FLUSH_INTERVAL, [&](){ return get_msg(); }};
 }
 
 void Server::close_connection(conn_t& c) {
     delete static_cast<HandlerData*>(c.parser.data);
+    lru_.remove(c.lru_node);
     conn_ids_.erase(c.fd);
     free_ids_.push_back(c.id);
     close(c.fd);
     return c.wipe();
 }
 
-int Server::start_server(const char* ip, ConnID port, const char* cert, const char* key) {
+int Server::start_server(RPCConfig& conf) {
     ctx_ = SSL_CTX_new(TLS_server_method());
     if (!ctx_) {
-        perror("epoll_create1");
+        logr_->log("SSL_CTX_new FAILED");
         return -1;
     }
 
-    if (SSL_CTX_use_certificate_file(ctx_, cert, SSL_FILETYPE_PEM) != 1) {
-        perror("cert file failed init.");
-        return -1;
-    }
-    if (SSL_CTX_use_PrivateKey_file(ctx_, key, SSL_FILETYPE_PEM) != 1) {
-        perror("private key file failed init.");
+    int r = SSL_CTX_use_certificate_file(ctx_, conf.cert_path, SSL_FILETYPE_PEM);
+    if (r != 1) {
+        logr_->log(std::format("SSL_CTX_use_cretificate_file FAILED: %d", r));
         return -1;
     }
 
-    if (SSL_CTX_check_private_key(ctx_) != 0) {
-        perror("private key invalid.");
+    r = SSL_CTX_use_PrivateKey_file(ctx_, conf.key_path, SSL_FILETYPE_PEM);
+    if (r != 1) {
+        logr_->log(std::format("SSL_CTX_use_PrivateKey_file FAILED: %d", r));
+        return -1;
+    }
+
+    r = SSL_CTX_check_private_key(ctx_);
+    if (r != 0) {
+        logr_->log(std::format("SSL_CTX_check_PrivateKey FAILED: %d", r));
         return -1;
     };
 
     epoll_fd_ = epoll_create1(0);
     if (epoll_fd_ < 0) {
-        perror("epoll_create1");
-        return -1;
+        logr_->log(std::format("EPOLL_CREATE1 FAILED: %d", epoll_fd_));
+        return epoll_fd_;
     }
 
     listen_fd_ = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_fd_ < 0) {
-        printf("SOCKET FAILURE :: %d\n", listen_fd_);
+        logr_->log(std::format("SOCKET FAILED: %d", listen_fd_));
         return listen_fd_;
     }
 
     int opt = 1;
-    int r = setsockopt(listen_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    r = setsockopt(listen_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     if (r < 0) {
-        printf("BAD SOCKET OPT :: %d\n", r);
+        logr_->log(std::format("SOCKET OPT FAILED: %d", r));
         return r;
     }
 
-    sockaddr_in addr{};
+    sockaddr_in addr {};
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    if (ip == nullptr) {
+    addr.sin_port = htons(conf.port);
+    if (conf.ip == nullptr) {
         addr.sin_addr.s_addr = INADDR_ANY;
     } else {
-        r = inet_pton(AF_INET, ip, &addr.sin_addr);
+        r = inet_pton(AF_INET, conf.ip, &addr.sin_addr);
         if (r < 0) {
             close(listen_fd_);
-            printf("NOT VALID IP :: %d\n", r);
+            logr_->log(std::format("INVALID IP : %d", r));
             return r;
         }
     }
 
     r = bind(listen_fd_, (sockaddr*)&addr, sizeof(addr));
     if (r < 0) {
-        printf("FAILED BIND :: %d\n", r);
+        logr_->log(std::format("BIND FAILED : %d", r));
         return r;
     }
 
     r = listen(listen_fd_, SOMAXCONN);
     if (r < 0) {
-        printf("FAILED LISTEN :: %d\n", r);
+        logr_->log(std::format("LISTEN FAILED : %d", r));
         return r;
     }
     
     int flags = fcntl(listen_fd_, F_GETFL, 0);
     if (flags < 0) {
-        perror("fcntl F_GETFL");
+        logr_->log(std::format("FCNTL FAILED : %d", flags));
         return -1;
     }
 
     r = fcntl(listen_fd_, F_SETFL, flags | O_NONBLOCK);
     if (r < 0) {
-        printf("FAILED FLAG SETTING :: %d\n", r);
+        logr_->log(std::format("FLAG SETTING FAILED : %d", r));
         return r;
     }
 
@@ -128,7 +130,7 @@ int Server::start_server(const char* ip, ConnID port, const char* cert, const ch
 
     r = epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, listen_fd_, &ev);
     if (r < 0) {
-        printf("FAILED ADDING LIST TO EPOLL :: %d\n", r);
+        logr_->log(std::format("ADDING LIST TO EPOLL FAILED : %d", r));
         return r;
     }
     return 0;
@@ -139,7 +141,8 @@ void Server::poll_loop() {
     epoll_event events[MAX_EVENTS];
 
     while (1) {
-        int n = epoll_wait(epoll_fd_, events, MAX_EVENTS, 0); // short timeout
+        // short timeout
+        int n = epoll_wait(epoll_fd_, events, MAX_EVENTS, 0); 
         time_t now = time(nullptr);
 
         for (int i = 0; i < n; ++i) {
@@ -153,15 +156,15 @@ void Server::poll_loop() {
                 // INTERNAL MSGS
                 int k = 0;
                 while (msg::Msg* msg = from_main_.pop()) {
-                    if (!msg->is_wiped && msg->code < CODE::ERRORS) {
+                    if (!msg->is_wiped && msg->code < Code::ERRORS) {
                         handle_msg(msg);
 
                     } else if (!msg->is_wiped) {
 
                         // HANDLE ERROR MSG
-                        net_msg::Error e {
+                        msg::Error e {
                             .id     = msg->id,
-                            .code   = (CODE)msg->code,
+                            .code   = (Code)msg->code,
                         };
 
                         size_t size_r = sizeof(e.r);
@@ -201,6 +204,7 @@ void Server::poll_loop() {
 
             // I think we can guarantee the connID exists.
             conn_t &c = conns_[conn_ids_[fd]];
+            int _ = lru_.use(c.lru_node);
 
             if (c.hand_failures >= 0) {
                 int r = c.drive_tls_handshake();
@@ -215,7 +219,7 @@ void Server::poll_loop() {
                 if (events[i].events & EPOLLIN) {
                     if (c.err.is_ok()) {
                         if (c.read_() != 0)
-                            c.queue_response("", nullptr, c.err);
+                            c.queue_err();
                     }
                 }
 
@@ -226,22 +230,29 @@ void Server::poll_loop() {
                             continue;
                         }
 
-                    if (c.outbuf.cursor == 0) {
+                    if (!c.has_outgoing()) {
                         struct epoll_event ev{};
                         ev.data.fd = fd;
                         ev.events = c.events &= ~EPOLLOUT;
                         bool ok = epoll_ctl(epoll_fd_, EPOLL_CTL_MOD, fd, &ev) == 0;
+                        if (!ok) close_connection(c);
                     }
 
                 } else {
-                    if (c.outbuf.cursor > 0) {
+                    if (c.has_outgoing()) {
                         struct epoll_event ev{};
                         ev.data.fd = fd;
                         ev.events = c.events |= EPOLLOUT;
                         bool ok = epoll_ctl(epoll_fd_, EPOLL_CTL_MOD, fd, &ev) == 0;
+                        if (!ok) close_connection(c);
                     }
                 }
             }
+        }
+
+        // HANDLE EXPIRED CONNECTIONS
+        for (auto idx: lru_.remove_expired()) {
+            close_connection(conns_[idx]);
         }
     }
 }
@@ -292,9 +303,11 @@ void Server::accept_new_connections(int listen_fd, int epfd, SSL_CTX *ctx) {
         conn_t &c = conns_[id];
         conn_ids_[client_fd] = id;
 
+        c.ip = std::string{ ip_str };
         c.id = id;
         c.fd = client_fd;
-        c.ip = std::string{ ip_str };
+        c.lru_node->key = id;
+
 
         llhttp_init(&c.parser, HTTP_REQUEST, &settings_);
         c.parser.data = new HandlerData{ &c, this };
@@ -316,7 +329,7 @@ void Server::accept_new_connections(int listen_fd, int epfd, SSL_CTX *ctx) {
     }
 }
 
-void Server::handle_error(net_msg::Error e) {}
+void Server::handle_error(msg::Error e) {}
 void Server::handle_msg(msg::Msg* m) {}
 
 int Server::build_n_send_msg(conn_t& c) {
@@ -326,10 +339,16 @@ int Server::build_n_send_msg(conn_t& c) {
     std::byte* cursor = m->data.data();
     std::byte* start = cursor;
 
+    bool found { false };
     for (auto& dest :PATHS) {
         if (dest.path != c.r.path && 
             dest.method == c.r.method
         ) continue;
+        found = true;
+
+        if (dest.code == Code::INDEX) {
+
+        }
 
         m->code = dest.code;
         m->too = dest.to;
@@ -357,6 +376,10 @@ int Server::build_n_send_msg(conn_t& c) {
         break;
     }
 
+    if (!found) {
+        // TODO if url endsj
+    }
+
     if (c.r.content_len > 0) {
         m->data.resize(m->data.size() + c.r.content_len);
         memcpy(cursor, c.inbuf.buff, c.inbuf.cursor);
@@ -372,4 +395,3 @@ int Server::build_n_send_msg(conn_t& c) {
 
     return 0;
 }
-

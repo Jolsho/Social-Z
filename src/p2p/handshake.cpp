@@ -1,3 +1,4 @@
+#include "crypto.h"
 #include "p2p/p2p.h"
 #include <cstring>
 #include <format>
@@ -5,7 +6,7 @@
 
 const size_t HANDSHAKE_LEN = 128;
 const size_t KEY_LEN = sizeof(Key);
-net_msg::Error conn::Connection::syn(p2p::Manager& man) {
+msg::Error conn::Connection::syn(p2p::Manager& man) {
 
     std::byte* data[HANDSHAKE_LEN];
     std::byte* cursor = data[0];
@@ -16,7 +17,7 @@ net_msg::Error conn::Connection::syn(p2p::Manager& man) {
 
     Packet* pkt = man.get_pkt();
 
-    net_msg::Error e = marshal_n_enqueue_msg(pkt, man.keys_.pub, CODE::SYN, data[0], HANDSHAKE_LEN);
+    msg::Error e = marshal_n_enqueue_msg(pkt, man.keys_.pub, Code::SYN, data[0], HANDSHAKE_LEN);
     if (e.is_err()) {
         man.pkts_.push_back(pkt);
         return e;
@@ -24,10 +25,10 @@ net_msg::Error conn::Connection::syn(p2p::Manager& man) {
 
     status_ = conn::Status::CryptoAck;
 
-    return net_msg::SUCCESS;
+    return msg::SUCCESS;
 }
 
-net_msg::Error conn::Connection::syn_ack(p2p::Manager& man) {
+msg::Error conn::Connection::syn_ack(p2p::Manager& man) {
 
     // AUTHORIZE INCOMING CONNECTION
     remote_auth_key_ = rpkt_.get_key();
@@ -52,7 +53,7 @@ net_msg::Error conn::Connection::syn_ack(p2p::Manager& man) {
     if (r != 0) {
         return {
             .id = id_, 
-            .code = CODE::E_MALFORMED, 
+            .code = Code::E_MALFORMED, 
             .msg = std::format("syn_ack() :: key ex :: {}",
                 key_to_str(remote_auth_key_)
             )
@@ -65,10 +66,10 @@ net_msg::Error conn::Connection::syn_ack(p2p::Manager& man) {
     }
 
     // HEADER
-    if (rpkt_.get_code() != CODE::SYN) {
+    if (rpkt_.get_code() != Code::SYN) {
         return {
             .id = id_, 
-            .code = CODE::E_UNAUTHORIZED, 
+            .code = Code::E_UNAUTHORIZED, 
             .msg = std::format("syn_ack() :: invalid pkt code :: {}",
                 key_to_str(remote_auth_key_)
             )
@@ -80,7 +81,7 @@ net_msg::Error conn::Connection::syn_ack(p2p::Manager& man) {
     if (r != 0) {
         return {
             .id = id_, 
-            .code = CODE::E_UNAUTHORIZED, 
+            .code = Code::E_UNAUTHORIZED, 
             .msg = std::format("syn_ack() :: decrypt body :: {}",
                 key_to_str(remote_auth_key_)
             )
@@ -101,7 +102,7 @@ net_msg::Error conn::Connection::syn_ack(p2p::Manager& man) {
     body += KEY_LEN;
 
     Packet* pkt = man.get_pkt();
-    net_msg::Error e = marshal_n_enqueue_msg(pkt, man.keys_.pub, CODE::SYNACK, data[0], HANDSHAKE_LEN);
+    msg::Error e = marshal_n_enqueue_msg(pkt, man.keys_.pub, Code::SYNACK, data[0], HANDSHAKE_LEN);
     if (e.is_err()) {
         man.pkts_.push_back(pkt);
         return e;
@@ -126,11 +127,12 @@ net_msg::Error conn::Connection::syn_ack(p2p::Manager& man) {
     }
 
     status_ = conn::Status::Live;
+    man.logr_->log(std::format("NEW CONN: %s", key_to_str(remote_auth_key_)));
 
-    return net_msg::SUCCESS;
+    return msg::SUCCESS;
 }
 
-net_msg::Error conn::Connection::ack(p2p::Manager& man) {
+msg::Error conn::Connection::ack(p2p::Manager& man) {
     // PARSE INCOMING SYNACK
     std::byte* body = rpkt_.body();
 
@@ -163,7 +165,8 @@ net_msg::Error conn::Connection::ack(p2p::Manager& man) {
     }
 
     status_ = conn::Status::Live;
+    man.logr_->log(std::format("NEW CONN: %s", key_to_str(remote_auth_key_)));
 
-    return net_msg::SUCCESS;
+    return msg::SUCCESS;
 }
 

@@ -42,15 +42,17 @@ void p2p::Manager::poll_loop() {
                 // INTERNAL MSGS
                 int k = 0;
                 while (msg::Msg* msg = from_main_.pop()) {
-                    if (!msg->is_wiped && msg->code < CODE::ERRORS) {
-                        handlers::handle_msg(*this, msg);
+                    if (!msg->is_wiped && msg->code < Code::ERRORS) {
+
+                        msg::Error e = handlers::handle_msg(*this, msg);
+                        if (e.is_err()) handlers::handle_error(*this, e);
 
                     } else if (!msg->is_wiped) {
 
                         // HANDLE ERROR MSG
-                        net_msg::Error e {
+                        msg::Error e {
                             .id     = msg->id,
-                            .code   = (CODE)msg->code,
+                            .code   = (Code)msg->code,
                         };
 
                         size_t size_r = sizeof(e.r);
@@ -90,22 +92,27 @@ void p2p::Manager::poll_loop() {
             // OPEN CONNECTIONS WITH WORK TO DO
             ConnID id = sock_ids_[fd];
             conn::Connection& conn = connections_[id];
-            expirations_[id] = now + CONNECTION_TIMEOUT;
+            int _ = lru_.use(conn.lru_node_);
+
+            static constexpr uint8_t MAX_FAILURE = 12;
+            if (conn.failure_count_ > MAX_FAILURE) remove_socket(id);
 
             if (conn.status_ == conn::Status::Failed || 
                 conn.status_ == conn::Status::Dead
             ) continue;
 
             if (events[i].events & EPOLLIN) {
-                net_msg::Error e = conn.read_(*this);
+                msg::Error e = conn.read_(*this);
                 if (e.is_err()) {
                     handlers::handle_error(*this, e);
                 }
             }
             if (events[i].events & EPOLLOUT) {
+
                 if (Packet* pkt = conn.write_()) {
                     pkts_.push_back(pkt);
                 }
+
                 if (!conn.has_data_to_write()) 
                     conn.disable_epollout(epoll_fd_);
             }
@@ -113,8 +120,8 @@ void p2p::Manager::poll_loop() {
         }
 
         // HANDLE EXPIRED CONNECTIONS
-        for (int i{ 0 }; i < expirations_.size(); i++) {
-            if (expirations_[i] < now) remove_socket(i);
+        for (auto idx: lru_.remove_expired()) {
+            remove_socket(idx);
         }
     }
 }

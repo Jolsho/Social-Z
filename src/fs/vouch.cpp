@@ -1,6 +1,7 @@
 #include "fs/fs.h"
 #include "fs/perms.h"
 #include "fs/vouch.h"
+#include "utils/sig.h"
 #include <cstddef>
 #include <cstdio>
 #include <format>
@@ -11,7 +12,7 @@ void fs::Manager::voucher(msg::Msg* msg) {
     if (msg->data.size() < PERM_SZ + VOUCHER_SZ) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_MALFORMED,
+            .code = Code::E_MALFORMED,
             .msg = "voucher() :: msg too small"
         });
         return;
@@ -26,7 +27,7 @@ void fs::Manager::voucher(msg::Msg* msg) {
     if (!locals_.contains(v.to)) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_NOTLOCAL,
+            .code = Code::E_NOTLOCAL,
             .msg = std::format("{} :: voucher() :: Not Local", key_to_str(p.recipient))
         });
         return;
@@ -35,7 +36,7 @@ void fs::Manager::voucher(msg::Msg* msg) {
     if (v.from != p.recipient || v.to != p.giver) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_UNAUTHORIZED,
+            .code = Code::E_UNAUTHORIZED,
             .msg = "voucher() :: voucher not match permission."
         });
         return;
@@ -45,7 +46,7 @@ void fs::Manager::voucher(msg::Msg* msg) {
     if (!valid_signature(v.to, p.signature, p_hash)) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_UNAUTHORIZED,
+            .code = Code::E_UNAUTHORIZED,
             .msg = "voucher() :: Fake Perm Signature"
         });
         return;
@@ -57,7 +58,7 @@ void fs::Manager::voucher(msg::Msg* msg) {
     if (!exists) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_PERM_NOT_EXIST,
+            .code = Code::E_PERM_NOT_EXIST,
             .msg = "voucher() :: perm doesnt exist"
         });
         return;
@@ -67,7 +68,7 @@ void fs::Manager::voucher(msg::Msg* msg) {
     if (!valid_signature(v.from, v.signature, v_hash)) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_UNAUTHORIZED,
+            .code = Code::E_UNAUTHORIZED,
             .msg = "voucher() :: Fake Voucher Signature"
         });
         return;
@@ -82,7 +83,7 @@ void fs::Manager::redeem(msg::Msg* msg) {
     if (msg->data.size() < VOUCHER_SZ + SID_SZ) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_MALFORMED,
+            .code = Code::E_MALFORMED,
             .msg = "redeem() :: msg too small"
         });
         return;
@@ -94,7 +95,7 @@ void fs::Manager::redeem(msg::Msg* msg) {
     if (!locals_.contains(v.from)) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_NOTLOCAL,
+            .code = Code::E_NOTLOCAL,
             .msg = std::format("{} :: redeem() :: Not Local", key_to_str(v.from))
         });
         return;
@@ -104,7 +105,7 @@ void fs::Manager::redeem(msg::Msg* msg) {
     if (v.expiration < time(nullptr)) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_VOUCHER_EXPIRED,
+            .code = Code::E_VOUCHER_EXPIRED,
             .msg = std::format("redeem() :: VOUCHER_EXPIRED")
         });
         return;
@@ -114,7 +115,7 @@ void fs::Manager::redeem(msg::Msg* msg) {
     if (!valid_signature(v.from, v.signature, v_hash)) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_UNAUTHORIZED,
+            .code = Code::E_UNAUTHORIZED,
             .msg = "redeem() :: Fake Voucher Signature"
         });
         return;
@@ -134,7 +135,7 @@ void fs::Manager::redeem(msg::Msg* msg) {
         if (stat(path.data(), &st) != 0) {
             handle_err({
                 .id = msg->id,
-                .code = CODE::E_FILE_NOT_EXIST,
+                .code = Code::E_FILE_NOT_EXIST,
                 .msg = "redeem() :: File Not Exist, Stat"
             });
             return;
@@ -144,7 +145,7 @@ void fs::Manager::redeem(msg::Msg* msg) {
         if (!f) {
             handle_err({
                 .id = msg->id,
-                .code = CODE::E_FILE_NOT_EXIST,
+                .code = Code::E_FILE_NOT_EXIST,
                 .msg = "redeem() :: File Not Exist, fopen"
             });
             return;
@@ -176,7 +177,7 @@ void fs::Manager::reward(msg::Msg* msg) {
     if (msg->data.size() <= SID_SZ) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_MALFORMED,
+            .code = Code::E_MALFORMED,
             .msg = "reward() :: msg too small"
         });
         return;
@@ -193,7 +194,7 @@ void fs::Manager::reward(msg::Msg* msg) {
     if (it == sessions_.end()) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_UNAUTHORIZED,
+            .code = Code::E_UNAUTHORIZED,
             .msg = "reward() :: Session not exists"
         });
         return;
@@ -206,7 +207,7 @@ void fs::Manager::reward(msg::Msg* msg) {
     if (written != chunk_sz - 1) {
         handle_err({
             .id = msg->id,
-            .code = CODE::E_INTERNAL,
+            .code = Code::E_INTERNAL,
             .msg = "reward() :: Failed chunk write"
         });
         // TODO -- clean up the file??

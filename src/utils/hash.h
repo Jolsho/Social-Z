@@ -1,11 +1,7 @@
 #pragma once
 #include "blake3.h"
-#include <array>
+#include "crypto.h"
 #include <cstddef>
-
-using Hash = std::array<std::byte, 32>;
-
-static constexpr size_t HASH_SIZE = 32;
 
 class Hasher {
     blake3_hasher self;
