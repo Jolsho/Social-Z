@@ -77,6 +77,7 @@ void fs::Manager::poll_loop() {
         }
 
         // AFTER PROCESSING EVENTS
+        // TODO -- what about outbound_??
 
     }
 }
