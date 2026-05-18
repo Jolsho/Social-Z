@@ -8,8 +8,8 @@
 #include <sys/stat.h>
 
 /// We are being given a voucher.
-void fs::Manager::voucher(msg::Msg* msg) {
-    if (msg->data.size() < PERM_SZ + VOUCHER_SZ) {
+void fs::Manager::voucher(Msg* msg) {
+    if (msg->data_len < PERM_SZ + VOUCHER_SZ) {
         handle_err({
             .id = msg->id,
             .code = Code::E_MALFORMED,
@@ -19,7 +19,7 @@ void fs::Manager::voucher(msg::Msg* msg) {
     }
 
     Perm p {};
-    std::byte* cursor = p.unmarshal(msg->data.data());
+    std::byte* cursor = p.unmarshal(reinterpret_cast<std::byte*>(msg->data));
 
     Voucher v{};
     cursor = v.unmarshal(cursor);
@@ -79,8 +79,8 @@ void fs::Manager::voucher(msg::Msg* msg) {
 
 
 /// Someone is redeeming a voucher we sent them.
-void fs::Manager::redeem(msg::Msg* msg) {
-    if (msg->data.size() < VOUCHER_SZ + SID_SZ) {
+void fs::Manager::redeem(Msg* msg) {
+    if (msg->data_len < VOUCHER_SZ + SID_SZ) {
         handle_err({
             .id = msg->id,
             .code = Code::E_MALFORMED,
@@ -90,7 +90,7 @@ void fs::Manager::redeem(msg::Msg* msg) {
     }
 
     Voucher v {};
-    std::byte* cursor = v.unmarshal(msg->data.data());
+    std::byte* cursor = v.unmarshal(reinterpret_cast<std::byte*>(msg->data));
 
     if (!locals_.contains(v.from)) {
         handle_err({
@@ -173,8 +173,8 @@ void fs::Manager::redeem(msg::Msg* msg) {
 
 
 /// We are receiving a reward for a voucher we redeemed.
-void fs::Manager::reward(msg::Msg* msg) {
-    if (msg->data.size() <= SID_SZ) {
+void fs::Manager::reward(Msg* msg) {
+    if (msg->data_len <= SID_SZ) {
         handle_err({
             .id = msg->id,
             .code = Code::E_MALFORMED,
@@ -182,8 +182,8 @@ void fs::Manager::reward(msg::Msg* msg) {
         });
         return;
     }
-    size_t chunk_sz = msg->data.size() - SID_SZ;
-    auto cursor = msg->data.data();
+    size_t chunk_sz = msg->data_len - SID_SZ;
+    std::byte* cursor = reinterpret_cast<std::byte*>(msg->data);
 
     SessionID id;
     memcpy(&id, cursor, SID_SZ);

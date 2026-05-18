@@ -27,7 +27,7 @@ struct Session {
     FileHandle* file;
     Hasher      hasher;
     int         chunk_idx = 0;
-    uint64_t    chunk_size = msg::MAX_BUFFER_SIZE - SID_SZ;
+    uint64_t    chunk_size = MAX_BUFFER_SIZE - SID_SZ;
 };
 struct HashSessionID {
     size_t operator()(const SessionID& arr) const noexcept {

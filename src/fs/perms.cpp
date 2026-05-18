@@ -5,8 +5,8 @@
 #include <format>
 
 /// We receive a permission to post to a remote node.
-void fs::Manager::give(msg::Msg* msg) {
-    if (msg->data.size() < PERM_SZ) {
+void fs::Manager::give(Msg* msg) {
+    if (msg->data_len < PERM_SZ) {
         handle_err({
             .id = msg->id,
             .code = Code::E_MALFORMED,
@@ -16,7 +16,7 @@ void fs::Manager::give(msg::Msg* msg) {
     }
 
     Perm p{ };
-    std::byte* cursor = p.unmarshal(msg->data.data());
+    std::byte* cursor = p.unmarshal(reinterpret_cast<std::byte*>(msg->data));
 
     if (!locals_.contains(p.recipient)) {
         handle_err({
@@ -55,8 +55,8 @@ void fs::Manager::give(msg::Msg* msg) {
 
 
 /// Remote accepts or denies a permission we offered them.
-void fs::Manager::accept(msg::Msg* msg) {
-    if (msg->data.size() < PERM_SZ + 1 + SIG_SIZE) {
+void fs::Manager::accept(Msg* msg) {
+    if (msg->data_len < PERM_SZ + 1 + SIG_SIZE) {
         handle_err({
             .id = msg->id,
             .code = Code::E_MALFORMED,
@@ -66,7 +66,7 @@ void fs::Manager::accept(msg::Msg* msg) {
     }
 
     Perm p{};
-    std::byte* cursor = p.unmarshal(msg->data.data());
+    std::byte* cursor = p.unmarshal(reinterpret_cast<std::byte*>(msg->data));
     Hash p_hash = p.hash();
 
     // ENSURE WE SENT AND CURRENTLY HOLD THE PERMISSION
@@ -148,8 +148,8 @@ void fs::Manager::accept(msg::Msg* msg) {
 
 
 /// Remote asks for a specific permission.
-void fs::Manager::ask(msg::Msg* msg) {
-    if (msg->data.size() < PERM_SZ) {
+void fs::Manager::ask(Msg* msg) {
+    if (msg->data_len < PERM_SZ) {
         handle_err({
             .id = msg->id,
             .code = Code::E_MALFORMED,
@@ -159,7 +159,7 @@ void fs::Manager::ask(msg::Msg* msg) {
     }
 
     Perm p{};
-    std::byte* cursor = p.unmarshal(msg->data.data());
+    std::byte* cursor = p.unmarshal(reinterpret_cast<std::byte*>(msg->data));
     Hash p_hash = p.hash();
 
     if (!locals_.contains(p.giver)) {
@@ -195,8 +195,8 @@ void fs::Manager::ask(msg::Msg* msg) {
 
 
 /// Remote notifies us they revoked a permission we had.
-void fs::Manager::revoke(msg::Msg* msg) {
-    if (msg->data.size() < PERM_SZ + SIG_SIZE) {
+void fs::Manager::revoke(Msg* msg) {
+    if (msg->data_len < PERM_SZ + SIG_SIZE) {
         handle_err({
             .id = msg->id,
             .code = Code::E_MALFORMED,
@@ -206,7 +206,7 @@ void fs::Manager::revoke(msg::Msg* msg) {
     }
 
     Perm p{};
-    std::byte* cursor = p.unmarshal(msg->data.data());
+    std::byte* cursor = p.unmarshal(reinterpret_cast<std::byte*>(msg->data));
     Hash p_hash = p.hash();
 
     if (!locals_.contains(p.recipient)) {

@@ -1,13 +1,12 @@
 #pragma once
 #include "log/accumulator.h"
-#include "msg.h"
 #include "p2p/connection.h"
 #include "p2p/citizens.h"
 #include "utils/lru.h"
 #include <fcntl.h>
 #include <functional>
 #include <unordered_map>
-#include "init.h"
+#include "config.h"
 
 namespace p2p {
 
@@ -23,13 +22,14 @@ public:
     int                         epoll_fd_;
     MsgChan&                    from_main_;
     MsgChan&                    to_main_;
-    std::vector<msg::Msg*>      msgs_;
+    std::vector<Msg*>      msgs_;
 
     // TCP SERVER
     int                                 listen_fd_;
     KeyPair                             keys_;
     std::vector<Packet*>                pkts_;
     std::vector<conn::Connection>       connections_;
+    std::unordered_map<Key, ConnID, KeyHash> key_to_conn_;
 
     ConnLRU<MAX_CONNECTIONS, CONNECTION_TIMEOUT>   lru_;
     // TODO -- there is an issue here where we dont diffentiate timeouts
@@ -49,9 +49,13 @@ public:
     ) : 
         from_main_(chan.to), 
         to_main_(chan.from),
-        msgs_(conf.msgs_cap, new msg::Msg{Actors::PEERNET}),
         pkts_(conf.pkts_cap)
     {
+        for (int i{0}; i < conf.msgs_cap; i++) {
+            Msg* m = new Msg{};
+            msg_init(m, Actors::PEERNET, MAX_BUFFER_SIZE);
+            msgs_.push_back(m);
+        }
         connections_.reserve(MAX_CONNECTIONS);
         free_ids_.reserve(MAX_CONNECTIONS);
         sock_ids_.reserve(MAX_CONNECTIONS);
@@ -78,13 +82,14 @@ public:
         return pkt;
     }
 
-    msg::Msg* get_msg() {
-        msg::Msg* msg;
+    Msg* get_msg() {
+        Msg* msg;
         if (msgs_.size() > 0) {
             msg = msgs_.back();
             msgs_.pop_back();
         } else {
-            msg = new msg::Msg { Actors::PEERNET };
+            msg = new Msg{};
+            msg_init(msg, Actors::PEERNET, MAX_BUFFER_SIZE);
         }
         msg->is_wiped = false;
         return msg;

@@ -15,6 +15,7 @@ target_include_directories(bullet_db PUBLIC
     ${PROJECT_SOURCE_DIR}/bindings
 )
 target_include_directories(bullet_db PRIVATE
+    ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/src/kzg
     ${PROJECT_SOURCE_DIR}/src/ledger
     ${PROJECT_SOURCE_DIR}/src/trie
@@ -59,15 +60,7 @@ endif()
 ####################################################
 #                   LMDB
 ####################################################
-find_path(LMDB_INCLUDE_DIR lmdb.h)
-find_library(LMDB_LIBRARY NAMES lmdb)
-
-if(NOT LMDB_INCLUDE_DIR OR NOT LMDB_LIBRARY)
-    message(FATAL_ERROR "LMDB not found on the system")
-endif()
-
-target_include_directories(bullet_db PRIVATE ${LMDB_INCLUDE_DIR})
-target_link_libraries(bullet_db PRIVATE ${LMDB_LIBRARY})
+target_link_libraries(bullet_db PRIVATE ${PROJECT_SOURCE_DIR}/../lib/lmdb/liblmdb.a)
 
 
 ####################################################

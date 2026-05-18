@@ -1,5 +1,6 @@
 #include "http/server.h"
 #include "http/parse.h"
+#include "msg.h"
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <format>
@@ -7,9 +8,13 @@
 Server::Server(ActorChannels& chan, RPCConfig& conf) : 
     from_main_(chan.to), 
     to_main_(chan.from), 
-    msgs_(conf.msgs_cap, new msg::Msg{ Actors::RPC_SERVER }),
     conns_(MAX_CONNECTIONS)
 {
+    for (int i = 0; i < conf.msgs_cap; i++) {
+        Msg* m = new Msg{};
+        msg_init(m, Actors::RPC_SERVER, MAX_BUFFER_SIZE);
+        msgs_.push_back(m);
+    }
 
     settings_.on_message_begin = parse::on_message_begin;
 
@@ -155,33 +160,33 @@ void Server::poll_loop() {
             } else if (fd == from_main_.get_event_fd()) {
                 // INTERNAL MSGS
                 int k = 0;
-                while (msg::Msg* msg = from_main_.pop()) {
+                while (Msg* msg = from_main_.pop()) {
                     if (!msg->is_wiped && msg->code < Code::ERRORS) {
                         handle_msg(msg);
 
                     } else if (!msg->is_wiped) {
 
                         // HANDLE ERROR MSG
-                        msg::Error e {
+                        Error e {
                             .id     = msg->id,
                             .code   = (Code)msg->code,
                         };
 
                         size_t size_r = sizeof(e.r);
-                        if (msg->data.size() > size_r) {
-                            memcpy(msg->data.data(), &e.r, size_r);
-                            e.msg.resize(msg->data.size() - size_r);
+                        if (msg->data_len > size_r) {
+                            memcpy(msg->data, &e.r, size_r);
+                            e.msg.resize(msg->data_len - size_r);
                             if (e.msg.size() > 0) {
                                 e.msg.copy(
-                                    (char*)msg->data.data() + size_r, 
-                                    msg->data.size() - size_r
+                                    (char*)msg->data + size_r, 
+                                    msg->data_len - size_r
                                 );
                             }
                         }
                         handle_error(e);
                     }
 
-                    if (!msg->is_wiped) msg->wipe();
+                    if (!msg->is_wiped) msg_wipe(msg);
 
                     if (msg->from == Actors::RPC_SERVER) {
                         if (msgs_.size() < msgs_.capacity()) {
@@ -329,14 +334,14 @@ void Server::accept_new_connections(int listen_fd, int epfd, SSL_CTX *ctx) {
     }
 }
 
-void Server::handle_error(msg::Error e) {}
-void Server::handle_msg(msg::Msg* m) {}
+void Server::handle_error(Error e) {}
+void Server::handle_msg(Msg* m) {}
 
 int Server::build_n_send_msg(conn_t& c) {
 
-    msg::Msg* m = get_msg();
+    Msg* m = get_msg();
 
-    std::byte* cursor = m->data.data();
+    std::byte* cursor = reinterpret_cast<std::byte*>(m->data);
     std::byte* start = cursor;
 
     bool found { false };
@@ -361,7 +366,7 @@ int Server::build_n_send_msg(conn_t& c) {
         cursor += sizeof(size_t);
 
         for (auto& [n, v] : c.r.query) {
-            m->data.resize(m->data.size() + n.size() + v.size());
+            msg_resize(m, m->data_len + n.size() + v.size());
             memcpy(cursor, n.data(), n.size());
             cursor += n.size();
             memcpy(cursor, v.data(), v.size());
@@ -381,12 +386,12 @@ int Server::build_n_send_msg(conn_t& c) {
     }
 
     if (c.r.content_len > 0) {
-        m->data.resize(m->data.size() + c.r.content_len);
+        msg_resize(m, m->data_len + c.r.content_len);
         memcpy(cursor, c.inbuf.buff, c.inbuf.cursor);
     }
 
     if (!to_main_.push(m)) {
-        m->wipe();
+        msg_wipe(m);
         msgs_.push_back(m);
         c.err.status = Status::SERVICE_UNAVAILABLE;
         c.err.reason = "Channel to handler is full.";

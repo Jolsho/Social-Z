@@ -3,7 +3,7 @@ set(LIBS ${CMAKE_SOURCE_DIR}/lib)
 file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS "*.cpp")
 
 # Remove main.cpp from library sources
-list(FILTER CORE_SOURCES EXCLUDE REGEX ".*main\\.cpp$")
+#list(FILTER CORE_SOURCES EXCLUDE REGEX ".*main\\.cpp$")
 
 add_library(sz_lib ${CORE_SOURCES})
 
@@ -19,14 +19,14 @@ target_include_directories(sz_lib
 set(SSL_DIR ${LIBS}/openssl)
 target_include_directories(sz_lib PRIVATE ${SSL_DIR}/include)
 target_link_libraries(sz_lib PRIVATE
-    ${SSL_DIR}/lib64/libssl.a
-    ${SSL_DIR}/lib64/libcrypto.a
+    ${SSL_DIR}/lib/libssl.a
+    ${SSL_DIR}/lib/libcrypto.a
 )
 
 # SODIUM
 set(SODIUM_DIR ${LIBS}/libsodium)
-target_include_directories(sz_lib PRIVATE ${SODIUM_DIR}/include)
-target_link_libraries(sz_lib PRIVATE ${SODIUM_DIR}/lib/libsodium.a)
+target_include_directories(sz_lib PUBLIC ${SODIUM_DIR}/include)
+target_link_libraries(sz_lib PUBLIC ${SODIUM_DIR}/lib/libsodium.a)
 
 
 # LMDB, BLAKE3, llhttp

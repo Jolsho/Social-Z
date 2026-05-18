@@ -10,8 +10,8 @@ option(BUILD_TESTS "Build tests" ON)
 add_subdirectory(src)
 add_subdirectory(ledger)
 
-add_executable(sz src/main.cpp)
-target_link_libraries(sz PRIVATE sz_lib)
+#add_executable(sz src/main.cpp)
+#target_link_libraries(sz PRIVATE sz_lib)
 
 if(BUILD_TESTS)
     enable_testing()

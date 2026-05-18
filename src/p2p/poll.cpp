@@ -41,35 +41,35 @@ void p2p::Manager::poll_loop() {
             } else if (fd == from_main_.get_event_fd()) {
                 // INTERNAL MSGS
                 int k = 0;
-                while (msg::Msg* msg = from_main_.pop()) {
+                while (Msg* msg = from_main_.pop()) {
                     if (!msg->is_wiped && msg->code < Code::ERRORS) {
 
-                        msg::Error e = handlers::handle_msg(*this, msg);
+                        Error e = handlers::handle_msg(*this, msg);
                         if (e.is_err()) handlers::handle_error(*this, e);
 
                     } else if (!msg->is_wiped) {
 
                         // HANDLE ERROR MSG
-                        msg::Error e {
+                        Error e {
                             .id     = msg->id,
                             .code   = (Code)msg->code,
                         };
 
                         size_t size_r = sizeof(e.r);
-                        if (msg->data.size() > size_r) {
-                            memcpy(msg->data.data(), &e.r, size_r);
-                            e.msg.resize(msg->data.size() - size_r);
+                        if (msg->data_len > size_r) {
+                            memcpy(msg->data, &e.r, size_r);
+                            e.msg.resize(msg->data_len - size_r);
                             if (e.msg.size() > 0) {
                                 e.msg.copy(
-                                    (char*)msg->data.data() + size_r, 
-                                    msg->data.size() - size_r
+                                    (char*)msg->data + size_r, 
+                                    msg->data_len - size_r
                                 );
                             }
                         }
                         handlers::handle_error(*this, e);
                     }
 
-                    if (!msg->is_wiped) msg->wipe();
+                    if (!msg->is_wiped) msg_wipe(msg);
 
                     if (msg->from == Actors::PEERNET) {
                         if (msgs_.size() < msgs_.capacity()) {
@@ -102,7 +102,7 @@ void p2p::Manager::poll_loop() {
             ) continue;
 
             if (events[i].events & EPOLLIN) {
-                msg::Error e = conn.read_(*this);
+                Error e = conn.read_(*this);
                 if (e.is_err()) {
                     handlers::handle_error(*this, e);
                 }

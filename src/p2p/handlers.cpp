@@ -39,7 +39,7 @@ int dial(const std::string& ip, uint16_t port) {
     return -1;
 }
 
-void handlers::handle_error(p2p::Manager& man, msg::Error e) {
+void handlers::handle_error(p2p::Manager& man, Error e) {
     conn::Connection& conn = man.connections_[e.id];
 
     if (conn.remote_auth_key_ != ZERO_KEY) {
@@ -53,25 +53,18 @@ void handlers::handle_error(p2p::Manager& man, msg::Error e) {
     man.logr_->log(e.msg);
 }
 
-msg::Error handlers::handle_msg(p2p::Manager& man, msg::Msg* msg) {
+Error handlers::handle_msg(p2p::Manager& man, Msg* msg) {
     switch (msg->code) {
-
-        case Code::WRITE: {
-            conn::Connection &conn = man.connections_[msg->id];
-            if (!conn.is_epollout_enabled()) {
-                conn.events_ = conn.enable_epollout(man.epoll_fd_);
-            }
-
-            msg::Error e = conn.marshal_n_enqueue_msg(man.get_pkt(), man.keys_.pub, msg->code, msg->data.data(), msg->data.size());
-            if (e.is_err()) return e;
-            break;
-        }
 
         case Code::CLOSE_CONN: {
             conn::Connection &conn = man.connections_[msg->id];
 
-            if (conn.status_ == conn::Status::Live && msg->data.size() > 0) {
-                msg::Error e = conn.marshal_n_enqueue_msg(man.get_pkt(), man.keys_.pub, msg->code, msg->data.data(), msg->data.size());
+            if (conn.status_ == conn::Status::Live && msg->data_len > 0) {
+                Error e = conn.marshal_n_enqueue_msg(man.get_pkt(), man.keys_.pub, 
+                    msg->code, 
+                    reinterpret_cast<std::byte*>(msg->data), 
+                    msg->data_len
+                );
                 if (e.is_err()) return e;
 
                 // Force write now
@@ -90,7 +83,7 @@ msg::Error handlers::handle_msg(p2p::Manager& man, msg::Msg* msg) {
         }
 
         case Code::NEW_CONN: {
-            std::byte* cursor = msg->data.data();
+            std::byte* cursor = reinterpret_cast<std::byte*>(msg->data);
 
             std::string ip{(char*)cursor};
             cursor += ip.size();
@@ -124,7 +117,7 @@ msg::Error handlers::handle_msg(p2p::Manager& man, msg::Msg* msg) {
             }
 
             // START NEGOTIATION PROCESS
-            msg::Error e = man.connections_[id].syn(man);
+            Error e = man.connections_[id].syn(man);
             if (e.is_err()) return e;
 
             break;
@@ -132,10 +125,32 @@ msg::Error handlers::handle_msg(p2p::Manager& man, msg::Msg* msg) {
 
         case Code::SHUTDOWN: {
             // TODO -- shutdown server
+            break;
         }
 
-        default: break;
+        case Code::PING: {
+            // TODO -- parse key find conn.
+            // if not exists just say fuck it and quit
+            break;
+        }
+
+        default: {
+            conn::Connection &conn = man.connections_[msg->id];
+            if (conn.status_ == conn::Status::Live) {
+                if (!conn.is_epollout_enabled()) {
+                    conn.events_ = conn.enable_epollout(man.epoll_fd_);
+                }
+
+                Error e = conn.marshal_n_enqueue_msg(
+                    man.get_pkt(), man.keys_.pub, msg->code, 
+                    reinterpret_cast<std::byte*>(msg->data), 
+                    msg->data_len
+                );
+                if (e.is_err()) return e;
+            }
+            break;
+        }
     }
-    return msg::SUCCESS;
+    return ESUCCESS;
 }
 

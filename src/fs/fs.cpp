@@ -5,7 +5,7 @@ fs::Manager::Manager(ActorChannels& chan, FSConfig& conf) :
     from_main_(chan.to), 
     too_main_(chan.from), 
     db_(conf.db_path, conf.map_size),
-    msgs_(conf.msgs_cap, new msg::Msg{ Actors::FILESYS })
+    msgs_(conf.msgs_cap, new Msg{ Actors::FILESYS })
 {
     open_files_.reserve(64);
     sessions_.reserve(64);
@@ -55,7 +55,7 @@ void fs::Manager::poll_loop() {
                         }
                     }
 
-                    if (!msg->is_wiped) msg->wipe();
+                    if (!msg->is_wiped) msg_wipe(msg);
 
                     if (msg->from == Actors::FILESYS) {
                         if (msgs_.size() < msgs_.capacity()) {

@@ -10,7 +10,13 @@ FetchContent_MakeAvailable(googletest)
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "*.cpp")
 
+
 add_executable(sz_tests ${SOURCES})
+
+target_include_directories(sz_tests
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
 
 target_link_libraries(sz_tests
     PRIVATE sz_lib

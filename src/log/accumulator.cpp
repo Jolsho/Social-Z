@@ -1,11 +1,13 @@
 #include <cstring>
 #include <ctime>
 #include "log/accumulator.h"
+#include "codes.h"
+#include "msg.h"
 
 LogAccumulator::LogAccumulator(
     std::string parent_str, 
     time_t flush_interval, 
-    std::function<msg::Msg*()> get_new_msg
+    std::function<Msg*()> get_new_msg
 ) : 
     parent_str_(parent_str),
     get_new_msg_(get_new_msg),
@@ -24,7 +26,7 @@ size_t LogAccumulator::flush(MsgChan& out) {
     if (now >= flush_time_) {
         flush_time_ = now + flush_interval_;
         while (!full_.empty()) {
-            msg::Msg* next = full_.back();
+            Msg* next = full_.back();
 
             if (!next || !out.push(next)) break;
 
@@ -38,16 +40,16 @@ size_t LogAccumulator::flush(MsgChan& out) {
 void LogAccumulator::log(std::string msg) {
     size_t log_size = FIXED_LOG_PART + msg.size();
 
-    if (l_->data.size() + log_size >= l_->data.capacity()) {
+    if (l_->data_len + log_size >= l_->data_cap) {
         full_.push_back(l_);
         l_ = get_new_msg_();
         l_->too = Actors::LOGGER;
         l_->code = Code::LOG;
     }
 
-    size_t old_size = l_->data.size();
-    l_->data.resize(old_size + log_size);
-    char* cursor = reinterpret_cast<char*>(l_->data.data() + old_size);
+    size_t old_size = l_->data_len;
+    msg_resize(l_, old_size + log_size);
+    char* cursor = reinterpret_cast<char*>(l_->data + old_size);
 
     *cursor++ = '[';                                    // 1
 

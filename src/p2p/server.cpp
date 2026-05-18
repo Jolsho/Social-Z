@@ -52,7 +52,8 @@ ConnID p2p::Manager::add_socket(int sock_fd, const Key pubkey, bool is_inbound) 
                             conn::Status::CryptoSynAck : 
                             conn::Status::CryptoSyn;
     c.rpkt_.cursor_     = 0;
-
+    key_to_conn_[pubkey] = id;
+    
     int evicted = lru_.use(c.lru_node_);
     if (evicted > 0) {
         remove_socket(evicted);
@@ -87,6 +88,7 @@ void p2p::Manager::remove_socket(ConnID id) {
     conn.clear();
     sock_ids_.erase(conn.fd_);
     free_ids_.push_back(id);
+    key_to_conn_.erase(conn.remote_auth_key_);
 }
 
 

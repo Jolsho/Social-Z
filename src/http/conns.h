@@ -21,7 +21,7 @@ public:
 
     //  OUTBOUND  //
     std::queue<int>         res_q;
-    std::vector<msg::Msg*>  outbound_msgs;
+    std::vector<Msg*>  outbound_msgs;
     Buffer<MX_HEADER_LEN>   out_h {};
     bool                    written_h = false;
     Buffer<MX_BODY_LEN>     outbuf {};
@@ -44,7 +44,7 @@ public:
     int parse_ws(size_t nread);
 
     void queue_err();
-    int queue_response(msg::Msg* msg);
+    int queue_response(Msg* msg);
 
     inline bool has_outgoing() {
         return outbuf.cursor != 0 || 

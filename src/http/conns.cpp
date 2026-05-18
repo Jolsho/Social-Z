@@ -109,7 +109,7 @@ void conn_t::queue_err() {
     // TODO
 }
 
-int conn_t::queue_response(msg::Msg* msg) {
+int conn_t::queue_response(Msg* msg) {
 
     if (res_q.front() != msg->mid) {
         outbound_msgs.push_back(msg);
@@ -117,7 +117,7 @@ int conn_t::queue_response(msg::Msg* msg) {
     }
     res_q.pop();
 
-    char* cursor = (char*)msg->data.data();
+    char* cursor = (char*)msg->data;
     std::string_view status = {cursor, strlen(cursor)};
     cursor += status.size();
     std::string_view reason = {cursor, strlen(cursor)};

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-DEPS=./dep_src
+DEPS="$(pwd)/dep_src"
 mkdir -p "$DEPS"
 
 LIB_DST="$(pwd)/lib"
@@ -51,6 +51,7 @@ if [[ ! -d "$LIB_DST/$LMDB" ]]; then
         make -j2
         cp liblmdb.a "$LIB_DST/$LMDB"
         cp lmdb.h "$INCLUDE"
+        cp lmdb.h "$(pwd)/ledger/include"
     )
 fi
 
@@ -82,20 +83,19 @@ SSL_URL=https://github.com/openssl/openssl/releases/download/openssl-3.5.5/opens
 if [ ! -d "$LIB_DST/$SSL" ]; then
     mkdir -p "$LIB_DST/$SSL"
 
+    cd "$DEPS"
     if [ ! -d "$DEPS/$SSL" ]; then
         echo "Downloading openssl..."
         curl -L  "$SSL_URL" -o "$DEPS/$SSL.tar.gz"
-    fi
-    (
-        cd "$DEPS"
+
         mkdir "$SSL"
         tar -xzf "$SSL.tar.gz" --strip-components=1 -C "$SSL"
         rm "$SSL.tar.gz"
-
-
+    fi
+    (
         echo "Building openssl..."
         cd "$SSL"
-        ./Configure linux-x86_64 \
+        ./Configure linux-aarch64 \
             --prefix="$LIB_DST/$SSL" \
             no-apps \
             no-tests \

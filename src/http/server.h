@@ -1,7 +1,8 @@
 #pragma once
+#include "error.h"
 #include "http/conns.h"
 #include "chans.h"
-#include "init.h"
+#include "config.h"
 #include "log/accumulator.h"
 #include "msg.h"
 #include "utils/lru.h"
@@ -60,12 +61,14 @@ class Server {
     int                         epoll_fd_;
     MsgChan&                    from_main_;
     MsgChan&                    to_main_;
-    std::vector<msg::Msg*>      msgs_;
+    std::vector<Msg*>      msgs_;
 
+    // SERVER
     int                         listen_fd_;
     SSL_CTX*                    ctx_;
     llhttp_settings_t           settings_;
 
+    // CONNS
     ConnID                              next_id_;
     std::vector<ConnID>                 free_ids_;
     std::unordered_map<int, ConnID>     conn_ids_;
@@ -74,16 +77,18 @@ class Server {
     std::vector<conn_t>                 conns_;
     std::set<Token>                     tokens_;
 
+    // FIREWALL
     std::set<std::string>   banned_ips_;
 
 
-    msg::Msg* get_msg() {
-        msg::Msg* msg;
+    Msg* get_msg() {
+        Msg* msg;
         if (msgs_.size() > 0) {
             msg = msgs_.back();
             msgs_.pop_back();
         } else {
-            msg = new msg::Msg { Actors::RPC_SERVER };
+            msg = new Msg{};
+            msg_init(msg, Actors::RPC_SERVER, MAX_BUFFER_SIZE);
         }
         msg->is_wiped = false;
         return msg;
@@ -97,8 +102,8 @@ public:
     );
     void poll_loop();
     int start_server(RPCConfig& conf);
-    void handle_error(msg::Error e);
-    void handle_msg(msg::Msg* m);
+    void handle_error(Error e);
+    void handle_msg(Msg* m);
 
     void accept_new_connections(int listen_fd, int epfd, SSL_CTX *ctx);
     void close_connection(conn_t& c);

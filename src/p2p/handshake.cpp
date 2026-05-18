@@ -6,7 +6,7 @@
 
 const size_t HANDSHAKE_LEN = 128;
 const size_t KEY_LEN = sizeof(Key);
-msg::Error conn::Connection::syn(p2p::Manager& man) {
+Error conn::Connection::syn(p2p::Manager& man) {
 
     std::byte* data[HANDSHAKE_LEN];
     std::byte* cursor = data[0];
@@ -17,7 +17,7 @@ msg::Error conn::Connection::syn(p2p::Manager& man) {
 
     Packet* pkt = man.get_pkt();
 
-    msg::Error e = marshal_n_enqueue_msg(pkt, man.keys_.pub, Code::SYN, data[0], HANDSHAKE_LEN);
+    Error e = marshal_n_enqueue_msg(pkt, man.keys_.pub, Code::SYN, data[0], HANDSHAKE_LEN);
     if (e.is_err()) {
         man.pkts_.push_back(pkt);
         return e;
@@ -25,10 +25,10 @@ msg::Error conn::Connection::syn(p2p::Manager& man) {
 
     status_ = conn::Status::CryptoAck;
 
-    return msg::SUCCESS;
+    return ESUCCESS;
 }
 
-msg::Error conn::Connection::syn_ack(p2p::Manager& man) {
+Error conn::Connection::syn_ack(p2p::Manager& man) {
 
     // AUTHORIZE INCOMING CONNECTION
     remote_auth_key_ = rpkt_.get_key();
@@ -102,7 +102,7 @@ msg::Error conn::Connection::syn_ack(p2p::Manager& man) {
     body += KEY_LEN;
 
     Packet* pkt = man.get_pkt();
-    msg::Error e = marshal_n_enqueue_msg(pkt, man.keys_.pub, Code::SYNACK, data[0], HANDSHAKE_LEN);
+    Error e = marshal_n_enqueue_msg(pkt, man.keys_.pub, Code::SYNACK, data[0], HANDSHAKE_LEN);
     if (e.is_err()) {
         man.pkts_.push_back(pkt);
         return e;
@@ -129,10 +129,10 @@ msg::Error conn::Connection::syn_ack(p2p::Manager& man) {
     status_ = conn::Status::Live;
     man.logr_->log(std::format("NEW CONN: %s", key_to_str(remote_auth_key_)));
 
-    return msg::SUCCESS;
+    return ESUCCESS;
 }
 
-msg::Error conn::Connection::ack(p2p::Manager& man) {
+Error conn::Connection::ack(p2p::Manager& man) {
     // PARSE INCOMING SYNACK
     std::byte* body = rpkt_.body();
 
@@ -167,6 +167,6 @@ msg::Error conn::Connection::ack(p2p::Manager& man) {
     status_ = conn::Status::Live;
     man.logr_->log(std::format("NEW CONN: %s", key_to_str(remote_auth_key_)));
 
-    return msg::SUCCESS;
+    return ESUCCESS;
 }
 

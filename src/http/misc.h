@@ -1,6 +1,7 @@
 #pragma once
 #include "msg.h"
 #include <string>
+#include <vector>
 
 using StrPairs = std::vector<std::pair<std::string_view, std::string_view>>;
 

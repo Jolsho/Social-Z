@@ -1,6 +1,7 @@
 #pragma once
 #include "msg.h"
 #include <ctime>
+#include <vector>
 
 struct ConnNode {
     ConnNode*   prev    = nullptr;

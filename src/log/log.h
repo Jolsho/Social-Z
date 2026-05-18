@@ -1,17 +1,17 @@
 #pragma once
 #include "chans.h"
-#include "init.h"
+#include "config.h"
 #include <cstdio>
 
 class Logger {
     int                     epoll_fd_;
     MsgChan&                from_main_;
     MsgChan&                to_main_;
-    std::vector<msg::Msg*>  msgs_;
+    std::vector<Msg*>  msgs_;
 
     int                     f_;
 
-    bool write_log(msg::Msg* l);
+    bool write_log(Msg* l);
 
     std::string derive_file_name();
 

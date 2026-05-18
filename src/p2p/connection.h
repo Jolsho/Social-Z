@@ -1,6 +1,6 @@
 #pragma once
+#include "error.h"
 #include "p2p/pkt.h"
-#include "msg.h"
 #include "utils/lru.h"
 #include <sys/epoll.h>
 #include <vector>
@@ -41,13 +41,13 @@ public:
     std::vector<Packet*>    wpkts_;
     Packet                  rpkt_;
 
-    msg::Error marshal_n_enqueue_msg(
+    Error marshal_n_enqueue_msg(
         Packet* pkt, const Key& key, uint16_t code,
         std::byte* data, size_t len
     );
 
     Packet* write_();
-    msg::Error read_(p2p::Manager& netman);
+    Error read_(p2p::Manager& netman);
 
     inline bool is_epollout_enabled() { 
         return (events_ & EPOLLOUT) != 0; 
@@ -58,9 +58,9 @@ public:
     bool disable_epollout(int epfd);
     bool enable_epollout(int epfd);
 
-    msg::Error syn(p2p::Manager& man);
-    msg::Error syn_ack(p2p::Manager& man);
-    msg::Error ack(p2p::Manager& man);
+    Error syn(p2p::Manager& man);
+    Error syn_ack(p2p::Manager& man);
+    Error ack(p2p::Manager& man);
 
     void clear();
 };

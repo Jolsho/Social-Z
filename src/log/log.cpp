@@ -46,14 +46,14 @@ std::string Logger::derive_file_name() {
     return std::string(buf);
 }
 
-bool Logger::write_log(msg::Msg* l) {
+bool Logger::write_log(Msg* l) {
     if (!f_ || !l) return false;
-    std::byte* b = l->data.data();
-    size_t n = write(f_, b, l->data.size());
-    if (n < l->data.size()) {
-        size_t remaining = l->data.size() - n;
+    std::byte* b = reinterpret_cast<std::byte*>(l->data);
+    size_t n = write(f_, b, l->data_len);
+    if (n < l->data_len) {
+        size_t remaining = l->data_len - n;
         memmove(b, b + n, remaining);
-        l->data.resize(remaining);
+        l->data_len = remaining;
         return false;
     }
     return true;
@@ -83,7 +83,7 @@ void Logger::poll_loop() {
 
                     if (!msg->is_wiped) write_log(msg);
 
-                    if (!msg->is_wiped) msg->wipe();
+                    if (!msg->is_wiped) msg_wipe(msg);
 
                     if (msg->from == Actors::LOGGER) {
                         if (msgs_.size() < msgs_.capacity()) {

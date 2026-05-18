@@ -1,4 +1,5 @@
 #include <format>
+#include "msg.h"
 #include "p2p/p2p.h"
 #include "p2p/connection.h"
 
@@ -32,7 +33,7 @@ bool conn::Connection::disable_epollout(int epfd) {
     return epoll_ctl(epfd, EPOLL_CTL_MOD, fd_, &ev) == -1;
 }
 
-msg::Error conn::Connection::read_(
+Error conn::Connection::read_(
     p2p::Manager& man
 ) {
     while (true) {
@@ -94,14 +95,30 @@ msg::Error conn::Connection::read_(
         }
 
         if (status_ == conn::Status::Live) {
-            msg::Msg* msg = man.get_msg();
+            Msg* msg = man.get_msg();
+
+            msg->code = (Code)rpkt_.get_code();
+
+            if (msg->code == Code::PING) {
+                Error e = marshal_n_enqueue_msg(man.get_pkt(), man.keys_.pub, Code::PONG, NULL, 0);
+                if (e.is_err()) {
+                    return { 
+                        -1, id_, 
+                        Code::E_INTERNAL, 
+                        std::format("read_() :: marshal_pong :: {}", 
+                             key_to_str(remote_auth_key_)
+                        )
+                    };
+                }
+            } else if (msg-> code == Code::PONG) {
+
+            }
+
+            msg->too = code_too_too(static_cast<Code>(msg->code));
 
             // MAKE SURE ITS NOT A (CTRL || INTERNAL) Code
-            msg->code = (Code)rpkt_.get_code();
-            msg->too = code_too_too(msg->code);
-
-            if (msg->too == Actors::NONE) {
-                msg->wipe();
+            if (msg->too == Actors::NONE && msg->code < Code::ERRORS) {
+                msg_wipe(msg);
                 man.msgs_.push_back(msg);
                 return { 
                     -1, id_, 
@@ -110,13 +127,20 @@ msg::Error conn::Connection::read_(
                          (uint16_t)msg->code , key_to_str(remote_auth_key_)
                     )
                 };
+
+            } else if (msg->code > Code::ERRORS) {
+                // TODO handle error somehow
+
+            } else {
+
+                // ROUTE TO HANDLER THREAD
+                msg->id = id_;
+                msg_insert(msg, reinterpret_cast<uint8_t*>(rpkt_.body()), rpkt_.get_body_len());
+                if (!man.to_main_.push(msg)) {
+                    // TODO 
+                }
             }
 
-            msg->id = id_;
-            msg->data.insert(msg->data.end(), rpkt_.body(), rpkt_.get_cursor());
-            if (!man.to_main_.push(msg)) {
-                // TODO 
-            }
             rpkt_.wipe();
 
         } else if (status_ == conn::Status::CryptoSynAck) {
@@ -126,7 +150,7 @@ msg::Error conn::Connection::read_(
         }
     }
 
-    return msg::SUCCESS;
+    return ESUCCESS;
 }
 
 Packet* conn::Connection::write_() {
@@ -147,7 +171,7 @@ Packet* conn::Connection::write_() {
     return nullptr;
 }
 
-msg::Error conn::Connection::marshal_n_enqueue_msg(
+Error conn::Connection::marshal_n_enqueue_msg(
     Packet* pkt, 
     const Key& key,
     uint16_t code,
@@ -161,7 +185,8 @@ msg::Error conn::Connection::marshal_n_enqueue_msg(
     pkt->set_version(version_);
     pkt->set_code(code);
     pkt->set_key(key);
-    memcpy(pkt->body(), data, len);
+    if (data)
+        memcpy(pkt->body(), data, len);
 
     // ENCRYPT BODY
     int r = pkt->encrypt_body(tx_key_);
@@ -171,7 +196,7 @@ msg::Error conn::Connection::marshal_n_enqueue_msg(
 
     wpkts_.push_back(pkt);
 
-    return msg::SUCCESS;
+    return ESUCCESS;
 }
 
 
