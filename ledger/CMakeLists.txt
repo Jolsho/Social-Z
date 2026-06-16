@@ -60,7 +60,7 @@ endif()
 ####################################################
 #                   LMDB
 ####################################################
-target_link_libraries(bullet_db PRIVATE ${PROJECT_SOURCE_DIR}/../lib/lmdb/liblmdb.a)
+target_link_libraries(bullet_db PRIVATE ${CMAKE_SOURCE_DIR}/../lib/lmdb/liblmdb.a)
 
 
 ####################################################

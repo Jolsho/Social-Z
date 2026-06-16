@@ -1,0 +1,36 @@
+API:: {
+
+    AUTH {
+        Login
+            -> Ask DB for unredeemed vouchers.
+                -> redeem them all in some order
+            -> Send client notifications.
+
+        Logout -> simple
+    }
+
+    PUTTERS {
+        Save File
+            -> Chunks   => FS
+
+        Save Card
+            -> ID card  => DB
+
+        Send Voucher(s)
+            -> Broadcast Voucher(s)
+                -> buffer of voucher(s) => P2P
+
+        Redeem Voucher(s)
+            -> buffer of voucher(s) => P2P
+    }
+
+    GETTERS {
+        Get Series
+            -> retrieves ordered ID cards (text/post/etc)
+                -> has an id/hash for recipients?
+                    or how to do that?
+
+        Get File
+            -> FS chunks back
+    }
+}

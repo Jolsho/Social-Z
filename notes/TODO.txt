@@ -1,0 +1,12 @@
+
+TODO --
+    DoS prevention by rate limiting incoming connections
+    I thought behaviour tracking did this though.
+    I mean unless you use legal paths to do this sort of thing.
+        But even then its like there isnt a case that happens.
+    Even when you post to someones feed they have to request it.
+        You can just post as much as you want.
+        You notify them of a new post and then they can request it.
+
+    So I suppose you could overload with those notis, but those are tiny.
+    That would be incredibly difficult.

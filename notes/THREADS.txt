@@ -1,0 +1,15 @@
+
+How many threads, and how this dictates hardware choice.
+
+P2P -> Active with expire checks and ping/pong crypto.      => 1
+
+MAIN -> will be actively switching msgs around.             => 2
+
+FS  -> Uses LMDB and FileSys, and crypto.                   => 3
+
+SZ  -> depends on the CLIENT and what they want to do.      => 4
+
+DB  -> SQL might spend significant time asleep.             => -
+
+LOG -> shouldnt be that big of a deal.                      => -
+    just writing to fs and fsync

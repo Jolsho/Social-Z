@@ -1,0 +1,20 @@
+There is a very interesting problem here of modeling the network.
+And like how to use this information to 
+    1) maintain consensus
+    2) optimize network
+    3) do things generally
+May require another thread?
+
+- I can figure out how other people are doing.
+
+- They dont have time and give me some other way of contacting them.
+- Tell them I got a new phone number and they can reach me there.
+
+- We get along well and become closer friends
+- Our friend group can grow.
+- Maybe we start a company, or move somewhere together.
+
+- Can offer them something they need (for free or paid) or vice versa.
+- Maybe they offer me a job.(Do something for pay)
+- They let me stay or store something at their house for a bit.
+

@@ -5,15 +5,16 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(sz LANGUAGES C CXX)
 
-option(BUILD_TESTS "Build tests" ON)
+add_subdirectory(node)
 
-add_subdirectory(src)
-add_subdirectory(ledger)
-
-#add_executable(sz src/main.cpp)
-#target_link_libraries(sz PRIVATE sz_lib)
-
-if(BUILD_TESTS)
-    enable_testing()
-    add_subdirectory(tests)
+option(LEDGER "Add Ledger Component" OFF)
+if(LEDGER)
+    add_subdirectory(ledger)
 endif()
+
+option(RPC_HTTP "Build & run RPC_HTTP" OFF)
+if(RPC_HTTP)
+    add_subdirectory(http)
+endif()
+
+

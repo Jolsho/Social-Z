@@ -1,0 +1,270 @@
+#include "p2p/p2p.h"
+#include "p2p/pkt.h"
+#include "p2p/protocols.h"
+#include "utils/chans.h"
+#include "utils/error.h"
+#include <format>
+
+Error p2p::Manager::writeable_conn(conn::Connection& conn) {
+    int mid = conn.write_(*this);
+    if (mid >= 0) {
+        while (true) {
+            auto next = messenger_.next(mid);
+
+            if (next.has_value()) {
+                auto [key, msg] = next.value();
+                
+                ConnID id;
+                if (connect(key, &id).has_value()) {
+                    //messenger_.push_to_retry(mid, key);
+                    continue;
+                }
+
+                conn::Connection &conn = connections_[id];
+
+                if (conn.pending_ids_.size() >= conn.MAX_PENDING_OUT)  {
+                    // TODO messenger_.push_to_retry(mid, key);
+                    continue;
+                }
+                conn.pending_ids_.push_back(mid);
+
+                if (conn.status_ == conn::Status::Live && !conn.is_epollout_enabled()) {
+                        conn.events_ = conn.enable_epollout(epoll_fd_);
+                }
+                break;
+
+            } else {
+
+                auto m = messenger_.remove(mid);
+                if (!m.has_value()) break;
+
+                if (m->data) {
+                    if (m->from != act_code(Actors::P2P)) {
+                        *chans_.out_.reserve(Priority::Control) = m.value();
+                        chans_.out_.commit(Priority::Control);
+                    } else {
+                        buffers_.put(m->data);
+                    }
+                }
+                break;
+            }
+        }
+    }
+    return ESUCCESS;
+}
+
+Error p2p::Manager::readable_conn(conn::Connection& conn) {
+
+    Error e = conn.read_(buffers_); 
+
+    if (!e.is_err() && conn.rpkt_.is_done() && conn.status_ == conn::Status::Live) {
+
+        int code = conn.rpkt_.get_code();
+
+        // MAKE SURE ITS NOT A (CTRL || INTERNAL) Code
+        if (code >= act_code(Actors::COUNT)) {
+            e = { 
+                -1, conn.id_, 
+                E_UNAUTHORIZED, 
+                conn.keys_.remote_auth_,
+                std::format("read_() :: bad too code :: {} :: {}", 
+                     code, key_to_str(conn.keys_.remote_auth_)
+                )
+            };
+
+        } else if (code == act_code(Actors::P2P)) {
+            e = p2p_protocols(conn);
+
+        } else if (Msg* msg = chans_.out_.reserve(Priority::Work)) {
+            msg->too = code;
+            msg->data = buffers_.grab(conn.rpkt_.get_len());
+
+            // ROUTE TO HANDLER THREAD
+            msg->id = conn.id_;
+            vec_write(msg->data, conn.rpkt_.get_body_cursor(), conn.rpkt_.get_len());
+            chans_.out_.commit(Priority::Work);
+        } else {
+            e = { 
+                -1, conn.id_, 
+                E_INTERNAL, 
+                conn.keys_.remote_auth_,
+                "connection::read_() :: to_main_ is full."
+            };
+        }
+    } else if (conn.status_ == conn::Status::CryptoSynAck) {
+        e = conn.syn_ack(*this);
+
+    } else if (conn.status_ == conn::Status::CryptoAck) {
+        e = conn.ack(*this);
+    }
+
+    if (e.is_err() || conn.rpkt_.is_done()) {
+        conn.rpkt_.wipe();
+        buffers_.put(conn.rpkt_.buff_);
+    }
+
+    return e;
+}
+
+Error p2p::Manager::p2p_protocols(conn::Connection& c) {
+    int mid = messenger_.new_msg(NULL);
+    Msg& msg = messenger_.get_mut_msg(mid);
+    Error e = ESUCCESS;
+    if (c.rpkt_.is_ping()) {
+        e = marshal_pong(buffers_, msg, c.rpkt_.buff_);
+
+    } else if (c.rpkt_.is_pong()) {
+        // TODO -- record
+    }
+
+    if (e.is_err()) {
+        auto r = messenger_.remove(mid);
+        if (r.has_value()) {
+            Msg& m = r.value();
+            buffers_.put(m.data);
+        }
+        return e;
+    }
+    c.pending_ids_.push_back(mid);
+
+    return ESUCCESS;
+}
+
+
+void p2p::Manager::handle_error(Error e) {
+    if (e.key == ZERO_KEY) {
+        e.key = connections_[e.id].keys_.remote_auth_;
+    }
+    // TODO --> if E == E_BAD_ANON record IP
+    // if IP happens multiple times then ban IP
+    // using the ip socet or whatever...
+    // this shit should be done in citizen I think.
+    // we just make sure to pass the ip and key and error
+
+
+    Citizen& citizen = citizens_.map_.at(e.key);
+    citizen.record_infringement(e.code);
+
+    if (!citizen.is_trustworthy()) {
+        if (e.id == 0) {
+            auto it =  key_to_conn_.find(e.key);
+            if (it != key_to_conn_.end())
+                remove_socket(it->second);
+        } else {
+            remove_socket(e.id);
+        }
+    }
+    logr_->log(e.msg, e.r, e.code);
+}
+
+Error p2p::Manager::handle_msg(Msg* msg) {
+    if (!msg->is_wiped && msg->code >= E_SUCCESS) {
+        // REGULAR INTERNAL MSG
+        switch (msg->code) {
+            case p2p::code(p2p::Code::CloseConn): {
+                remove_socket(msg->id);
+                break;
+            }
+
+            case p2p::code(p2p::Code::NewConn): {
+                Key pubkey;
+                vec_read(msg->data, pubkey.data(), KEY_SIZE);
+
+                ConnID id;
+                auto res = connect(pubkey, &id);
+                if (res->is_err()) return res.value();
+                
+                break;
+            }
+
+            case p2p::code(p2p::Code::Broadcast): {
+                int mid = messenger_.new_msg(msg);
+                auto next = messenger_.next(mid);
+                if (!next.has_value()) {
+                    // This should never happen.
+                    auto m = messenger_.remove(mid);
+                    if (m.has_value()) {
+                        Msg& mm = m.value();
+                        mm.too = mm.from;
+                        *chans_.out_.reserve(Priority::Control) = mm;
+                        chans_.out_.commit(Priority::Control);
+                    }
+                    return Error{ .r = -1, .msg = "Failed Broadcast" };
+                }
+
+                auto [key, _] = next.value();
+                ConnID id = msg->id;
+
+                conn::Connection &conn = connections_[id];
+                if (conn.keys_.remote_auth_ != key) {
+                    auto r = connect(key, &id);
+                    if (r->is_err()) return r.value();
+                    conn = connections_[id];
+                }
+
+                if (conn.pending_ids_.size() >= conn.MAX_PENDING_OUT)  {
+                    return {-1,  conn.id_, E_INTERNAL, conn.keys_.remote_auth_, "Write Buffer CAP reached."};
+                }
+                conn.pending_ids_.push_back(mid);
+
+                if (conn.status_ == conn::Status::Live && !conn.is_epollout_enabled()) {
+                        conn.events_ = conn.enable_epollout(epoll_fd_);
+                }
+                /*
+                    TODO -- 
+                        need a way to be able to broadcast multiple chunks.
+
+                        also we shouldnt be sending sequentially.
+                        it should be a few at a time.
+
+                        When they finally do connect or whatever:
+                            - check for broadcast ID.
+                            - get and marshal msg from broadcaster.
+                                - make sure not already sending msg.
+                                - if so wait until that finishes.
+                            - keep track of msg idx(pack broadcast_id with an idx)
+                            - if last pkt try to lead next recipient
+                                - if no more and your last sending destroy broadcaster
+                                    - this might not be right...
+                                        - because of multiple chunks
+                */
+                break;
+            }
+
+            default: {
+                return {-1,  0, E_INTERNAL, ZERO_KEY, "Invalid msg code."};
+                break;
+            }
+        }
+
+    } else if (!msg->is_wiped) {
+
+        // INTERNAL ERROR MSG
+        Error e {};
+        unmarshal_error(e, msg);
+        handle_error(e);
+    }
+
+    if (!msg->is_wiped) msg_wipe(msg);
+
+    if (msg->from == act_code(Actors::P2P) && msg->data) {
+
+        buffers_.put(msg->data);
+
+    } else if (msg->from != act_code(Actors::P2P) && msg->data) {
+
+        // Return message
+        Msg* r_m = chans_.out_.reserve(Priority::Control);
+        if (r_m) {
+            *r_m  = *msg;
+            chans_.out_.commit(Priority::Control);
+
+        } else {
+            free(msg->data->b);
+            delete msg->data;
+        }
+    }
+    chans_.in_.pop();
+
+    return ESUCCESS;
+}

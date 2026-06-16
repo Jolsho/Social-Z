@@ -1,3 +1,5 @@
 build
 deps
 lib
+http
+.cache

@@ -187,10 +187,11 @@ fi
 
 
 if [[ ! -d "./build" ]]; then 
-    cmake -B build
+        cmake -B build
 fi
-
 cmake --build build
+
+
 
 RUN=0
 while getopts "r" opt; do
