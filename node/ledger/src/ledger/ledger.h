@@ -40,9 +40,9 @@
 */
 
 #pragma once
-#include "gadgets.h"
-#include "hashing.h"
-#include "node.h"
+#include "ledger/gadgets.h"
+#include "utils/hashing.h"
+#include "trie/node.h"
 
 
 class Ledger {

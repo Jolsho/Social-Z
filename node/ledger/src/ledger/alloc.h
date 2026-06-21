@@ -17,10 +17,10 @@
  */
 
 #pragma once
-#include "node.h"
-#include "db.h"
-#include "lru.h"
-#include "result.h"
+#include "trie/node.h"
+#include "ledger/db.h"
+#include "utils/lru.h"
+#include "utils/result.h"
 
 struct Gadgets;
 

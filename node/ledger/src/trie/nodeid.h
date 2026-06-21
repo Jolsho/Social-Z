@@ -21,7 +21,7 @@
 #include <array>
 #include <vector>
 #include "blst.h"
-#include "hashing.h"
+#include "utils/hashing.h"
 
 // 13 bytes for path, 1 for level, and 2 for block_id
 const size_t ID_SIZE = 13 + 1 + 2;

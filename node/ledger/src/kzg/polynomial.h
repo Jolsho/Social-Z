@@ -17,7 +17,7 @@
  */
 
 #pragma once
-#include "settings.h"
+#include "kzg/settings.h"
 #include <optional>
  
 using Polynomial = std::vector<blst_scalar>;

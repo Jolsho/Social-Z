@@ -16,13 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "branch.h"
+#include "trie/branch.h"
 #include "blst.h"
-#include "hashing.h"
-#include "helpers.h"
-#include "leaf.h"
-#include "polynomial.h"
-#include "state_types.h"
+#include "utils/hashing.h"
+#include "kzg/helpers.h"
+#include "trie/leaf.h"
+#include "kzg/polynomial.h"
+#include "trie/state_types.h"
 #include <cstring>
 
 Branch::Branch(

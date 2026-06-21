@@ -16,12 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "processing.h"
-#include "bitmap.h"
-#include "hashing.h"
-#include "helpers.h"
-#include "kzg.h"
-#include "state_types.h"
+#include "blocks/processing.h"
+#include "utils/bitmap.h"
+#include "utils/hashing.h"
+#include "kzg/helpers.h"
+#include "kzg/kzg.h"
+#include "trie/state_types.h"
 #include <cstdint>
 #include <cstdio>
 #include <future>

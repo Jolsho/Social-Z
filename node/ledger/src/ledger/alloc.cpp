@@ -16,8 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "branch.h"
-#include "leaf.h"
+#include "trie/branch.h"
+#include "trie/leaf.h"
 #include <cassert>
 
 NodeAllocator::NodeAllocator(

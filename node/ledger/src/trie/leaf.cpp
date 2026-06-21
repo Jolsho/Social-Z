@@ -16,11 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "bitmap.h"
-#include "helpers.h"
-#include "leaf.h"
-#include "branch.h"
-#include "state_types.h"
+#include "utils/bitmap.h"
+#include "kzg/helpers.h"
+#include "trie/leaf.h"
+#include "trie/branch.h"
+#include "trie/state_types.h"
 
 Leaf::Leaf(
     Gadgets_ptr gadgets, 

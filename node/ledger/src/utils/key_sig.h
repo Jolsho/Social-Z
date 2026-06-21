@@ -18,7 +18,7 @@
 
 #pragma once
 #include "blst.h"
-#include "hashing.h"
+#include "utils/hashing.h"
 #include <array>
 #include <vector>
 

@@ -16,10 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "fft.h"
-#include "kzg.h"
-#include "helpers.h"
-#include "polynomial.h"
+#include "kzg/fft.h"
+#include "kzg/kzg.h"
+#include "kzg/helpers.h"
+#include "kzg/polynomial.h"
 
 // Returns C, Pi
 std::optional<blst_p1> prove_kzg(

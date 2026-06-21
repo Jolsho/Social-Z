@@ -17,9 +17,9 @@
  */
 
 #pragma once
-#include "fft.h"
-#include "gadgets.h"
-#include "helpers.h"
+#include "kzg/fft.h"
+#include "ledger/gadgets.h"
+#include "kzg/helpers.h"
 
 // TODO -- make children vector cleaner...like branch
 

@@ -17,7 +17,7 @@
  */
 
 #pragma once
-#include "bigint.h"
+#include "utils/bigint.h"
 #include "blst.h"
 
 blst_scalar num_scalar(const uint64_t v);

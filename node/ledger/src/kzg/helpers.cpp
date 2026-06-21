@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "helpers.h"
+#include "kzg/helpers.h"
 #include <cstring>
 #include <iomanip>
 #include <iostream>

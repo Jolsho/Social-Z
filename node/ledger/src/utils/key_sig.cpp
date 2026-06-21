@@ -18,7 +18,7 @@
 
 #include <cstdlib>
 #include <cstring>
-#include "key_sig.h"
+#include "utils/key_sig.h"
 
 std::tuple<const byte*, size_t> str_to_bytes(const char* str) {
     const byte* bytes = reinterpret_cast<const byte*>(str);

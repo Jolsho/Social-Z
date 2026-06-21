@@ -1,74 +1,22 @@
 # SPDX-License-Identifier: GPL-3.0-only
-
-cmake_minimum_required(VERSION 3.9)
-
-project(bullet_lmdb)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_library(bullet_db SHARED)
+add_library(sz_ledger SHARED)
 
-target_include_directories(bullet_db PUBLIC
-    ${PROJECT_SOURCE_DIR}/bindings
-)
-target_include_directories(bullet_db PRIVATE
-    ${PROJECT_SOURCE_DIR}/include
-    ${PROJECT_SOURCE_DIR}/src/kzg
-    ${PROJECT_SOURCE_DIR}/src/ledger
-    ${PROJECT_SOURCE_DIR}/src/trie
-    ${PROJECT_SOURCE_DIR}/src/utils
-    ${PROJECT_SOURCE_DIR}/src/blocks
-    ${PROJECT_SOURCE_DIR}/src/bindings
-)
-
-file(GLOB_RECURSE HEADERS "src/**/*.h")
 file(GLOB_RECURSE SRC "src/**/*.cpp")
-target_sources(bullet_db PRIVATE ${SRC} ${HEADERS})
+target_sources(sz_ledger PRIVATE ${SRC})
+target_include_directories(sz_ledger 
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/bindings
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
 
-
-####################################################
-#                   BLST
-####################################################
-set(BLST_SOURCE ${PROJECT_SOURCE_DIR}/deps/blst)
-set(BLST_INCLUDE ${BLST_SOURCE}/bindings)
-if(TESTING)
-    target_include_directories(bullet_db PUBLIC ${BLST_INCLUDE})
-    target_link_libraries(bullet_db PUBLIC ${BLST_SOURCE}/libblst.a)
-else()
-    target_include_directories(bullet_db PRIVATE ${BLST_INCLUDE})
-    target_link_libraries(bullet_db PRIVATE ${BLST_SOURCE}/libblst.a)
-endif()
-
-
-####################################################
-#                   BLAKE 3
-####################################################
-set(BLAKE3_SOURCE ${PROJECT_SOURCE_DIR}/deps/blake3)
-set(BLAKE3_INCLUDE ${BLAKE3_SOURCE}/c)
-if(TESTING)
-    target_include_directories(bullet_db PUBLIC ${BLAKE3_INCLUDE})
-    target_link_libraries(bullet_db PUBLIC ${BLAKE3_SOURCE}/libblake3.a)
-else()
-    target_include_directories(bullet_db PRIVATE ${BLAKE3_INCLUDE})
-    target_link_libraries(bullet_db PRIVATE ${BLAKE3_SOURCE}/libblake3.a)
-endif()
-
-
-####################################################
-#                   LMDB
-####################################################
-set(LMDB_SOURCE ${PROJECT_SOURCE_DIR}/deps/lmdb/libraries/liblmdb)
-set(LMDB_INCLUDE ${LMDB_SOURCE})
-if(TESTING)
-    target_include_directories(bullet_db PUBLIC ${BLAKE3_INCLUDE})
-    target_link_libraries(bullet_db PUBLIC ${BLAKE3_SOURCE}/libblake3.a)
-else()
-    target_include_directories(bullet_db PRIVATE ${BLAKE3_INCLUDE})
-    target_link_libraries(bullet_db PRIVATE ${BLAKE3_SOURCE}/libblake3.a)
-endif()
+target_link_libraries(sz_ledger PRIVATE 
+    $<$<TARGET_EXISTS:blst>:blst>
+    $<$<TARGET_EXISTS:lmdb>:lmdb>
+    $<$<TARGET_EXISTS:blake3>:blake3>
+)
 
 ####################################################
 #                   TESTING

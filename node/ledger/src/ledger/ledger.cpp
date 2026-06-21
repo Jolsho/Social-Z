@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "ledger.h"
-#include "branch.h"
-#include "state_types.h"
+#include "ledger/ledger.h"
+#include "trie/branch.h"
+#include "trie/state_types.h"
 
 const size_t PENDING_BLOCKS_SIZE = 256;
 

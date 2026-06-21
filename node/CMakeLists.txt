@@ -20,8 +20,8 @@ option(DB           "Add DB Actor"      ON)
 option(FS           "Add FS Actor"      ON)
 option(LOG          "Add LOG Actor"     ON)
 option(P2P          "Add P2P Actor"     ON)
+option(LEDGER       "Add Ledger Actor"  ON)
 
-option(LEDGER       "Add Ledger Actor"  OFF)
 option(RPC          "Add RPC Actor"     OFF)
 
 
@@ -36,7 +36,11 @@ option(USE_OPENSSL  "Enable OpenSSL"    OFF)
 option(USE_LLHTTP   "Enable llhttp"     OFF)
 option(USE_SQLITE   "Enable SQLite"     OFF)
 option(USE_SIMDJSON "Enable simdjson"   OFF)
+option(USE_BLST     "Enable libblst"    OFF)
 
+if (LEDGER) 
+    set(USE_BLST        ON CACHE BOOL "" FORCE)
+endif()
 
 if (LEDGER OR FS)
     set(USE_UTILS       ON CACHE BOOL "" FORCE)
@@ -170,6 +174,33 @@ if(USE_SIMDJSON)
     )
 
     FetchContent_MakeAvailable(simdjson)
+endif()
+
+# OPENSSL
+if(USE_BLST)
+    ExternalProject_Add(blst_ep
+        PREFIX ${CMAKE_BINARY_DIR}/_deps/blst
+
+        GIT_REPOSITORY https://github.com/supranational/blst.git
+        GIT_TAG v0.3.15
+
+        UPDATE_DISCONNECTED TRUE
+        BUILD_IN_SOURCE 1
+
+        CONFIGURE_COMMAND ""
+        BUILD_COMMAND ./build.sh
+        INSTALL_COMMAND ""
+    )
+
+    set(BLST_SRC ${CMAKE_BINARY_DIR}/_deps/blst/src/blst_ep)
+    add_library(blst STATIC IMPORTED GLOBAL)
+    add_dependencies(blst blst_ep)
+
+    set_target_properties(blst PROPERTIES
+        IMPORTED_LOCATION ${BLST_SRC}/libblst.a
+        INTERFACE_INCLUDE_DIRECTORIES ${BLST_SRC}/bindings
+    )
+
 endif()
 
 

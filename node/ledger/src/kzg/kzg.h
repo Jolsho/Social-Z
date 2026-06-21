@@ -17,8 +17,8 @@
  */
 
 #pragma once
-#include "hashing.h"
-#include "settings.h"
+#include "utils/hashing.h"
+#include "kzg/settings.h"
 #include <optional>
 
 using Scalar_vec = std::vector<blst_scalar>;

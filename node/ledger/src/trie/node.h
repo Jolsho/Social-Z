@@ -17,10 +17,10 @@
  */
 
 #pragma once
-#include "bitmap.h"
-#include "nodeid.h"
-#include "state_types.h"
-#include "polynomial.h"
+#include "utils/bitmap.h"
+#include "trie/nodeid.h"
+#include "trie/state_types.h"
+#include "kzg/polynomial.h"
 #include <memory>
 
 class Node;

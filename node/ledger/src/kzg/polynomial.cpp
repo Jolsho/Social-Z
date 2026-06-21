@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "helpers.h"
-#include "polynomial.h"
-#include "kzg.h"
+#include "kzg/helpers.h"
+#include "kzg/polynomial.h"
+#include "kzg/kzg.h"
 
 // ================== COMMIT POLYNOMIAL ==================
 // commits to f(x) via evaluating f(r)

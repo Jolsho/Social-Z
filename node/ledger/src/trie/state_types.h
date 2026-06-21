@@ -17,7 +17,7 @@
  */
 
 #pragma once
-#include "hashing.h"
+#include "utils/hashing.h"
 
 using Commitment = blst_p1;
 using Proof = blst_p1;

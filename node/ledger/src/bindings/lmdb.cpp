@@ -17,8 +17,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "db.h"
-#include "state_types.h"
+#include "ledger/db.h"
+#include "trie/state_types.h"
 
 extern "C" {
 

@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "bitmap.h"
-#include "helpers.h"
-#include "processing.h"
+#include "utils/bitmap.h"
+#include "kzg/helpers.h"
+#include "blocks/processing.h"
 
 int ledger_finalize(
     void* ledger, 

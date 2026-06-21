@@ -64,12 +64,12 @@
 */
 
 #pragma once
-#include "fft.h"
-#include "gadgets.h"
-#include "helpers.h"
-#include "node.h"
-#include "nodeid.h"
-#include "state_types.h"
+#include "kzg/fft.h"
+#include "ledger/gadgets.h"
+#include "kzg/helpers.h"
+#include "trie/node.h"
+#include "trie/nodeid.h"
+#include "trie/state_types.h"
 
 class Branch : public Node {
 private:

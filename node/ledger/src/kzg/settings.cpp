@@ -16,8 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "settings.h"
-#include "helpers.h"
+#include "kzg/settings.h"
+#include "kzg/helpers.h"
 
 NTTRoots build_roots(size_t n) {
     

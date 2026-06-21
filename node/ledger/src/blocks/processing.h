@@ -17,8 +17,8 @@
  */
 
 #pragma once
-#include "kzg.h"
-#include "ledger.h"
+#include "kzg/kzg.h"
+#include "ledger/ledger.h"
 
 int finalize_block(
     Ledger &ledger, 

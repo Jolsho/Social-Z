@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "nodeid.h"
+#include "trie/nodeid.h"
 #include <algorithm>
 #include <cstring>
 #include <format>

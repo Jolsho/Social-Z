@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "db.h"
+#include "ledger/db.h"
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
