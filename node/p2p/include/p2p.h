@@ -1,5 +1,4 @@
 #pragma once
-#include "bindings.h"
 #include "utils/accumulator.h"
 #include "connection.h"
 #include "citizens.h"
@@ -52,7 +51,7 @@ public:
 
     std::deque<std::pair<ConnID, time_t>>    negotiating_timeouts_;
 
-    MsgBuffer*  out_msgs_;
+    MsgBuffer*  free_out_msgs_;
     MsgBuffer*  in_msgs_;
 
 

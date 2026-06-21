@@ -10,6 +10,4 @@ target_include_directories(sz_fs
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
-
-# core gives us access to sodium and lmdb
-target_link_libraries(sz_fs PRIVATE sz_core)
+target_link_libraries(sz_fs PRIVATE sz_api sz_utils)

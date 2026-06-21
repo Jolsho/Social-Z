@@ -35,7 +35,7 @@ class Server {
 public:
     Actor*               chans_;
 
-    MsgBuffer*  out_msgs_;
+    MsgBuffer*  free_out_msgs_;
     MsgBuffer*  in_msgs_;
 
     Server(Actor *chans, DBConfig& conf);

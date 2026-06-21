@@ -106,5 +106,5 @@ void p2p::Manager::shutdown() {
     }
     close(listen_fd_);
     logr_->log("Server Shutdown Successful.");
-    logr_->flush(this->out_msgs_);
+    logr_->flush(this->free_out_msgs_);
 }

@@ -1,6 +1,6 @@
 #pragma once
 #include "blake3.h"
-#include "bindings.h"
+#include "api/types.h"
 #include <cstddef>
 #include <cstring>
 

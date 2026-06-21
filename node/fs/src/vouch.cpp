@@ -1,6 +1,6 @@
 #include "fs.h"
 #include "fs_types.h"
-#include "bindings.h"
+#include "api/db.h"
 #include "utils/vec.h"
 #include <cstddef>
 #include <cstdio>
@@ -68,7 +68,7 @@ void fs::Manager::voucher(const Msg* msg, Error& e) {
     }
 
     
-    Msg* m = next_msg(out_msgs_);
+    Msg* m = consume_msg(free_out_msgs_);
     if (!m) {
         e.code = E_INTERNAL;
         e.msg = "voucher() :: too_main_ no msgs.";
@@ -245,7 +245,7 @@ void fs::Manager::reward(const Msg* msg, Error& e) {
             return;
         }
 
-        Msg* m = next_msg(out_msgs_);
+        Msg* m = consume_msg(free_out_msgs_);
         if (!m) {
             e.code = E_INTERNAL;
             e.msg = "reward() :: too_main_ no msgs.";

@@ -64,11 +64,10 @@ void fs::Manager::poll_loop() {
 
                 // INTERNAL MSGS
 
-                auto stats = poll_actor(chans_, in_msgs_, out_msgs_);
+                auto stats = poll_actor(chans_, in_msgs_, free_out_msgs_);
                 if (stats != NULL) logr_->log(stats);
 
-                size_t processed = 0;
-                while (Msg* msg = next_msg(in_msgs_)) {
+                while (Msg* msg = consume_msg(in_msgs_)) {
                     if (!msg->is_wiped && msg->data && msg->data->len > sizeof(FSCODE)) {
 
                         // If no space just silently drop
@@ -110,13 +109,12 @@ void fs::Manager::poll_loop() {
                         buffers_.put(msg->data);
                     } else {
                         // Return message
-                        Msg* m = next_msg(out_msgs_);
+                        Msg* m = consume_msg(free_out_msgs_);
                         *m = *msg;
                         m->priority = PRIORITY_WORK;
                     }
 
-                    // TODO
-                    update_actor(chans_, processed, 0);
+                    update_actor(chans_, &in_msgs_->consumed_, &free_out_msgs_->consumed_);
                 }
             } else {
                 // OTHER FD
@@ -145,7 +143,7 @@ void fs::Manager::poll_loop() {
         const int MAX_OUTS_PER_ROUND = 8;
         for (int i = 0; i < MAX_OUTS_PER_ROUND; i++) {
             Session& s = outbound_.front();
-            Msg* m = next_msg(out_msgs_);
+            Msg* m = consume_msg(free_out_msgs_);
             m->priority = PRIORITY_WORK;
             m->data = buffers_.grab(BufferSize::SU);
             m->too = s.actor;
@@ -167,7 +165,7 @@ void fs::Manager::poll_loop() {
                     open_files_.erase(s.file->hash);
                 }
                 outbound_.pop_front();
-                revert_msg(out_msgs_);
+                unconsume_msg(free_out_msgs_);
 
                 continue;
             }
@@ -210,7 +208,7 @@ void fs::Manager::poll_loop() {
                     open_files_.erase(s.file->hash);
                 }
                 outbound_.pop_front();
-                revert_msg(out_msgs_);
+                unconsume_msg(free_out_msgs_);
                 continue;
             }
 

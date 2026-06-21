@@ -1,6 +1,7 @@
 #include "fs.h"
 #include "fs_types.h"
-#include "bindings.h"
+#include "api/db.h"
+#include "api/rpc.h"
 #include "utils/vec.h"
 #include <format>
 
@@ -38,7 +39,7 @@ void fs::Manager::give(const Msg* msg, Error& e) {
 
     new_pending_perm(p_hash);
 
-    Msg* m = next_msg(out_msgs_);
+    Msg* m = consume_msg(free_out_msgs_);
     if (!m) {
         e.code = E_INTERNAL;
         e.msg = "give() :: too_main_ no msgs.";
@@ -55,7 +56,7 @@ void fs::Manager::give(const Msg* msg, Error& e) {
         e.msg = "give() :: marshal response";
         buffers_.put(m->data);
         msg_wipe(m);
-        revert_msg(out_msgs_);
+        unconsume_msg(free_out_msgs_);
         return;
     }
 };
@@ -126,7 +127,7 @@ void fs::Manager::settle(const Msg* msg, Error& e) {
         if (pp.remove_perm(p_hash)) break;
     }
 
-    Msg* m = next_msg(out_msgs_);
+    Msg* m = consume_msg(free_out_msgs_);
     if (!m) {
         e.code = E_INTERNAL;
         e.msg = "remote_settle() :: too_main_ no msgs.";
@@ -143,7 +144,7 @@ void fs::Manager::settle(const Msg* msg, Error& e) {
         e.msg = "remote_settle() :: marshal perm";
         buffers_.put(m->data);
         msg_wipe(m);
-        revert_msg(out_msgs_);
+        unconsume_msg(free_out_msgs_);
         return;
     }
 };
@@ -182,7 +183,7 @@ void fs::Manager::ask(const Msg* msg, Error& e) {
     memset(&p.signature, 0, SIG_SIZE);
 
 
-    Msg* m = next_msg(out_msgs_);
+    Msg* m = consume_msg(free_out_msgs_);
     if (!m) {
         e.code = E_INTERNAL;
         e.msg = "ask() :: too_main_ no msgs.";
@@ -200,7 +201,7 @@ void fs::Manager::ask(const Msg* msg, Error& e) {
         e.msg = "ask() :: marshal perm";
         buffers_.put(m->data);
         msg_wipe(m);
-        revert_msg(out_msgs_);
+        unconsume_msg(free_out_msgs_);
         return;
     }
 
@@ -329,7 +330,7 @@ void fs::Manager::local_settle(const Msg* msg, Error& e) {
         if (pp.remove_perm(p_hash)) break;
     }
 
-    Msg* m = next_msg(out_msgs_);
+    Msg* m = consume_msg(free_out_msgs_);
     if (!m) {
         e.code = E_INTERNAL;
         e.msg = "local_settle() :: too_main_ no msgs.";
@@ -350,7 +351,7 @@ void fs::Manager::local_settle(const Msg* msg, Error& e) {
         e.msg = "local_settle() :: marshal response";
         buffers_.put(m->data);
         msg_wipe(m);
-        revert_msg(out_msgs_);
+        unconsume_msg(free_out_msgs_);
         return;
     }
 };

@@ -40,7 +40,7 @@ Error p2p::Manager::writeable_conn(conn::Connection& conn) {
                 if (m->data) {
                     if (m->from != ACTOR_P2P) {
                         m->priority = PRIORITY_CONT;
-                        *next_msg(out_msgs_) = m.value();
+                        *consume_msg(free_out_msgs_) = m.value();
                     } else {
                         buffers_.put(m->data);
                     }
@@ -74,7 +74,7 @@ Error p2p::Manager::readable_conn(conn::Connection& conn) {
         } else if (code == ACTOR_P2P) {
             e = p2p_protocols(conn);
 
-        } else if (Msg* msg = next_msg(out_msgs_)) {
+        } else if (Msg* msg = consume_msg(free_out_msgs_)) {
             msg->priority = PRIORITY_WORK;
             msg->too = code;
             msg->data = buffers_.grab(conn.rpkt_.get_len());
@@ -186,7 +186,7 @@ Error p2p::Manager::handle_msg(Msg* msg) {
                         Msg& mm = m.value();
                         mm.too = mm.from;
                         mm.priority = PRIORITY_CONT;
-                        *next_msg(out_msgs_) = mm;
+                        *consume_msg(free_out_msgs_) = mm;
                     }
                     return Error{ .r = -1, .msg = "Failed Broadcast" };
                 }
@@ -252,7 +252,7 @@ Error p2p::Manager::handle_msg(Msg* msg) {
 
     } else if (msg->from != ACTOR_P2P && msg->data) {
         msg->priority = PRIORITY_CONT;
-        *next_msg(out_msgs_) = *msg;
+        *consume_msg(free_out_msgs_) = *msg;
     }
     return ESUCCESS;
 }

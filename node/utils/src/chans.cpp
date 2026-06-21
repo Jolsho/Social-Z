@@ -1,5 +1,4 @@
 #include "utils/chans.h"
-#include "bindings.h"
 #include <cstddef>
 
 QueueStats Channel::stats(Priority p) {
@@ -18,21 +17,23 @@ QueueStats Channel::stats(Priority p) {
 }
 
 
-size_t Channel::poll(std::span<Msg*>&& msgs) {
+void Channel::poll(MsgBuffer* msgs) {
 
-    size_t i    = 0;
-    size_t prev = 0;
+    size_t free_slots = remaining_space(msgs);
+
+    size_t prev = free_slots;
     size_t laps = 0;
 
     size_t* c = in_use_.front();
-    while (laps < PRIORITY_COUNT && i < msgs.size()) {
+    while (laps < PRIORITY_COUNT && 0 < free_slots) {
 
-        size_t load = std::min(budgets_[current_], msgs.size() - i);
+        size_t load = std::min(budgets_[current_], free_slots);
 
-        i += q_[current_].take_elements(in_use_, load);
+        free_slots -= q_[current_].take_elements(in_use_, load);
 
-        for (;prev < i && c != NULL; prev++) {
-            msgs[prev] = &msgs_[*c];
+        for (;free_slots < prev && c != NULL; prev--) {
+            *(msgs->msgs_ + msgs->head_) = &msgs_[*c];
+            msgs->head_ = (msgs->head_ + 1) % msgs->cap_;
             c = in_use_.step(c);
         }
 
@@ -42,8 +43,6 @@ size_t Channel::poll(std::span<Msg*>&& msgs) {
             ++laps;
         }
     }
-
-    return i;
 }
 
 void Channel::free_msgs(size_t size) {
@@ -59,16 +58,15 @@ void Channel::free_msgs(size_t size) {
     }
 }
 
-size_t Channel::get_free_msgs(std::span<Msg*>&& msgs) {
-    size_t i = 0;
+void Channel::get_free_msgs(MsgBuffer* msgs) {
     size_t* c = free_.back();
+    size_t remaining = remaining_space(msgs);
 
-    while (i < msgs.size() && c != nullptr) {
-        msgs[i++] = &msgs_[*c];
+    while (0 < remaining && c != nullptr) {
+        *(msgs->msgs_ + msgs->head_) = &msgs_[*c];
         c = free_.step(c);
+        msgs->head_ = (msgs->head_ + 1) % msgs->cap_;
     }
-
-    return i;
 }
 
 void Channel::use_free_msgs(size_t size) {

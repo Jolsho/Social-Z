@@ -1,5 +1,5 @@
+#include "api/db.h"
 #include "db.h"
-#include "bindings.h"
 #include "utils/error.h"
 #include "utils/vec.h"
 #include <cstdint>

@@ -1,7 +1,6 @@
 #include <array>
 #include <cassert>
-#include "sz.h"
-#include "bindings.h"
+#include "api/sz.h"
 #include "utils/shutdown.h"
 #include <cstddef>
 #include <cstdlib>
@@ -14,7 +13,7 @@ struct ActorMainView {
     MsgBuffer*  out = nullptr;
     size_t      out_processed = 0;
 
-    MsgBuffer*  in = nullptr;
+    MsgBuffer*  free_in = nullptr;
     size_t      in_pending = 0;
 
     bool        has_work = false;
@@ -42,7 +41,7 @@ bool set_actor(SZT* sz, Actors idx, Actor* actor) {
         .a = actor,
         .out_event_fd = out_event_fd(actor),
         .out = new_msg_buffer(512),
-        .in = new_msg_buffer(512),
+        .free_in = new_msg_buffer(512),
     };
     return true;
 }
@@ -70,7 +69,7 @@ int run(SZT* sz) {
             // POLL ACTORS WHICH HAVE NEW EVENTS
             for (auto& from: sz->actors_) {
                 if (fd == from.out_event_fd) {
-                    from.has_work = poll_actor_main_loop(from.a, from.in, from.out);
+                    from.has_work = poll_actor_main_loop(from.a, from.free_in, from.out);
                 }
             }
         }
@@ -81,7 +80,7 @@ int run(SZT* sz) {
             if (!from.has_work) continue;
             from.has_work = false;
 
-            while (Msg* msg = next_msg(from.out)) {
+            while (Msg* msg = consume_msg(from.out)) {
 
                 from.out_processed++;
 
@@ -94,11 +93,11 @@ int run(SZT* sz) {
                 }
 
                 auto& to = sz->actors_[msg->too];
-                if (Msg* to_msg = next_msg(to.in)) {
+                if (Msg* to_msg = consume_msg(to.free_in)) {
                     to.in_pending++;
                     *to_msg = *msg;
 
-                } else if (Msg* return_msg = next_msg(from.in)) {
+                } else if (Msg* return_msg = consume_msg(from.free_in)) {
                     // TRY TO RETURN TO SENDER
                     from.in_pending++;
                     *return_msg = *msg;

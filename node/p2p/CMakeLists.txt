@@ -11,8 +11,7 @@ target_include_directories(sz_p2p
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# core gives us access to sodium and lmdb
-target_link_libraries(sz_p2p PRIVATE sz_core)
+target_link_libraries(sz_p2p PRIVATE sz_api sz_utils)
 
 # TESTING
 # option(NODE_BUILD_TESTS "Build node tests" ON)

@@ -126,27 +126,21 @@ int register_actor_input_with_epoll(int epoll_fd, Actor* a) {
 }
 
 ChanStatsPair* poll_actor(Actor* actor, MsgBuffer* in, MsgBuffer* out) {
-
-    Msg**   next  = next_msg_ref(in);
-    size_t  space = remaining_space(in);
-    size_t added = actor->in_->poll({next, space});
-    in->head_ = (in->head_ + added) % in->cap_;
-
-    next  = next_msg_ref(out);
-    space = remaining_space(out);
-    added = actor->out_->get_free_msgs({next, space});
-    out->head_ = (out->head_ + added) % out->cap_;
-
+    actor->in_->poll(in);
+    actor->out_->get_free_msgs(out);
     actor->clear_in_event();
     return actor->poll_telemetry();
 }
 
-void update_actor(Actor* actor, size_t in_processed, size_t out_pending) {
+void update_actor(Actor* actor, size_t* in_processed, size_t* out_pending) {
     // flush checkedout msgs from in
-    actor->in_->free_msgs(in_processed);
+    actor->in_->free_msgs(*in_processed);
+    *in_processed = 0;
 
     // pops from free and puts each msg into correct q_[msg->priority]
-    actor->out_->use_free_msgs(out_pending);
+    actor->out_->use_free_msgs(*out_pending);
+    *out_pending = 0;
+
     actor->write_out_event();
 }
 
@@ -158,24 +152,19 @@ void update_actor(Actor* actor, size_t in_processed, size_t out_pending) {
 
 void update_actor_main_loop(Actor* actor, size_t* in_pending, size_t* out_processed) {
     actor->out_->free_msgs(*out_processed);
-    actor->in_->use_free_msgs(*in_pending);
     *out_processed = 0;
+
+    actor->in_->use_free_msgs(*in_pending);
     *in_pending = 0;
+
     actor->write_in_event();
 }
 
 bool poll_actor_main_loop(Actor* actor, MsgBuffer* in, MsgBuffer* out) {
-    Msg**   next  = next_msg_ref(in);
-    size_t  space = remaining_space(in);
-    size_t  added = actor->in_->get_free_msgs({next, space});
-    in->head_ = (in->head_ + added) % in->cap_;
-
-    next  = next_msg_ref(out);
-    space = remaining_space(out);
-    added = actor->out_->poll({next, space});
-    out->head_ = (out->head_ + added) % out->cap_;
-
+    actor->in_->get_free_msgs(in);
+    size_t o = out->head_;
+    actor->out_->poll(out);
     actor->clear_out_event();
-    return added > 0;
+    return o != out->head_;
 }
 

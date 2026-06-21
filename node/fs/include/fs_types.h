@@ -2,7 +2,6 @@
 #include "sig.h"
 #include "crypto.h"
 #include "hash.h"
-#include "bindings.h"
 #include <array>
 #include <cstdio>
 #include <cstring>

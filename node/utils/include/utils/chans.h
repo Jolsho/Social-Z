@@ -1,7 +1,8 @@
 #pragma once
-#include "bindings.h"
+#include "api/actor.h"
+#include "api/msgT.h"
 #include "utils/queue.h"
-#include <span>
+#include <array>
 
 template <typename T> using ChanArray = std::array<T, PRIORITY_COUNT>;
 
@@ -62,10 +63,8 @@ public:
         budgets_[idx] = bud;
     }
 
-    // TODO -- these need to take in MsgBuffers
-    // you cant just append to spans of them
-    size_t poll(std::span<Msg*>&& msgs);
-    size_t get_free_msgs(std::span<Msg*>&& msgs);
+    void poll(MsgBuffer* msgs);
+    void get_free_msgs(MsgBuffer* msgs);
 
     void free_msgs(size_t size);
     void use_free_msgs(size_t size);

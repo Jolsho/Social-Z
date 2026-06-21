@@ -1,4 +1,5 @@
-#include "bindings.h"
+#include "api/msgT.h"
+#include <cstddef>
 #include <cstdlib>
 
 Msg* msg_new(uint8_t from, size_t cap, unsigned char* bytes) {
@@ -65,27 +66,38 @@ void delete_msg_buffer(MsgBuffer* buff) {
     delete buff;
 }
 
-Msg* next_msg(MsgBuffer* buff) {
+Msg* consume_msg(MsgBuffer* buff) {
     if (buff->tail_ == buff->head_) return NULL;
-    Msg* m = (*buff->msgs_) + buff->tail_; // From back
+    Msg* m = *(buff->msgs_ + buff->tail_); // From back
     buff->tail_ = (buff->tail_ + 1) % buff->cap_;
+    buff->consumed_++;
     return m;
 }
-
-Msg** next_msg_ref(MsgBuffer* buff) {
-    if (buff->tail_ == buff->head_) return NULL;
-    return &(*buff->msgs_) + buff->tail_; // From back
-}
-
-void revert_msg(MsgBuffer* buff) {
+void unconsume_msg(MsgBuffer* buff) {
     size_t prev = (buff->tail_ - 1) % buff->cap_;
     if (buff->head_ == prev) return; 
     buff->tail_ = prev;
+    buff->consumed_--;
+}
+
+Msg* reserve_msg(MsgBuffer* buff) {
+    size_t next = (buff->head_ + 1) % buff->cap_;
+    if (buff->tail_ == next) return NULL;
+    Msg* m = *(buff->msgs_ + buff->head_); // From front
+    buff->head_ = next;
+    return m;
+}
+
+void release_msg(MsgBuffer* buff) {
+    if (buff->tail_ == buff->head_) return;
+    size_t prev = (buff->head_ - 1) % buff->cap_;
+    buff->head_ = prev;
 }
 
 size_t remaining_space(MsgBuffer* buff) {
-    return (buff->tail_ - buff->head_ - 1 + buff->cap_) % buff->cap_;
+    return buff->cap_ - ((buff->head_ + buff->cap_ - buff->tail_) % buff->cap_);
 }
+
 size_t element_count(MsgBuffer* buff) {
-    return (buff->tail_ - buff->head_ - 1 + buff->cap_) % buff->cap_;
+    return (buff->head_ + buff->cap_ - buff->tail_) % buff->cap_;
 }

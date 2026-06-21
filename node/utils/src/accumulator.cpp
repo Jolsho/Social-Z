@@ -26,7 +26,7 @@ size_t LogAccumulator::flush(MsgBuffer* m) {
     if (now >= flush_time_) {
         flush_time_ = now + flush_interval_;
         while (!full_.empty()) {
-            Msg* msg = next_msg(m);
+            Msg* msg = consume_msg(m);
             if (!msg) break;
             msg->priority = PRIORITY_TELE;
             *msg = full_.back();

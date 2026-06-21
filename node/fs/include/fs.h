@@ -5,7 +5,6 @@
 #include "db_iface.h"
 #include "fs_types.h"
 #include "utils/accumulator.h"
-#include "bindings.h"
 #include <cstdio>
 #include <deque>
 #include <set>
@@ -51,7 +50,7 @@ private:
 
     std::deque<PendingPermBucket>  pending_perms_;
 
-    MsgBuffer*  out_msgs_;
+    MsgBuffer*  free_out_msgs_;
     MsgBuffer*  in_msgs_;
 
     void voucher(const Msg* msg, Error& e);
@@ -109,11 +108,11 @@ private:
 
         close(epoll_fd_);
         logr_->log("File System Shutdown Successful.");
-        logr_->flush(this->out_msgs_);
+        logr_->flush(this->free_out_msgs_);
     }
 
     bool handle_err(Error  e, Actors too) {
-        Msg* m = next_msg(out_msgs_);
+        Msg* m = consume_msg(free_out_msgs_);
         if (!m) return false;
         m->priority = PRIORITY_CRIT;
         marshal_error(e, m, too, [&](size_t s){ return buffers_.grab(s); });

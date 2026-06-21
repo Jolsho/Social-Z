@@ -11,5 +11,5 @@ target_include_directories(sz_log
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(sz_log PRIVATE sz_core)
+target_link_libraries(sz_log PRIVATE sz_api sz_utils)
 

@@ -1,5 +1,7 @@
 #pragma once
 #include "utils/buffers.h"
+#include "api/msgT.h"
+#include "api/actor.h"
 #include <string>
 
 class LogAccumulator {

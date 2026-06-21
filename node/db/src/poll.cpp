@@ -1,5 +1,4 @@
 #include "db.h"
-#include "bindings.h"
 #include "utils/lru.h"
 #include "utils/shutdown.h"
 #include <sys/epoll.h>
@@ -31,23 +30,10 @@ void db::Server::poll_loop() {
 
                 // INTERNAL MSGS
 
-                Msg* in = nullptr;
-                Msg* out = nullptr;
-                size_t in_n = 0;
-                size_t out_n = 0;
-                std::vector<Priority> out_priorities;
+                auto stats = poll_actor(chans_, in_msgs_, free_out_msgs_);
+                if (stats != NULL) logr_->log(stats);
 
-                auto stats = poll_actor(chans_, in_msgs_, out_msgs_);
-                if (stats != NULL) {
-                    logr_->log(stats);
-                }
-                if (in_n > 0) {
-                    out_priorities.reserve(out_n);
-                }
-
-                int i = 0;
-                for (; i < in_n; i++) {
-                    Msg* msg = in + i;
+                while (Msg* msg = consume_msg(in_msgs_)) {
 
                     if (!msg->is_wiped && msg->code < E_SUCCESS) {
 
@@ -77,17 +63,18 @@ void db::Server::poll_loop() {
 
                     } else {
                         // Return message
-                        if (out_priorities.size() < n) {
-                            out[out_priorities.size()]  = *msg;
-                            out_priorities.push_back(PRIORITY_CONT);
+                        Msg* rm = consume_msg(free_out_msgs_);
+                        if (rm) {
+                            *rm  = *msg;
+                            rm->priority = PRIORITY_CONT;
                         } else {
                             free(msg->data->b);
                             delete msg->data;
                         }
                     }
                 }
-                // TODO
-                update_actor(chans_, i, 0);
+
+                update_actor(chans_, &in_msgs_->consumed_, &free_out_msgs_->consumed_);
             }
         }
     }

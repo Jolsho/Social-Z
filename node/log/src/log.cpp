@@ -92,10 +92,9 @@ void Logger::poll_loop() {
             int fd = events[i].data.fd;
             if (fd == chans_fd) {
 
-                poll_actor(chans_, in_msgs_, out_msgs_);
+                poll_actor(chans_, in_msgs_, free_out_msgs_);
 
-                size_t processed = 0;
-                while (Msg* msg = next_msg(in_msgs_)) {
+                while (Msg* msg = consume_msg(in_msgs_)) {
                     switch (msg->code) {
                         case log_code(LogCode::Log):   {
                             parse_n_write_log(msg);     
@@ -107,7 +106,7 @@ void Logger::poll_loop() {
 
                     if (!msg->is_wiped) msg_wipe(msg);
 
-                    Msg* to_m = next_msg(out_msgs_);
+                    Msg* to_m = consume_msg(free_out_msgs_);
                     if (!to_m) {
                         free(msg->data->b);
                         delete msg->data;
@@ -117,6 +116,7 @@ void Logger::poll_loop() {
                     }
                     counter++;
                 }
+                update_actor(chans_, &in_msgs_->consumed_, &free_out_msgs_->consumed_);
 
                 // OTHER FD
             }

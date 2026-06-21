@@ -59,7 +59,9 @@ public:
         lseek(fd, 0, SEEK_SET);
 
         size_t len = 0;
-        read(fd, &len, sizeof(len));
+        size_t n = read(fd, &len, sizeof(len));
+        /// TODO -- error
+
         if (len == 0) return ESUCCESS;
         map_.reserve(len);
 

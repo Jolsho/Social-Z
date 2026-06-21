@@ -1,5 +1,5 @@
 #pragma once
-#include "bindings.h"
+#include "api/actor.h"
 #include "config.h"
 #include <cstdio>
 #include <string>
@@ -8,7 +8,7 @@ class Logger {
     int             epoll_fd_;
     Actor*          chans_;
 
-    MsgBuffer*  out_msgs_;
+    MsgBuffer*  free_out_msgs_;
     MsgBuffer*  in_msgs_;
 
     int     f_;

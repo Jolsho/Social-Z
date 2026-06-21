@@ -1,5 +1,5 @@
 #pragma once
-#include "bindings.h"
+#include "api/types.h"
 #include "utils/key.h"
 #include "sodium/crypto_sign.h"
 #include <array>

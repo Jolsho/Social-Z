@@ -46,18 +46,16 @@ void p2p::Manager::poll_loop() {
 
                 // INTERNAL MSGS
 
-                auto stats = poll_actor(chans_, in_msgs_, out_msgs_);
+                auto stats = poll_actor(chans_, in_msgs_, free_out_msgs_);
                 if (stats != NULL) logr_->log(stats);
 
-                size_t processed = 0;
-                while (Msg* msg = next_msg(in_msgs_)) {
-                    processed++;
+                while (Msg* msg = consume_msg(in_msgs_)) {
                     Error e = handle_msg(msg);
                     if (e.is_err()) handle_error(e);
                 }
 
-                // TODO 
-                update_actor(chans_, processed, 0);
+                update_actor(chans_, &in_msgs_->consumed_, &free_out_msgs_->consumed_);
+
 
                 continue;
 
