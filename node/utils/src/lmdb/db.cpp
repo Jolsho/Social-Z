@@ -2,7 +2,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
-#include <lmdb.h>
+#include <vector>
 
 LMDB::LMDB(const char* path, size_t map_size) {
     assert(mdb_env_create(&env_) == 0);

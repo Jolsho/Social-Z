@@ -60,11 +60,15 @@ public:
 
         size_t len = 0;
         size_t n = read(fd, &len, sizeof(len));
-        /// TODO -- error
+        if (n < 0) {
+            return {
+                .r = fd,
+                .msg = "Read Citizen File Failed."
+            };
+        }
 
         if (len == 0) return ESUCCESS;
         map_.reserve(len);
-
 
         Key k;
         Citizen tmp;

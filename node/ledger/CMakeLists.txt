@@ -1,21 +1,36 @@
 # SPDX-License-Identifier: GPL-3.0-only
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
-add_library(sz_ledger SHARED)
-
 file(GLOB_RECURSE SRC "src/**/*.cpp")
-target_sources(sz_ledger PRIVATE ${SRC})
-target_include_directories(sz_ledger 
+
+add_library(ledger ${SRC})
+add_library(sz::ledger ALIAS ledger)
+
+target_include_directories(ledger 
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/bindings
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/bindings>
+        $<INSTALL_INTERFACE:include/ledger>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(sz_ledger PRIVATE 
+target_link_libraries(ledger PRIVATE 
     $<$<TARGET_EXISTS:blst>:blst>
     $<$<TARGET_EXISTS:lmdb>:lmdb>
     $<$<TARGET_EXISTS:blake3>:blake3>
+)
+
+set_target_properties(ledger PROPERTIES
+    OUTPUT_NAME "szledger"
+    OUTPUT_NAME_DEBUG "szledger"
+)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bindings/
+    DESTINATION include/ledger
+)
+
+install(TARGETS ledger
+    EXPORT sz_targets
+    ARCHIVE DESTINATION lib
 )
 
 ####################################################

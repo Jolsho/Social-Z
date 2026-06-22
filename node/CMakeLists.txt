@@ -40,9 +40,11 @@ option(USE_BLST     "Enable libblst"    OFF)
 
 if (LEDGER) 
     set(USE_BLST        ON CACHE BOOL "" FORCE)
+    set(USE_LMDB        ON CACHE BOOL "" FORCE)
+    set(USE_BLAKE3      ON CACHE BOOL "" FORCE)
 endif()
 
-if (LEDGER OR FS)
+if (FS)
     set(USE_UTILS       ON CACHE BOOL "" FORCE)
     set(USE_LMDB        ON CACHE BOOL "" FORCE)
     set(USE_SODIUM      ON CACHE BOOL "" FORCE)
@@ -71,7 +73,7 @@ endif()
 
 # SODIUM
 if(USE_SODIUM)
-    ExternalProject_Add(libsodium
+    ExternalProject_Add(sodium
         PREFIX ${CMAKE_BINARY_DIR}/_deps/sodium
         URL https://download.libsodium.org/libsodium/releases/libsodium-1.0.21-stable.tar.gz
 
@@ -80,6 +82,10 @@ if(USE_SODIUM)
 
         INSTALL_COMMAND make install
         BUILD_IN_SOURCE 1
+    )
+
+    set_target_properties(sodium PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES ${DEPS_INSTALL_DIR}/include
     )
 endif()
 
@@ -132,9 +138,13 @@ if(USE_BLAKE3)
     FetchContent_Declare(blake3
         GIT_REPOSITORY https://github.com/BLAKE3-team/BLAKE3.git
         GIT_TAG 1.8.5
-        SOURCE_SUBDIR c
     )
-    FetchContent_MakeAvailable(blake3)
+    FetchContent_GetProperties(blake3)
+
+    if(NOT blake3_POPULATED)
+        FetchContent_Populate(blake3)
+        add_subdirectory(${blake3_SOURCE_DIR}/c ${blake3_BINARY_DIR} EXCLUDE_FROM_ALL)
+    endif()
 endif()
 
 # OPENSSL
@@ -206,15 +216,33 @@ endif()
 
 ## BUILDING ##############################
 
-add_subdirectory(api)
+file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS "api/*.cpp")
+add_library(sz ${CORE_SOURCES})
+target_include_directories(sz 
+    PUBLIC 
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/api/include>
+        $<INSTALL_INTERFACE:include>
+)
+
 add_subdirectory(utils)
+
+target_link_libraries(sz PRIVATE sz::utils)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/api/include/
+    DESTINATION include
+)
+install(TARGETS sz
+    EXPORT sz_targets
+    ARCHIVE DESTINATION lib
+)
+
 
 if(LEDGER)      
     add_subdirectory(ledger) 
 endif()
 
 if(RPC)         
-    add_subdirectory(http)  
+    add_subdirectory(rpc)  
 endif()
 
 if(DB)          
@@ -232,4 +260,13 @@ endif()
 if(P2P)         
     add_subdirectory(p2p)   
 endif()
+
+
+## INSTALL #######################
+
+install(EXPORT sz_targets
+    FILE sz_targets.cmake
+    NAMESPACE sz::
+    DESTINATION lib/cmake/sz
+)
 

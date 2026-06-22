@@ -1,7 +1,7 @@
 #pragma once
 #include "api/types.h"
-#include "utils/key.h"
 #include "sodium/crypto_sign.h"
+#include "utils/key.h"
 #include <array>
 
 using Signature = std::array<unsigned char, crypto_sign_BYTES>;

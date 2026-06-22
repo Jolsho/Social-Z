@@ -1,6 +1,6 @@
 #pragma once
 #include "config.h"
-#include "sodium/utils.h"
+#include <sodium/utils.h>
 #include "utils/buffers.h"
 #include "db_iface.h"
 #include "fs_types.h"
