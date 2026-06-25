@@ -1,7 +1,6 @@
 #pragma once
 #include "sodium/crypto_aead_chacha20poly1305.h"
 #include "utils/buffers.h"
-#include "crypto.h"
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
@@ -75,11 +74,11 @@ public:
 
     Key get_key() {
         Key key;
-        memcpy(key.data(), prefix_ + PUB_KEY_OFF, PUB_KEY_LEN);
+        memcpy(key.b, prefix_ + PUB_KEY_OFF, PUB_KEY_LEN);
         return key;
     }
     inline void set_key(const Key& key) {
-        memcpy(prefix_ + PUB_KEY_OFF, key.data(), key.size());
+        memcpy(prefix_ + PUB_KEY_OFF, key.b, KEY_SIZE);
     }
 
     uint64_t get_version() {
@@ -147,8 +146,8 @@ public:
             buff_->b, get_len(), 
             get_tag(),
             AD, ADLEN, 
-            nonce.data(), 
-            rx_key.data()
+            nonce.b, 
+            rx_key.b
         );
         if (r != 0) return r;
 
@@ -161,8 +160,8 @@ public:
         if (!buff_) return 0;
 
         Nonce nonce;
-        randombytes_buf(nonce.data(), NONCE_LEN);
-        memcpy(&buff_->b + NONCE_OFF, nonce.data(), NONCE_LEN);
+        randombytes_buf(nonce.b, NONCE_LEN);
+        memcpy(&buff_->b + NONCE_OFF, nonce.b, NONCE_LEN);
         unsigned long long mac_len = TAG_LEN;
 
         int r = crypto_aead_chacha20poly1305_encrypt_detached(
@@ -171,7 +170,7 @@ public:
             buff_->b, get_len(),
             AD, ADLEN, 
             NULL,
-            nonce.data(), tx_key.data()
+            nonce.b, tx_key.b
         );
         if (r != 0) return r;
         done = true;

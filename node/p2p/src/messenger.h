@@ -1,7 +1,6 @@
 #pragma once
 #include "api/msgT.h"
 #include "utils/vec.h"
-#include "utils/key.h"
 #include <cstring>
 #include <optional>
 #include <vector>
@@ -38,7 +37,7 @@ public:
 
         for (auto i { 0 }; i < total_recipients; i++) {
             Key& pubkey = recipients[i].emplace_back();
-            vec_read(msg->data, pubkey.data(), KEY_SIZE);
+            vec_read(msg->data, pubkey.b, KEY_SIZE);
             break;
         };
 

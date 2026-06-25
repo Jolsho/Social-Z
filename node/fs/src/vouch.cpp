@@ -1,16 +1,29 @@
 #include "api/paths.h"
+#include "crypto.h"
 #include "manager.h"
 #include "fs_types.h"
 #include "utils/vec.h"
 #include <cstddef>
 #include <cstdio>
+#include <cstring>
 #include <format>
 #include <sys/stat.h>
+HashT hash_voucher(Voucher* v) {
+    Hasher h {};
+    h.update(v->to.b, KEY_SIZE);
+    h.update(v->from.b, KEY_SIZE);
+    h.update(v->file_hash.b, HASH_SIZE);
+
+    auto raw = reinterpret_cast<const unsigned char*>(&v->expiration);
+    h.update(raw, sizeof(time_t));
+    h.update(v->data, VOUCH_DATA_SIZE);
+    return h.finalize();
+}
 
 
 /// We are being given a voucher.
 void FS::voucher(const Msg* msg, Error& e) {
-    if (vec_remaining(msg->data) < PERM_SZ + VOUCHER_SZ) {
+    if (vec_remaining(msg->data) < sizeof(Perm) + sizeof(Voucher)) {
         e.code = E_MALFORMED;
         e.msg = "voucher() :: msg too small";
         return;
@@ -34,13 +47,16 @@ void FS::voucher(const Msg* msg, Error& e) {
         return;
     }
 
-    if (v.from != p.recipient || v.to != p.giver) {
+    if (
+        memcmp(v.from.b, p.recipient.b, KEY_SIZE) != 0 || 
+        memcmp(v.to.b, p.giver.b, KEY_SIZE) != 0
+    ) {
         e.code = E_UNAUTHORIZED;
         e.msg = "voucher() :: voucher not match permission.";
         return;
     }
 
-    HashT p_hash = p.hash();
+    HashT p_hash = hash_perm(&p);
     if (!valid_signature(v.to, p.signature, p_hash)) {
         e.code = E_UNAUTHORIZED;
         e.msg = "voucher() :: Fake Perm Signature";
@@ -60,7 +76,7 @@ void FS::voucher(const Msg* msg, Error& e) {
         return;
     }
 
-    HashT v_hash = v.hash();
+    HashT v_hash = hash_voucher(&v);
     if (!valid_signature(v.from, v.signature, v_hash)) {
         e.code = E_UNAUTHORIZED;
         e.msg = "voucher() :: Fake Voucher Signature";
@@ -76,7 +92,7 @@ void FS::voucher(const Msg* msg, Error& e) {
     }
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_DB;
-    m->data = buffers_.grab(VOUCHER_SZ + sizeof(DB_PATH));
+    m->data = buffers_.grab(sizeof(Voucher) + sizeof(DB_PATH));
 
     if (
         !vec_write(m->data, DB_VOUCHER_INSERT) ||
@@ -94,7 +110,7 @@ void FS::voucher(const Msg* msg, Error& e) {
 
 /// Someone is redeeming a voucher we sent them.
 void FS::redeem(const Msg* msg, Error& e) {
-    if (vec_remaining(msg->data) < VOUCHER_SZ + SID_SZ) {
+    if (vec_remaining(msg->data) < sizeof(Voucher) + SID_SZ) {
         e.code = E_MALFORMED;
         e.msg = "redeem() :: msg too small";
         return;
@@ -120,7 +136,7 @@ void FS::redeem(const Msg* msg, Error& e) {
         return;
     }
 
-    HashT v_hash = v.hash();
+    HashT v_hash = hash_voucher(&v);
     if (!valid_signature(v.from, v.signature, v_hash)) {
         e.code = E_UNAUTHORIZED;
         e.msg = "redeem() :: Fake Voucher Signature";
@@ -254,7 +270,7 @@ void FS::reward(const Msg* msg, Error& e) {
 
         m->priority = PRIORITY_WORK;
         m->too = ACTOR_DB;
-        m->data = buffers_.grab(sizeof(DB_PATH) + VOUCHER_SZ);
+        m->data = buffers_.grab(sizeof(DB_PATH) + sizeof(Voucher));
         vec_write(m->data, DB_NEW_BLOB);
         vec_write(m->data, s.voucher);
     }

@@ -7,12 +7,11 @@
 void conn::clear(Connection& conn) {
     conn.fd_ = -1;
     conn.id_ = 0;
-    size_t key_s = conn.keys_.rx_.size();
-    memset(&conn.keys_.remote_auth_, 0, key_s);
-    memset(&conn.keys_.remote_session_, 0, key_s);
+    memset(&conn.keys_.remote_auth_, 0, KEY_SIZE);
+    memset(&conn.keys_.remote_session_, 0, KEY_SIZE);
     memset(&conn.keys_.session_, 0, sizeof(KeyPair));
-    memset(&conn.keys_.rx_, 0, key_s);
-    memset(&conn.keys_.tx_, 0, key_s);
+    memset(&conn.keys_.rx_, 0, KEY_SIZE);
+    memset(&conn.keys_.tx_, 0, KEY_SIZE);
     conn.events_ = 0;
     conn.failure_count_ = 0;
     conn.status_ = Status::Dead;

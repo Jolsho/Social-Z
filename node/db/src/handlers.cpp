@@ -10,7 +10,7 @@ void user_insert(DB& db, Error& e, const Msg* msg) {
     int i = 0;
 
     Key key = vec_read<Key>(msg->data);
-    sqlite3_bind_blob(stmt, ++i, key.data(), KEY_SIZE, SQLITE_TRANSIENT);
+    sqlite3_bind_blob(stmt, ++i, key.b, KEY_SIZE, SQLITE_TRANSIENT);
 
     if (sqlite3_step(stmt) != SQLITE_DONE) {
         e.msg = db.get_err();
@@ -24,7 +24,7 @@ void user_delete(DB& db, Error& e, const Msg* msg) {
     int i = 0;
 
     Key key = vec_read<Key>(msg->data);
-    sqlite3_bind_blob(stmt, ++i, key.data(), KEY_SIZE, SQLITE_TRANSIENT);
+    sqlite3_bind_blob(stmt, ++i, key.b, KEY_SIZE, SQLITE_TRANSIENT);
 
     if (sqlite3_step(stmt) != SQLITE_DONE) {
         e.msg = db.get_err();
@@ -46,7 +46,7 @@ void card_recent(DB& db_, Error& e, const Msg* msg) {
 
     Key key = vec_read<Key>(msg->data);
     uint64_t offset = vec_read<uint64_t>(msg->data);
-    sqlite3_bind_blob(stmt, ++i, key.data(), KEY_SIZE, SQLITE_TRANSIENT);
+    sqlite3_bind_blob(stmt, ++i, key.b, KEY_SIZE, SQLITE_TRANSIENT);
     sqlite3_bind_int64(stmt, ++i, offset);
 
 

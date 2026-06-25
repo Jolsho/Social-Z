@@ -13,7 +13,7 @@ Error conn::syn(Connection& conn, P2P& man) {
     conn.wpkt_.set_version(conn.version_);
     conn.wpkt_.set_key(man.keys_.pub);
     conn.wpkt_.set_len(HANDSHAKE_LEN);
-    vec_write(conn.wpkt_.buff_, conn.keys_.session_.pub.data(), KEY_SIZE);
+    vec_write(conn.wpkt_.buff_, conn.keys_.session_.pub.b, KEY_SIZE);
 
     // ENCRYPT RESPONSE
     int r = conn.wpkt_.encrypt_body(conn.keys_.tx_);
@@ -50,10 +50,10 @@ Error conn::syn_ack(Connection& conn, P2P& man) {
         };
     }
     int r = crypto_kx_client_session_keys(
-        conn.keys_.rx_.data(), conn.keys_.tx_.data(), 
-        man.keys_.pub.data(), 
-        man.keys_.priv.data(), 
-        conn.keys_.remote_auth_.data()
+        conn.keys_.rx_.b, conn.keys_.tx_.b, 
+        man.keys_.pub.b, 
+        man.keys_.priv.b, 
+        conn.keys_.remote_auth_.b
     );
     if (r != 0) {
         return {
@@ -84,7 +84,7 @@ Error conn::syn_ack(Connection& conn, P2P& man) {
     }
 
     // PARSE INCOMING SYN
-    vec_read(conn.rpkt_.buff_, conn.keys_.remote_session_.data(), KEY_SIZE);
+    vec_read(conn.rpkt_.buff_, conn.keys_.remote_session_.b, KEY_SIZE);
 
 
     // BUILD RESPONSE
@@ -94,7 +94,7 @@ Error conn::syn_ack(Connection& conn, P2P& man) {
     conn.wpkt_.set_version(conn.version_);
     conn.wpkt_.set_key(man.keys_.pub);
     conn.wpkt_.set_len(HANDSHAKE_LEN);
-    vec_write(conn.wpkt_.buff_, conn.keys_.session_.pub.data(), KEY_SIZE);
+    vec_write(conn.wpkt_.buff_, conn.keys_.session_.pub.b, KEY_SIZE);
 
     // ENCRYPT RESPONSE
     r = conn.wpkt_.encrypt_body(conn.keys_.tx_);
@@ -106,10 +106,10 @@ Error conn::syn_ack(Connection& conn, P2P& man) {
 
     // DERIVE FINAL SHARED KEYS AFTER SENDING SYNACK
     r = crypto_kx_client_session_keys(
-        conn.keys_.rx_.data(), conn.keys_.tx_.data(), 
-        conn.keys_.session_.pub.data(), 
-        conn.keys_.session_.priv.data(), 
-        conn.keys_.remote_session_.data()
+        conn.keys_.rx_.b, conn.keys_.tx_.b, 
+        conn.keys_.session_.pub.b, 
+        conn.keys_.session_.priv.b, 
+        conn.keys_.remote_session_.b
     );
     if (r != 0) {
         return {
@@ -132,7 +132,7 @@ Error conn::ack(Connection& conn, P2P& man) {
     // PARSE INCOMING SYNACK
 
     uint8_t remote_version = vec_read<uint8_t>(conn.rpkt_.buff_);
-    vec_read(conn.rpkt_.buff_, conn.keys_.remote_session_.data(), KEY_SIZE);
+    vec_read(conn.rpkt_.buff_, conn.keys_.remote_session_.b, KEY_SIZE);
 
     // ALTER STATE BASED ON SYN
     if (remote_version < conn.version_) {
@@ -141,10 +141,10 @@ Error conn::ack(Connection& conn, P2P& man) {
 
     // DERIVE SESSION SHARED KEYS AFTER SENDING SYNACK
     int r = crypto_kx_client_session_keys(
-        conn.keys_.rx_.data(), conn.keys_.tx_.data(), 
-        conn.keys_.session_.pub.data(), 
-        conn.keys_.session_.priv.data(), 
-        conn.keys_.remote_session_.data()
+        conn.keys_.rx_.b, conn.keys_.tx_.b, 
+        conn.keys_.session_.pub.b, 
+        conn.keys_.session_.priv.b, 
+        conn.keys_.remote_session_.b
     );
     if (r != 0) {
         return {

@@ -26,7 +26,7 @@ public:
     int                                             listen_fd_;
     KeyPair                                         keys_;
     std::vector<Connection>                         connections_;
-    std::unordered_map<Key, ConnID, KeyHash>        key_to_conn_;
+    std::unordered_map<Key, ConnID, KeyHash, KeyEqual>        key_to_conn_;
     std::unordered_map<int, ConnID>                 sock_ids_;
     CitizenMap                                      citizens_;
 

@@ -43,7 +43,7 @@ public:
 class CitizenMap {
     std::string path_;
 public:
-    std::unordered_map<Key, Citizen, KeyHash> map_;
+    std::unordered_map<Key, Citizen, KeyHash, KeyEqual> map_;
 
     Error load(const std::string path) {
         path_ = path;

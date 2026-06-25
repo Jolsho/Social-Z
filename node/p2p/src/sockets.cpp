@@ -32,7 +32,7 @@ ConnID P2P::add_socket(int sock_fd, const Key pubkey, bool is_inbound) {
     }
 
     KeyPair session{};
-    crypto_kx_keypair(session.pub.data(), session.priv.data());
+    crypto_kx_keypair(session.pub.b, session.priv.b);
     Connection& c = connections_[id];
 
     // Store connection
@@ -52,15 +52,15 @@ ConnID P2P::add_socket(int sock_fd, const Key pubkey, bool is_inbound) {
         remove_socket(evicted);
     }
 
-    if (pubkey != ZERO_KEY) {
-        memcpy(c.keys_.remote_auth_.data(), pubkey.data(), pubkey.size());
+    if (memcmp(pubkey.b, ZERO_KEY.b, KEY_SIZE) != 0) {
+        memcpy(c.keys_.remote_auth_.b, pubkey.b, KEY_SIZE);
 
         // DERIVE INITIAL SHARED SECRET WITH AUTH KEYS
         int r = crypto_kx_client_session_keys(
-            c.keys_.rx_.data(), c.keys_.tx_.data(), 
-            keys_.pub.data(), 
-            keys_.priv.data(), 
-            c.keys_.remote_auth_.data()
+            c.keys_.rx_.b, c.keys_.tx_.b, 
+            keys_.pub.b, 
+            keys_.priv.b, 
+            c.keys_.remote_auth_.b
         );
         if (r != 0) return 0;
     }

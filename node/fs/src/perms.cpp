@@ -1,62 +1,98 @@
 #include "api/paths.h"
+#include "crypto.h"
 #include "manager.h"
 #include "fs_types.h"
 #include "utils/vec.h"
 #include <format>
 
+HashT hash_perm(Perm* p) {
+    Hasher h {};
+    h.update(p->giver.b, KEY_SIZE);
+    h.update(p->recipient.b, KEY_SIZE);
+    h.update(p->nonce.b, NONCE_SIZE);
+    h.update(p->data, PERM_DATA_SIZE);
+    return h.finalize();
+}
+
 static constexpr uint8_t ACCEPTED{ 1 };
 
 void FS::local_give(const Msg* msg, Error& e) {
     // TODO
-}
-
-/// We receive a permission to post to a remote node.
-void FS::give(const Msg* msg, Error& e) {
-
-    if (vec_remaining(msg->data) < PERM_SZ) {
+    if (vec_remaining(msg->data) < sizeof(Perm)) {
         e.code = E_MALFORMED;
-        e.msg  = "msg size small for give()";
+        e.msg  = "local_give() :: msg size too small";
         return;
     }
 
     Perm p; 
     if (!vec_read(msg->data, p)) {
         e.code = E_MALFORMED;
-        e.msg = "give() :: malformed perm";
+        e.msg = "local_give() :: malformed perm";
+        return;
+    }
+
+    if (!locals_.contains(p.giver)) {
+        e.code = E_NOTLOCAL;
+        e.msg = std::format("local_give() :: Not Local :: {}", key_to_str(p.recipient));
+        return;
+    }
+
+    HashT p_hash = hash_perm(&p);
+    if (!valid_signature(p.giver, p.signature, p_hash)) {
+        e.code = E_UNAUTHORIZED;
+        e.msg = "local_give() :: Fake Signature";
+        return;
+    }
+
+    new_pending_perm(p_hash);
+}
+
+/// We receive a permission to post to a remote node.
+void FS::give(const Msg* msg, Error& e) {
+
+    if (vec_remaining(msg->data) < sizeof(Perm)) {
+        e.code = E_MALFORMED;
+        e.msg  = "msg size small for remote_give()";
+        return;
+    }
+
+    Perm p; 
+    if (!vec_read(msg->data, p)) {
+        e.code = E_MALFORMED;
+        e.msg = "remote_give() :: malformed perm";
         return;
     }
 
     if (!locals_.contains(p.recipient)) {
         e.code = E_NOTLOCAL;
-        e.msg = std::format("give() :: Not Local :: {}", key_to_str(p.recipient));
+        e.msg = std::format("remote_give() :: Not Local :: {}", key_to_str(p.recipient));
         return;
     }
 
-    HashT p_hash = p.hash();
+    HashT p_hash = hash_perm(&p);
     if (!valid_signature(p.giver, p.signature, p_hash)) {
         e.code = E_UNAUTHORIZED;
-        e.msg = "give() :: Fake Signature";
+        e.msg = "remote_give() :: Fake Signature";
         return;
     }
-
 
     new_pending_perm(p_hash);
 
     Msg* m = consume_msg(free_out_msgs_);
     if (!m) {
         e.code = E_INTERNAL;
-        e.msg = "give() :: too_main_ no msgs.";
+        e.msg = "remote_give() :: too_main_ no msgs.";
         return;
     }
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_DB;
-    m->data = buffers_.grab(PERM_SZ + sizeof(DB_PATH));
+    m->data = buffers_.grab(sizeof(Perm) + sizeof(DB_PATH));
     if (
         !vec_write(m->data, DB_PERM_INSERT) ||
         !vec_write(m->data, p)
     ) {
         e.code = E_INTERNAL;
-        e.msg = "give() :: marshal response";
+        e.msg = "remote_give() :: marshal response";
         buffers_.put(m->data);
         msg_wipe(m);
         unconsume_msg(free_out_msgs_);
@@ -66,7 +102,7 @@ void FS::give(const Msg* msg, Error& e) {
 
 /// Remote accepts or denies a permission we offered them.
 void FS::settle(const Msg* msg, Error& e) {
-    if (vec_remaining(msg->data) < PERM_SZ + 1 + SIG_SIZE) {
+    if (vec_remaining(msg->data) < sizeof(Perm) + 1 + SIGNATURE_SIZE) {
         e.code = E_MALFORMED;
         e.msg = "msg size small for remote_settle()";
         return;
@@ -78,7 +114,7 @@ void FS::settle(const Msg* msg, Error& e) {
         e.msg = "remote_settle() :: malformed perm";
         return;
     }
-    HashT p_hash = p.hash();
+    HashT p_hash = hash_perm(&p);
 
     // ENSURE WE SENT AND CURRENTLY HOLD THE PERMISSION
     if (!locals_.contains(p.giver)) {
@@ -102,7 +138,7 @@ void FS::settle(const Msg* msg, Error& e) {
     HashT accept_hash = h.finalize();
 
     Signature sig;
-    vec_read(msg->data, sig.data(), SIG_SIZE);
+    vec_read(msg->data, sig.b, SIGNATURE_SIZE);
 
     if (!valid_signature(p.recipient, sig, accept_hash)) {
         e.code = E_UNAUTHORIZED;
@@ -125,9 +161,17 @@ void FS::settle(const Msg* msg, Error& e) {
         }
     }
 
+    bool removed = false;
     for (auto& pp: pending_perms_) {
-        if (pp.remove_perm(p_hash)) break;
+        removed = pp.remove_perm(p_hash);
+        if (removed) break;
     }
+    if (!removed) {
+        e.code = E_PERM_NOT_EXIST;
+        e.msg = "remote_settle() :: Pending Perm does not exist.";
+        return;
+    }
+
 
     Msg* m = consume_msg(free_out_msgs_);
     if (!m) {
@@ -138,7 +182,7 @@ void FS::settle(const Msg* msg, Error& e) {
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_SZ;
     m->code = code;
-    m->data = buffers_.grab(PERM_SZ);
+    m->data = buffers_.grab(sizeof(Perm));
     if (
         !vec_write(msg->data, p)
     ) {
@@ -157,7 +201,7 @@ void FS::local_ask(const Msg* msg, Error& e) {
 
 /// Remote asks for a specific permission.
 void FS::ask(const Msg* msg, Error& e) {
-    if (vec_remaining(msg->data) < PERM_SZ) {
+    if (vec_remaining(msg->data) < sizeof(Perm)) {
         e.code = E_MALFORMED;
         e.msg = "msg size small for ask()";
         return;
@@ -169,7 +213,7 @@ void FS::ask(const Msg* msg, Error& e) {
         e.msg = "ask() :: malformed perm";
         return;
     }
-    HashT p_hash = p.hash();
+    HashT p_hash = hash_perm(&p);
 
     if (!locals_.contains(p.giver)) {
         e.code = E_NOTLOCAL;
@@ -185,7 +229,7 @@ void FS::ask(const Msg* msg, Error& e) {
 
     // Zero out the sig so local can sign it...
     // isn't mandatory, but whatever
-    memset(&p.signature, 0, SIG_SIZE);
+    memset(&p.signature, 0, SIGNATURE_SIZE);
 
 
     Msg* m = consume_msg(free_out_msgs_);
@@ -198,7 +242,7 @@ void FS::ask(const Msg* msg, Error& e) {
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_SZ;
     m->code = NOTI_PERM_REQ;
-    m->data = buffers_.grab(PERM_SZ);
+    m->data = buffers_.grab(sizeof(Perm));
     if (
         !vec_write(m->data, p)
     ) {
@@ -230,7 +274,7 @@ void FS::revoke(const Msg* msg, Error& e) {
     // and like you can do that manually...
     // and this is in like a peer management system of sorts.
 
-    if (vec_remaining(msg->data) < PERM_SZ + SIG_SIZE) {
+    if (vec_remaining(msg->data) < sizeof(Perm) + SIGNATURE_SIZE) {
         e.code = E_MALFORMED;
         e.msg = "msg size small for revoke()";
         return;
@@ -242,7 +286,7 @@ void FS::revoke(const Msg* msg, Error& e) {
         e.msg = "revoke() :: malformed perm";
         return;
     }
-    HashT p_hash = p.hash();
+    HashT p_hash = hash_perm(&p);
 
     if (!locals_.contains(p.recipient)) {
         e.code = E_NOTLOCAL;
@@ -258,7 +302,7 @@ void FS::revoke(const Msg* msg, Error& e) {
     HashT revoke_hash = h.finalize();
 
     Signature sig;
-    vec_read(msg->data, sig.data(), SIG_SIZE);
+    vec_read(msg->data, sig.b, SIGNATURE_SIZE);
 
     if (!valid_signature(p.giver, sig, revoke_hash)) {
         e.code = E_UNAUTHORIZED;
@@ -283,7 +327,7 @@ void FS::revoke(const Msg* msg, Error& e) {
 /// Perms are by default accepted.
 void FS::local_settle(const Msg* msg, Error& e) {
 
-    if (vec_remaining(msg->data) < PERM_SZ + 1 + SIG_SIZE) {
+    if (vec_remaining(msg->data) < sizeof(Perm) + 1 + SIGNATURE_SIZE) {
         e.code = E_MALFORMED;
         e.msg = "msg size small for local_settle()";
         return;
@@ -295,7 +339,7 @@ void FS::local_settle(const Msg* msg, Error& e) {
         e.msg = "local_settle() :: malformed perm";
         return;
     }
-    HashT p_hash = p.hash();
+    HashT p_hash = hash_perm(&p);
 
     // ENSURE WE SENT AND CURRENTLY HOLD THE PERMISSION
     if (!locals_.contains(p.recipient)) {
@@ -314,7 +358,7 @@ void FS::local_settle(const Msg* msg, Error& e) {
     HashT accept_hash = h.finalize();
 
     Signature sig;
-    vec_read(msg->data, sig.data(), SIG_SIZE);
+    vec_read(msg->data, sig.b, SIGNATURE_SIZE);
 
     if (!valid_signature(p.recipient, sig, accept_hash)) {
         e.code = E_UNAUTHORIZED;
@@ -335,8 +379,15 @@ void FS::local_settle(const Msg* msg, Error& e) {
         }
     }
 
+    bool removed = false;
     for (auto& pp: pending_perms_) {
-        if (pp.remove_perm(p_hash)) break;
+        removed = pp.remove_perm(p_hash);
+        if (removed) break;
+    }
+    if (!removed) {
+        e.code = E_PERM_NOT_EXIST;
+        e.msg = "local_settle() :: Pending Perm does not exist.";
+        return;
     }
 
     Msg* m = consume_msg(free_out_msgs_);
@@ -348,7 +399,7 @@ void FS::local_settle(const Msg* msg, Error& e) {
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_P2P;
     m->code = ACTOR_FS;
-    m->data = buffers_.grab(PERM_SZ + sizeof(FS_PATH) + SIG_SIZE + 1);
+    m->data = buffers_.grab(sizeof(Perm) + sizeof(FS_PATH) + SIGNATURE_SIZE + 1);
 
     if (
         !vec_write(m->data, FS_SETTLE) ||

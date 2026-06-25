@@ -19,6 +19,7 @@ struct P2PConfig {
 };
 
 ActorThread* start_p2p(Actor* actor, P2PConfig* conf);
+bool broadcast_msg(Key* recipients, size_t recip_len);
 
 #ifdef __cplusplus
 }

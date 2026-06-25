@@ -15,6 +15,21 @@ struct HashT {
     unsigned char b[HASH_SIZE];
 };
 
+#define KEY_SIZE 32
+struct Key {
+    unsigned char b[KEY_SIZE];
+};
+
+#define SIGNATURE_SIZE 32
+struct Signature {
+    unsigned char b[SIGNATURE_SIZE];
+};
+
+#define NONCE_SIZE 8
+struct Nonce {
+    unsigned char b[NONCE_SIZE];
+};
+
 struct Vec {
     unsigned char*  b;
     unsigned char*  c;

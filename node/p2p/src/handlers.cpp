@@ -133,7 +133,7 @@ Error P2P::p2p_protocols(Connection& c) {
 
 
 void P2P::handle_error(Error e) {
-    if (e.key == ZERO_KEY) {
+    if (memcmp(e.key.b, ZERO_KEY.b, KEY_SIZE) == 0) {
         e.key = connections_[e.id].keys_.remote_auth_;
     }
     // TODO --> if E == E_BAD_ANON record IP
@@ -169,7 +169,7 @@ Error P2P::handle_msg(Msg* msg) {
 
             case P2P_NEW_CONN: {
                 Key pubkey;
-                vec_read(msg->data, pubkey.data(), KEY_SIZE);
+                vec_read(msg->data, pubkey.b, KEY_SIZE);
 
                 ConnID id;
                 auto res = connect(pubkey, &id);
@@ -197,7 +197,7 @@ Error P2P::handle_msg(Msg* msg) {
                 ConnID id = msg->id;
 
                 Connection &conn = connections_[id];
-                if (conn.keys_.remote_auth_ != key) {
+                if (memcmp(conn.keys_.remote_auth_.b, key.b, KEY_SIZE) != 0) {
                     auto r = connect(key, &id);
                     if (r->is_err()) return r.value();
                     conn = connections_[id];

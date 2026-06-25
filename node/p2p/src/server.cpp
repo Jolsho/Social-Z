@@ -35,9 +35,9 @@ int P2P::start_server() {
     }
 
     lseek(key_fd, 0, SEEK_SET);
-    if (read(key_fd, keys_.priv.data(), KEY_SIZE) < KEY_SIZE) {
+    if (read(key_fd, keys_.priv.b, KEY_SIZE) < KEY_SIZE) {
 
-        int r = crypto_box_keypair(keys_.pub.data(), keys_.priv.data());
+        int r = crypto_box_keypair(keys_.pub.b, keys_.priv.b);
         if (r < 0) {
             logr_->log(std::format("GENERATING KEYS FAILED %d", r));
             close(key_fd);
@@ -46,7 +46,7 @@ int P2P::start_server() {
         }
 
         lseek(key_fd, 0, SEEK_SET);
-        if (write(key_fd, keys_.priv.data(), KEY_SIZE) < KEY_SIZE) {
+        if (write(key_fd, keys_.priv.b, KEY_SIZE) < KEY_SIZE) {
             close(key_fd);
             remove(key_path.c_str());
             logr_->log("PERSISTING KEYS FAILED");

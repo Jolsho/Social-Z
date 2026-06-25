@@ -1,5 +1,6 @@
 #pragma once
 #include <sodium/utils.h>
+#include "crypto.h"
 #include "utils/buffers.h"
 #include "fs/fs.h"
 #include "db_iface.h"
@@ -26,8 +27,8 @@ private:
     Actor*              chans_;
     BufferStore         buffers_;
 
-    std::set<Key>       locals_;
-    LMDB                db_;
+    std::set<Key, KeyCompare>          locals_;
+    LMDB                            db_;
 
     std::unordered_map<HashT, FileHandle, HashFileHash>         open_files_;
     std::unordered_map<SessionID, Session, HashSessionID>       sessions_;

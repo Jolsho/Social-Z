@@ -1,59 +1,11 @@
 #pragma once
-#include "sig.h"
-#include "crypto.h"
+#include "fs/fs.h"
 #include "hash.h"
 #include <array>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 
-struct Perm {
-    static constexpr size_t DATA_SIZE = 256;
-
-    Key         giver;
-    Key         recipient;
-    Nonce       nonce;
-    std::array<unsigned char, DATA_SIZE>   data;
-    Signature   signature;
-
-    HashT hash() {
-        Hasher h {};
-        h.update(giver.data(), KEY_SIZE);
-        h.update(recipient.data(), KEY_SIZE);
-        h.update(nonce.data(), NONCE_SIZE);
-        h.update(data.data(), DATA_SIZE);
-        return h.finalize();
-    }
-};
-static_assert(std::is_trivially_copyable_v<Perm>);
-static constexpr size_t PERM_SZ = sizeof(Perm);
-
-struct Voucher {
-    static constexpr size_t TIME_SIZE = sizeof(time_t);
-
-    Key         to;
-    Key         from;
-
-    std::array<unsigned char, Perm::DATA_SIZE> data {0};
-    HashT       file_hash;
-    time_t      expiration;
-
-    Signature   signature;
-
-    HashT hash() {
-        Hasher h {};
-        h.update(to.data(), KEY_SIZE);
-        h.update(from.data(), KEY_SIZE);
-        h.update(file_hash.b, HASH_SIZE);
-
-        auto raw = reinterpret_cast<const unsigned char*>(&expiration);
-        h.update(raw, TIME_SIZE);
-        h.update(data.data(), Perm::DATA_SIZE);
-
-        return h.finalize();
-    }
-};
-static constexpr size_t VOUCHER_SZ = sizeof(Voucher);
-static_assert(std::is_trivially_copyable_v<Voucher>);
 
 
 struct PendingPermBucket {
@@ -109,9 +61,11 @@ struct FileHandle {
     uint8_t     ref_count = 0;
 };
 struct HashFileHash {
-    size_t operator()(const HashT& arr) const noexcept {
-        size_t h;
-        memcpy(&h, arr.b, sizeof(size_t));
+    size_t operator()(const HashT& has) const noexcept {
+        std::size_t h = 0;
+        for (int i = 0; i < HASH_SIZE; i++) {
+            h = h * 31 + reinterpret_cast<uint8_t>(has.b[i]);
+        }
         return h;
     }
 };
