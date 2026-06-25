@@ -1,17 +1,11 @@
 #pragma once
-#include "utils/error.h"
-#include "pkt.h"
+#include "api/types.h"
 #include "crypto.h"
+#include "pkt.h"
 #include "utils/lru.h"
-#include <cstdint>
 #include <deque>
-#include <sys/epoll.h>
 
-namespace p2p {
-class Manager;
-}
-
-namespace conn {
+namespace  conn {
 enum class Status : uint8_t {
     CryptoSyn,
     CryptoSynAck,
@@ -20,6 +14,8 @@ enum class Status : uint8_t {
     Dead,
     Failed,
 };
+}
+
 struct ConnKeys {
     Key         remote_auth_;
     Key         remote_session_;
@@ -28,10 +24,7 @@ struct ConnKeys {
     KeyPair     session_;
 };
 
-class Connection {
-public:
-    static constexpr size_t MAX_PENDING_OUT = 32;
-
+struct Connection {
     int         fd_;
     uint32_t    events_;
 
@@ -48,20 +41,4 @@ public:
     Packet      rpkt_;
 
     ConnNode*   lru_node_;
-
-    int write_(p2p::Manager& netman);
-    Error read_(BufferStore& buffs);
-
-    inline bool is_epollout_enabled() { 
-        return (events_ & EPOLLOUT) != 0; 
-    }
-    bool disable_epollout(int epfd);
-    bool enable_epollout(int epfd);
-
-    Error syn(p2p::Manager& man);
-    Error syn_ack(p2p::Manager& man);
-    Error ack(p2p::Manager& man);
-
-    void clear();
 };
-}

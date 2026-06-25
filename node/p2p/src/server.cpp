@@ -1,10 +1,30 @@
-#include "p2p.h"
+#include "api/actor.h"
+#include "manager.h"
 #include <arpa/inet.h>
 #include <format>
 #include <sodium/crypto_box.h>
+#include <sys/epoll.h>
+#include <thread>
 #include "utils/path.h"
 
-int p2p::Manager::start_server(P2PConfig& conf) {
+ActorThread* start_p2p(Actor* actor, P2PConfig* conf) {
+    ActorThread* at = new ActorThread{.r = 0};
+
+    P2P* p2p = new P2P(actor, conf);
+    at->r = p2p->start_server();
+    if (at->r < 0) {
+        delete p2p;
+        return at;
+    }
+    at->t = (void*)new std::thread([&] {
+        p2p->poll_loop();
+        delete p2p;
+    });
+
+    return at;
+}
+
+int P2P::start_server() {
     const std::string key_path = cpy_apnd(PATHS.config_dir, "/keys");
     citizens_.load(cpy_apnd(PATHS.data_dir, "/p2p/citizens"));
 
@@ -35,12 +55,6 @@ int p2p::Manager::start_server(P2PConfig& conf) {
     }
 
 
-    epoll_fd_ = epoll_create1(0);
-    if (epoll_fd_ < 0) {
-        logr_->log(std::format("EPOLL_CREATE1 FAILED %d", epoll_fd_));
-        return -1;
-    }
-
     listen_fd_ = socket(AF_INET, SOCK_STREAM, 0);
 
     int opt = 1;
@@ -52,11 +66,11 @@ int p2p::Manager::start_server(P2PConfig& conf) {
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(conf.port);
-    if (conf.ip == nullptr) {
+    addr.sin_port = htons(conf_->port);
+    if (conf_->ip == nullptr) {
         addr.sin_addr.s_addr = INADDR_ANY;
     } else {
-        r = inet_pton(AF_INET, conf.ip, &addr.sin_addr);
+        r = inet_pton(AF_INET, conf_->ip, &addr.sin_addr);
         if (r < 0) {
             close(listen_fd_);
             logr_->log(std::format("INVALID IP: %d", r));
@@ -88,11 +102,10 @@ int p2p::Manager::start_server(P2PConfig& conf) {
         return r;
     }
 
-    epoll_event ev{};
+    EpollEvent ev{};
     ev.events = EPOLLIN;
     ev.data.fd = listen_fd_;
-
-    r = epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, listen_fd_, &ev);
+    r = ctl_epoll(chans_, &ev, EPOLL_CTL_ADD);
     if (r < 0) {
         logr_->log(std::format("EPOLL ADDING FAILED: %d", r));
         return r;
@@ -100,7 +113,7 @@ int p2p::Manager::start_server(P2PConfig& conf) {
     return 0;
 }
 
-void p2p::Manager::shutdown() {
+void P2P::shutdown() {
     for (const auto& c: connections_) {
         remove_socket(c.id_);
     }

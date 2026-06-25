@@ -8,7 +8,7 @@ typedef struct SZT SZT;
 SZT* new_sz();
 int run(SZT* sz);
 void stop(SZT* sz);
-bool set_actor(SZT* sz, Actors idx, Actor* actor);
+Actor* new_actor(SZT* sz, ActorConfig* conf);
 
 
 // THESE PASS MSGS TO SZT ACTORS
@@ -16,7 +16,6 @@ bool set_actor(SZT* sz, Actors idx, Actor* actor);
 HashT new_file(SZT* sz, SSID ssid, size_t total_len);
 bool file_chunk(SZT* sz, TrxID trx_id, const unsigned char* data, size_t len);
 TrxID get_file(SZT* sz, SSID ssid, HashT* name);
-
 
 HashT put_card(SZT* sz, SSID ssid, const unsigned char* data, size_t len, int cardType);
 TrxID remove_card(SZT* sz, SSID ssid, const char* id);

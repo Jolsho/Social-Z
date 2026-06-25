@@ -22,6 +22,12 @@ struct Vec {
     size_t          cap;
 };
 
+struct Card {
+    int     id;
+    HashT   hash;
+    int     created_at;
+};
+
 #ifdef __cplusplus
 }
 #endif

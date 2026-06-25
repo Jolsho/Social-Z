@@ -1,7 +1,7 @@
 #pragma once
-#include "config.h"
 #include <sodium/utils.h>
 #include "utils/buffers.h"
+#include "fs/fs.h"
 #include "db_iface.h"
 #include "fs_types.h"
 #include "utils/accumulator.h"
@@ -13,22 +13,8 @@
 #include "utils/error.h"
 #include "utils/time.h"
 
-namespace fs {
-
-enum class FSCODE: uint16_t {
-    VOUCHER = 1,
-    REDEEM  = 2,
-    REWARD  = 3,
-    GIVE    = 4,
-    SETTLE  = 5,
-    ASK     = 6,
-    REVOKE  = 7,
-};
-
-
-class Manager {
+class FS {
 private:
-
 
     const std::string       fs_root_;
     static constexpr size_t PATH_PARTS = 4;
@@ -130,11 +116,12 @@ private:
             pps.put_next(h);
         }
     }
+    
+    void handle_outbound();
+    void handle_internal_msgs();
 
 public:
-    Manager(Actor* chans, FSConfig& conf);
+    FS(Actor* chans, FSConfig* conf);
     int initialize();
     void poll_loop();
 };
-
-}

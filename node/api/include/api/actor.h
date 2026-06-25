@@ -6,6 +6,12 @@
 extern "C" {
 #endif
 
+struct ActorThread {
+    int r;
+    void* t;
+};
+void wait_on_actor_thread(ActorThread* t);
+
 struct QueueStats {
   uint64_t accepted;
   uint64_t dropped;
@@ -36,12 +42,13 @@ typedef uint8_t Actors;
 #define ACTOR_SZ    2
 #define ACTOR_DB    3
 #define ACTOR_LOG   4
-#define ACTOR_BC    5
+#define ACTOR_LEDG  5
 #define ACTOR_COUNT 6
 #define ACTOR_NONE  7
 
 struct ActorConfig {
     Actors  id;
+    size_t  event_cap;
 
     size_t* in_q_sizes; 
     size_t  in_q_sizes_len;
@@ -56,19 +63,31 @@ struct ActorConfig {
     size_t  out_budgets_len;
 };
 
-Actor* new_actor(ActorConfig* config);
+Actor* create_actor(ActorConfig* config);
+void delete_actor(Actor* a);
 
-int in_event_fd(Actor* a);
-int out_event_fd(Actor* a);
+struct EpollEvent {
+    uint32_t        events;
+    struct {
+        int         fd;
+        void*       ptr;
+        uint32_t    u32;
+        uint64_t    u64;
+    }data;
+};
 
-int register_actor_output_with_epoll(int epoll_fd, Actor* a);
-int register_actor_input_with_epoll(int epoll_fd, Actor* a);
+struct EventBuffer {
+    EpollEvent* events;
+    size_t      size;
+    size_t      cap;
+};
+EventBuffer* new_event_buffer(size_t cap);
+void delete_event_buffer(EventBuffer* b);
 
-ChanStatsPair* poll_actor(Actor* a, MsgBuffer* in, MsgBuffer* out);
+ChanStatsPair* poll_telemetry(Actor* a);
+void poll_actor(Actor* actor, EventBuffer* evs, MsgBuffer* in, MsgBuffer* out_free_msgs, int timeout_ms = 0);
 void update_actor(Actor* a, size_t* in_processed, size_t* out_pending);
-
-bool poll_actor_main_loop(Actor* actor, MsgBuffer* in, MsgBuffer* out);
-void update_actor_main_loop(Actor* actor, size_t* in_pending, size_t* out_processed);
+int ctl_epoll(Actor* a, EpollEvent* eev, int op);
 
 #ifdef __cplusplus
 }

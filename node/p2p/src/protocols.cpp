@@ -1,5 +1,6 @@
 #include "protocols.h"
-#include "p2p.h"
+#include "api/paths.h"
+#include "utils/vec.h"
 
 void marshal_ping(Msg &m) {
 }
@@ -11,7 +12,7 @@ Error marshal_pong(BufferStore& buffs, Msg &msg, Vec* ping) {
         .msg = "No ping provided to marshal pong."
     };
 
-    msg.code = p2p::code(p2p::Code::Pong);
+    msg.code = P2P_PONG;
     msg.too = ACTOR_P2P;
     msg.from = ACTOR_P2P;
     msg.is_wiped = false;

@@ -1,11 +1,10 @@
-#include "api/db.h"
-#include "db.h"
+#include "server.h"
 #include "utils/error.h"
 #include "utils/vec.h"
 #include <cstdint>
 #include <cstring>
 
-void user_insert(db::Server& db, Error& e, const Msg* msg) {
+void user_insert(DB& db, Error& e, const Msg* msg) {
 
     auto stmt = db.get_stmt(Stmts::UserInsert);
     int i = 0;
@@ -19,7 +18,7 @@ void user_insert(db::Server& db, Error& e, const Msg* msg) {
     }
 }
 
-void user_delete(db::Server& db, Error& e, const Msg* msg) {
+void user_delete(DB& db, Error& e, const Msg* msg) {
 
     auto stmt = db.get_stmt(Stmts::UserDelete);
     int i = 0;
@@ -33,7 +32,7 @@ void user_delete(db::Server& db, Error& e, const Msg* msg) {
     }
 }
 
-void card_recent(db::Server& db_, Error& e, const Msg* msg) {
+void card_recent(DB& db_, Error& e, const Msg* msg) {
 
     static constexpr size_t LEN = KEY_SIZE + sizeof(uint64_t);
     if (vec_remaining(msg->data) < LEN) {

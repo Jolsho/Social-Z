@@ -1,6 +1,6 @@
-#include "fs.h"
+#include "api/paths.h"
+#include "manager.h"
 #include "fs_types.h"
-#include "api/db.h"
 #include "utils/vec.h"
 #include <cstddef>
 #include <cstdio>
@@ -9,7 +9,7 @@
 
 
 /// We are being given a voucher.
-void fs::Manager::voucher(const Msg* msg, Error& e) {
+void FS::voucher(const Msg* msg, Error& e) {
     if (vec_remaining(msg->data) < PERM_SZ + VOUCHER_SZ) {
         e.code = E_MALFORMED;
         e.msg = "voucher() :: msg too small";
@@ -93,7 +93,7 @@ void fs::Manager::voucher(const Msg* msg, Error& e) {
 
 
 /// Someone is redeeming a voucher we sent them.
-void fs::Manager::redeem(const Msg* msg, Error& e) {
+void FS::redeem(const Msg* msg, Error& e) {
     if (vec_remaining(msg->data) < VOUCHER_SZ + SID_SZ) {
         e.code = E_MALFORMED;
         e.msg = "redeem() :: msg too small";
@@ -180,7 +180,7 @@ void fs::Manager::redeem(const Msg* msg, Error& e) {
 
 
 /// We are receiving a reward for a voucher we redeemed.
-void fs::Manager::reward(const Msg* msg, Error& e) {
+void FS::reward(const Msg* msg, Error& e) {
     if (vec_remaining(msg->data) <= sizeof(uint64_t) + SID_SZ) {
         e.code = E_MALFORMED;
         e.msg = "reward() :: msg too small";

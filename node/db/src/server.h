@@ -1,6 +1,6 @@
 #pragma once
 #include "utils/buffers.h"
-#include "config.h"
+#include "db/db.h"
 #include "utils/error.h"
 #include "utils/accumulator.h"
 #include "db_iface.h"
@@ -9,10 +9,7 @@
 #include <vector>
 #include "utils.h"
 
-namespace db {
-
-
-class Server {
+class DB {
     LogAccumulator*             logr_;
 
     // MSGING
@@ -28,7 +25,7 @@ class Server {
 
     struct Handler {
         std::string path;
-        std::function<void(Server&, Error&, const Msg*)> handle;
+        std::function<void(DB&, Error&, const Msg*)> handle;
     };
     std::vector<Handler>    handlers_;
 
@@ -38,7 +35,7 @@ public:
     MsgBuffer*  free_out_msgs_;
     MsgBuffer*  in_msgs_;
 
-    Server(Actor *chans, DBConfig& conf);
+    DB(Actor *chans, DBConfig* conf);
     void poll_loop();
 
     void handle_msg(Error& e, Msg* msg);
@@ -56,5 +53,4 @@ public:
 
     inline Vec* get_buffer(size_t sz) { return buffers_.grab(sz); }
 };
-}
 

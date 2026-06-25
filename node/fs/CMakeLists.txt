@@ -8,24 +8,24 @@ add_library(sz::fs ALIAS fs)
 target_include_directories(fs
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include/fs>
+        $<INSTALL_INTERFACE:include/socialz/fs>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 target_link_libraries(fs PRIVATE 
-    sz sz::utils
+    sz::api sz::utils
     $<$<TARGET_EXISTS:lmdb>:lmdb>
     $<$<TARGET_EXISTS:sodium>:sodium>
     $<$<TARGET_EXISTS:blake3>:blake3>
 )
 
 set_target_properties(fs PROPERTIES
-    OUTPUT_NAME "szfs"
-    OUTPUT_NAME_DEBUG "szfs"
+    OUTPUT_NAME "sz_fs"
+    OUTPUT_NAME_DEBUG "sz_fs"
 )
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
-    DESTINATION include/fs
+    DESTINATION include/socialz
 )
 
 install(TARGETS fs

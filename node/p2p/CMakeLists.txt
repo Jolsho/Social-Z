@@ -8,20 +8,20 @@ add_library(sz::p2p ALIAS p2p)
 target_include_directories(p2p
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include/p2p>
+        $<INSTALL_INTERFACE:include/socialz/p2p>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(p2p PRIVATE 
-    sz sz::utils
-    $<$<TARGET_EXISTS:sodium>:sodium>
+target_link_libraries(p2p PRIVATE sz::api sz::utils sodium)
+set_target_properties(p2p PROPERTIES
+    OUTPUT_NAME "sz_p2p"
+    OUTPUT_NAME_DEBUG "sz_p2p"
 )
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
-    DESTINATION include/p2p
+    DESTINATION include/socialz
 )
-
 install(TARGETS p2p
     EXPORT sz_targets
     ARCHIVE DESTINATION lib

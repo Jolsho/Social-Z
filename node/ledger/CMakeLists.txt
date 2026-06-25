@@ -8,7 +8,7 @@ add_library(sz::ledger ALIAS ledger)
 target_include_directories(ledger 
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/bindings>
-        $<INSTALL_INTERFACE:include/ledger>
+        $<INSTALL_INTERFACE:include/socialz/ledger>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
@@ -20,17 +20,12 @@ target_link_libraries(ledger PRIVATE
 )
 
 set_target_properties(ledger PROPERTIES
-    OUTPUT_NAME "szledger"
-    OUTPUT_NAME_DEBUG "szledger"
+    OUTPUT_NAME "sz_ledger"
+    OUTPUT_NAME_DEBUG "sz_ledger"
 )
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bindings/
-    DESTINATION include/ledger
-)
-
-install(TARGETS ledger
-    EXPORT sz_targets
-    ARCHIVE DESTINATION lib
+    DESTINATION include/socialz/ledger
 )
 
 ####################################################

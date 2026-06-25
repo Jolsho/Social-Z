@@ -1,61 +1,8 @@
 
 
-
-Expose main SZ object.
-    This is like the main thread, but not exactly.
-    call run_sz() and that starts the main thread.
-    It mainly holds actors.
-    call register_(actor)(actor*)
-    so like register_db(sz_db*)
-
-    and this means each 
-
-    But each actor slot has to be filled.
-    With something.
-    Doesnt really matter what it is.
-    but it has to be registered.
-        So then you could just create and register each.
-        and when you call run_sz() it might error
-        if any of them arent registered.
-        Or maybe we just implant our own.
-        like there is a default.
-        although I dont know about that.
-
-
-    Need like an actor API.
-    So the what that does is allows you to like poll chans
-        and then send through chans and shit.
-
-    From there the user can process their own messages and shit.
-    But they would need to compile each and every thing used.
-
-
-    ITS A METHOD...
-        Actor* get_actor(SZ, Actor);
-        This means when we run_sz(SZ) it doesnt start that thread
-            the user then takes that into their own hands.
-
-        Which means people can just build around these Actor*'s
-            like if its RPC maybe you forward or whatever.
-            same could be true of P2P and db and what not.
-            i mean the point is that you take it apart and shit if you want.
-
-            each actor I've already defined its own library than.
-            or subdirectory or whatever.
-            Yea...
-            and all I would expose all the time is the actor api and shit.
-            and then the main loop or whatever.
-            but yea besides that its up to the user to decide.
-            they can attach their own actors or use mine.
-
-
-So each Actor I have is actually its own sub_directory which import the Actor API, and uses that for messages and shit.
-    they just take that in their constructor...
-    Config has to be defined in its own file, and not passed through constructor.
-
-and it does like a polling msgs thing as well...
-Or maybe its just poll one msg at a time.
-I know this will fuck shit up, but I cant think of any other way to do this shit.
-Like i dont know how else to poll a bunch of messages at once.
-Unless I just went through and tried to get a pointer to each message and returned that.
-I suppose I could do that.
+need to create an epoll wait method for actors
+inside that we can epoll_wait then poll_actor
+    or maybe we do that from within poll_actor
+    Maybe poll_actor is poll_acotr_chans
+        and then we need a poll_actor seperately
+        which does epoll and looks at events adn shit

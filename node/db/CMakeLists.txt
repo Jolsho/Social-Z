@@ -7,29 +7,28 @@ add_library(sz::db ALIAS db)
 target_include_directories(db
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include/db>
+        $<INSTALL_INTERFACE:include/socialz/db>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_link_libraries(db PRIVATE 
-    sz sz::utils 
+    sz::api 
+    sz::utils 
     lmdb
     $<$<TARGET_EXISTS:sqlite>:sqlite>
     $<$<TARGET_EXISTS:simdjson>:simdjson>
 )
 
 set_target_properties(db PROPERTIES
-    OUTPUT_NAME "szdb"
-    OUTPUT_NAME_DEBUG "szdbd"
+    OUTPUT_NAME "sz_db"
+    OUTPUT_NAME_DEBUG "sz_db"
 )
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
-    DESTINATION include/db
+    DESTINATION include/socialz
 )
-
 install(TARGETS db
     EXPORT sz_targets
     ARCHIVE DESTINATION lib
 )
-

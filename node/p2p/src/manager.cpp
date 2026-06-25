@@ -1,7 +1,8 @@
-#include "p2p.h"
+#include "connection.h"
+#include "manager.h"
 #include <arpa/inet.h>
-#include <unistd.h>
 #include <format>
+
 
 int dial(const char* ip, uint16_t port) {
     // Try IPv4 first
@@ -40,7 +41,7 @@ int dial(const char* ip, uint16_t port) {
     return -1;
 }
 
-std::optional<Error> p2p::Manager::connect(
+std::optional<Error> P2P::connect(
     Key& pubkey,
     ConnID* id
 ) {
@@ -72,8 +73,8 @@ std::optional<Error> p2p::Manager::connect(
     }
 
     // START NEGOTIATION PROCESS
-    conn::Connection& c = connections_[*id];
-    Error e = c.syn(*this);
+    Connection& c = connections_[*id];
+    Error e = conn::syn(c, *this);
     if (e.is_err()) {
         remove_socket(*id);
         return e;

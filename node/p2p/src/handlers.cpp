@@ -1,11 +1,13 @@
-#include "p2p.h"
+#include "api/paths.h"
+#include "connection.h"
+#include "manager.h"
 #include "pkt.h"
 #include "protocols.h"
 #include "utils/error.h"
 #include <format>
 
-Error p2p::Manager::writeable_conn(conn::Connection& conn) {
-    int mid = conn.write_(*this);
+Error P2P::writeable_conn(Connection& conn) {
+    int mid = conn::write_(conn, *this);
     if (mid >= 0) {
         while (true) {
             auto next = messenger_.next(mid);
@@ -19,16 +21,16 @@ Error p2p::Manager::writeable_conn(conn::Connection& conn) {
                     continue;
                 }
 
-                conn::Connection &conn = connections_[id];
+                Connection &conn = connections_[id];
 
-                if (conn.pending_ids_.size() >= conn.MAX_PENDING_OUT)  {
+                if (conn.pending_ids_.size() >= conn::MAX_PENDING_OUT)  {
                     // TODO messenger_.push_to_retry(mid, key);
                     continue;
                 }
                 conn.pending_ids_.push_back(mid);
 
-                if (conn.status_ == conn::Status::Live && !conn.is_epollout_enabled()) {
-                        conn.events_ = conn.enable_epollout(epoll_fd_);
+                if (conn.status_ == conn::Status::Live && !conn::is_epollout_enabled(conn)) {
+                        conn.events_ = conn::enable_epollout(conn, chans_);
                 }
                 break;
 
@@ -52,9 +54,9 @@ Error p2p::Manager::writeable_conn(conn::Connection& conn) {
     return ESUCCESS;
 }
 
-Error p2p::Manager::readable_conn(conn::Connection& conn) {
+Error P2P::readable_conn(Connection& conn) {
 
-    Error e = conn.read_(buffers_); 
+    Error e = conn::read_(conn, buffers_); 
 
     if (!e.is_err() && conn.rpkt_.is_done() && conn.status_ == conn::Status::Live) {
 
@@ -91,10 +93,10 @@ Error p2p::Manager::readable_conn(conn::Connection& conn) {
             };
         }
     } else if (conn.status_ == conn::Status::CryptoSynAck) {
-        e = conn.syn_ack(*this);
+        e = conn::syn_ack(conn, *this);
 
     } else if (conn.status_ == conn::Status::CryptoAck) {
-        e = conn.ack(*this);
+        e = conn::ack(conn, *this);
     }
 
     if (e.is_err() || conn.rpkt_.is_done()) {
@@ -105,7 +107,7 @@ Error p2p::Manager::readable_conn(conn::Connection& conn) {
     return e;
 }
 
-Error p2p::Manager::p2p_protocols(conn::Connection& c) {
+Error P2P::p2p_protocols(Connection& c) {
     int mid = messenger_.new_msg(NULL);
     Msg& msg = messenger_.get_mut_msg(mid);
     Error e = ESUCCESS;
@@ -130,7 +132,7 @@ Error p2p::Manager::p2p_protocols(conn::Connection& c) {
 }
 
 
-void p2p::Manager::handle_error(Error e) {
+void P2P::handle_error(Error e) {
     if (e.key == ZERO_KEY) {
         e.key = connections_[e.id].keys_.remote_auth_;
     }
@@ -156,16 +158,16 @@ void p2p::Manager::handle_error(Error e) {
     logr_->log(e.msg, e.r, e.code);
 }
 
-Error p2p::Manager::handle_msg(Msg* msg) {
+Error P2P::handle_msg(Msg* msg) {
     if (!msg->is_wiped && msg->code >= E_SUCCESS) {
         // REGULAR INTERNAL MSG
         switch (msg->code) {
-            case p2p::code(p2p::Code::CloseConn): {
+            case P2P_CLOSE_CONN: {
                 remove_socket(msg->id);
                 break;
             }
 
-            case p2p::code(p2p::Code::NewConn): {
+            case P2P_NEW_CONN: {
                 Key pubkey;
                 vec_read(msg->data, pubkey.data(), KEY_SIZE);
 
@@ -176,7 +178,7 @@ Error p2p::Manager::handle_msg(Msg* msg) {
                 break;
             }
 
-            case p2p::code(p2p::Code::Broadcast): {
+            case P2P_BROADCAST: {
                 int mid = messenger_.new_msg(msg);
                 auto next = messenger_.next(mid);
                 if (!next.has_value()) {
@@ -194,20 +196,20 @@ Error p2p::Manager::handle_msg(Msg* msg) {
                 auto [key, _] = next.value();
                 ConnID id = msg->id;
 
-                conn::Connection &conn = connections_[id];
+                Connection &conn = connections_[id];
                 if (conn.keys_.remote_auth_ != key) {
                     auto r = connect(key, &id);
                     if (r->is_err()) return r.value();
                     conn = connections_[id];
                 }
 
-                if (conn.pending_ids_.size() >= conn.MAX_PENDING_OUT)  {
+                if (conn.pending_ids_.size() >= conn::MAX_PENDING_OUT)  {
                     return {-1,  conn.id_, E_INTERNAL, conn.keys_.remote_auth_, "Write Buffer CAP reached."};
                 }
                 conn.pending_ids_.push_back(mid);
 
-                if (conn.status_ == conn::Status::Live && !conn.is_epollout_enabled()) {
-                        conn.events_ = conn.enable_epollout(epoll_fd_);
+                if (conn.status_ == conn::Status::Live && !conn::is_epollout_enabled(conn)) {
+                        conn.events_ = conn::enable_epollout(conn, chans_);
                 }
                 /*
                     TODO -- 

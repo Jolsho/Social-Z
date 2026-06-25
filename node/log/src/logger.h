@@ -1,11 +1,10 @@
 #pragma once
 #include "api/actor.h"
-#include "config.h"
+#include "log/log.h"
 #include <cstdio>
 #include <string>
 
-class Logger {
-    int             epoll_fd_;
+class LOG {
     Actor*          chans_;
 
     MsgBuffer*  free_out_msgs_;
@@ -19,7 +18,7 @@ class Logger {
     std::string derive_file_name();
 
 public:
-    Logger(Actor* chan, LogConfig& conf);
+    LOG(Actor* chan, LogConfig* conf);
     int initialize();
     void poll_loop();
     void shutdown();

@@ -1,14 +1,17 @@
-#include "fs.h"
+#include "api/paths.h"
+#include "manager.h"
 #include "fs_types.h"
-#include "api/db.h"
-#include "api/rpc.h"
 #include "utils/vec.h"
 #include <format>
 
 static constexpr uint8_t ACCEPTED{ 1 };
 
+void FS::local_give(const Msg* msg, Error& e) {
+    // TODO
+}
+
 /// We receive a permission to post to a remote node.
-void fs::Manager::give(const Msg* msg, Error& e) {
+void FS::give(const Msg* msg, Error& e) {
 
     if (vec_remaining(msg->data) < PERM_SZ) {
         e.code = E_MALFORMED;
@@ -61,9 +64,8 @@ void fs::Manager::give(const Msg* msg, Error& e) {
     }
 };
 
-
 /// Remote accepts or denies a permission we offered them.
-void fs::Manager::settle(const Msg* msg, Error& e) {
+void FS::settle(const Msg* msg, Error& e) {
     if (vec_remaining(msg->data) < PERM_SZ + 1 + SIG_SIZE) {
         e.code = E_MALFORMED;
         e.msg = "msg size small for remote_settle()";
@@ -149,9 +151,12 @@ void fs::Manager::settle(const Msg* msg, Error& e) {
     }
 };
 
+void FS::local_ask(const Msg* msg, Error& e) {
+    // TODO
+}
 
 /// Remote asks for a specific permission.
-void fs::Manager::ask(const Msg* msg, Error& e) {
+void FS::ask(const Msg* msg, Error& e) {
     if (vec_remaining(msg->data) < PERM_SZ) {
         e.code = E_MALFORMED;
         e.msg = "msg size small for ask()";
@@ -209,8 +214,12 @@ void fs::Manager::ask(const Msg* msg, Error& e) {
 };
 
 
+void FS::local_revoke(const Msg* msg, Error& e) {
+    // TODO
+}
+
 /// Remote notifies us they revoked a permission we had.
-void fs::Manager::revoke(const Msg* msg, Error& e) {
+void FS::revoke(const Msg* msg, Error& e) {
 
     // TODO -- 
     // How to recover when we don't get the notice of revokation?
@@ -272,7 +281,7 @@ void fs::Manager::revoke(const Msg* msg, Error& e) {
 /// Local denies a give permission, meaning delete local copy.
 /// In case of accept no action is needed. 
 /// Perms are by default accepted.
-void fs::Manager::local_settle(const Msg* msg, Error& e) {
+void FS::local_settle(const Msg* msg, Error& e) {
 
     if (vec_remaining(msg->data) < PERM_SZ + 1 + SIG_SIZE) {
         e.code = E_MALFORMED;
@@ -339,10 +348,10 @@ void fs::Manager::local_settle(const Msg* msg, Error& e) {
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_P2P;
     m->code = ACTOR_FS;
-    m->data = buffers_.grab(PERM_SZ + sizeof(fs::FSCODE) + SIG_SIZE + 1);
+    m->data = buffers_.grab(PERM_SZ + sizeof(FS_PATH) + SIG_SIZE + 1);
 
     if (
-        !vec_write(m->data, fs::FSCODE::SETTLE) ||
+        !vec_write(m->data, FS_SETTLE) ||
         !vec_write(m->data, p) ||
         !vec_write(m->data, &flags) ||
         !vec_write(m->data, sig)

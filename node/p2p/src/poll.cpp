@@ -1,29 +1,36 @@
 #include <arpa/inet.h>
-#include <cstddef>
 #include <cstdio>
 #include <fcntl.h>
-#include "connection.h"
-#include "p2p.h"
+#include <sys/epoll.h>
+#include "api/actor.h"
+#include "manager.h"
 #include "utils/shutdown.h"
 
-void p2p::Manager::poll_loop() {
+void P2P::poll_loop() {
     const int MAX_EVENTS = 64;
-    epoll_event events[MAX_EVENTS];
+    EventBuffer* events = new_event_buffer(MAX_EVENTS);
 
-    int chan_fd = in_event_fd(chans_);
 
     while (true) {
-        int n = epoll_wait(epoll_fd_, events, MAX_EVENTS, 0); // short timeout
-        time_t now = time(nullptr);
-        if (should_shutdown) {
-            shutdown();
-            return;
+        poll_actor(chans_, events, in_msgs_, free_out_msgs_, 500);
+        if (ChanStatsPair* stats = poll_telemetry(chans_)) logr_->log(stats);
+
+        if (events->size < 0) {
+            logr_->log("p2p:poll returned error.", events->size);
+            should_shutdown = true;
         }
 
-        for (int i = 0; i < n; ++i) {
-            int fd = events[i].data.fd;
+        // INTERNAL MSGS
+        while (Msg* msg = consume_msg(in_msgs_)) {
+            Error e = handle_msg(msg);
+            if (e.is_err()) handle_error(e);
+        }
 
-            if (fd == listen_fd_) {
+        // ALL OTHER EVENTS
+        for (int i = 0; i < events->size; i++) {
+            EpollEvent& ev = events->events[i];
+
+            if (ev.data.fd == listen_fd_) {
                 // NEW CONNECTION
                 while (true) {
                     sockaddr_storage client_addr{};
@@ -41,29 +48,13 @@ void p2p::Manager::poll_loop() {
                     if (id == 0) close(client);
                 }
                 continue;
-
-            } else if (fd == chan_fd) {
-
-                // INTERNAL MSGS
-
-                auto stats = poll_actor(chans_, in_msgs_, free_out_msgs_);
-                if (stats != NULL) logr_->log(stats);
-
-                while (Msg* msg = consume_msg(in_msgs_)) {
-                    Error e = handle_msg(msg);
-                    if (e.is_err()) handle_error(e);
-                }
-
-                update_actor(chans_, &in_msgs_->consumed_, &free_out_msgs_->consumed_);
-
-
-                continue;
-
             }
 
             // OPEN CONNECTIONS WITH WORK TO DO
-            ConnID id = sock_ids_[fd];
-            conn::Connection& conn = connections_[id];
+            ConnID id = ev.data.u64;
+            if (id > connections_.size()) continue;
+
+            Connection& conn = connections_[id];
             int _ = lru_.use(conn.lru_node_);
 
             static constexpr uint8_t MAX_FAILURE = 12;
@@ -73,22 +64,18 @@ void p2p::Manager::poll_loop() {
                 conn.status_ == conn::Status::Dead
             ) continue;
 
-            if (events[i].events & EPOLLIN) {
+            if (ev.events & EPOLLIN) {
                 Error e = readable_conn(conn);
-                if (e.is_err()) {
-                    handle_error(e);
-                }
+                if (e.is_err()) handle_error(e);
             }
-            if (events[i].events & EPOLLOUT) {
+            if (ev.events & EPOLLOUT) {
                 Error e = writeable_conn(conn);
-                if (e.is_err()) {
-                    handle_error(e);
-                }
+                if (e.is_err()) handle_error(e);
             }
         }
 
-
         // HANDLE EXPIRED CONNECTIONS
+        time_t now = time(nullptr);
         while (negotiating_timeouts_.size() > 0) {
             auto [id, timeout] = negotiating_timeouts_.front();
             if (timeout > now ) break;
@@ -99,9 +86,18 @@ void p2p::Manager::poll_loop() {
             negotiating_timeouts_.pop_front();
         }
 
+
         for (auto idx: lru_.remove_expired()) {
             remove_socket(idx);
         }
+
+        update_actor(chans_, &in_msgs_->consumed_, &free_out_msgs_->consumed_);
+
+        if (should_shutdown) {
+            shutdown();
+            return;
+        }
+
     }
 }
 

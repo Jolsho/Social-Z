@@ -1,14 +1,20 @@
+#include "api/actor.h"
 #include "utils/chans.h"
 #include <cstdlib>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
+#include <thread>
+
+void wait_on_actor_thread(ActorThread* at) {
+    if (!at || at->r != 0) return;
+    if (at->t != nullptr) ((std::thread*)at->t)->join();
+}
 
 class Actor {
 
 private:
-    time_t next_snapshot = time(nullptr) + 20;
-    ChanStatsPair stats_;
-
+    time_t          next_snapshot = time(nullptr) + 20;
+    ChanStatsPair   stats_;
 public:
     Actors      id_;
 
@@ -19,6 +25,9 @@ public:
     int         in_event_fd_;
     Channel*    in_;
     MsgBuffer   in_msg_view_ = {};
+
+    int epoll_fd_;
+    std::vector<epoll_event> events_;
 
 
     ChanStatsPair *poll_telemetry() {
@@ -56,7 +65,13 @@ public:
 
 };
 
-Actor* new_actor(ActorConfig* config) {
+void delete_actor(Actor* a) {
+    delete a->in_;
+    delete a->out_;
+    delete a;
+}
+
+Actor* create_actor(ActorConfig* config) {
     Actor* a = new Actor();
     a->id_ = config->id;
     a->out_event_fd_ = eventfd(0, EFD_NONBLOCK);
@@ -72,7 +87,6 @@ Actor* new_actor(ActorConfig* config) {
 
     ActorConfig& c = *config;
 
-    size_t in_msg_cap = 0;
     size_t out_msg_cap = 0;
 
     ChanArray<size_t> in_sizes;
@@ -91,7 +105,6 @@ Actor* new_actor(ActorConfig* config) {
     }
 
     for (int i = 0; i < c.in_budgets_len; i++) {
-        in_msg_cap += *c.in_q_sizes;
         in_sizes[i] = *(c.in_q_sizes++);
         in_buds[i] = *(c.in_budgets++);
 
@@ -102,34 +115,92 @@ Actor* new_actor(ActorConfig* config) {
     }
 
     a->in_ = new Channel(
-        in_msg_cap, 
+        config->event_cap, 
         a->id_, in_sizes, in_buds
     );
+    a->events_.resize(config->event_cap);
 
     a->out_ = new Channel(
         out_msg_cap, 
         a->id_, out_sizes, out_buds
     );
 
+    a->epoll_fd_ = epoll_create1(0);
+    if (a->epoll_fd_ < 0) {
+        delete_actor(a);
+        return nullptr;
+    }
+
+    epoll_event ev{.events = EPOLLIN, .data = {.fd = a->in_event_fd_}};
+    int r = epoll_ctl(a->epoll_fd_, EPOLL_CTL_ADD, a->in_event_fd_, &ev);
+    if (r < 0) {
+        delete_actor(a);
+        return nullptr;
+    }
+
     return a;
 }
 
-int in_event_fd(Actor* a) { return a->in_event_fd_; }
+
 int out_event_fd(Actor* a) { return a->out_event_fd_; }
-int register_actor_output_with_epoll(int epoll_fd, Actor* a) {
-    epoll_event ev{.events = EPOLLIN, .data = {.fd = out_event_fd(a)}};
-    return epoll_ctl(epoll_fd, EPOLL_CTL_ADD, out_event_fd(a), &ev);
-}
-int register_actor_input_with_epoll(int epoll_fd, Actor* a) {
-    epoll_event ev{.events = EPOLLIN, .data = {.fd = in_event_fd(a)}};
-    return epoll_ctl(epoll_fd, EPOLL_CTL_ADD, in_event_fd(a), &ev);
+
+int ctl_epoll(Actor* a, EpollEvent* eev, int op) {
+    epoll_event ev{ .events = eev->events };
+    ev.data.fd = eev->data.fd;
+    ev.data.ptr = eev->data.ptr;
+    ev.data.u64 = eev->data.u64;
+    ev.data.u32 = eev->data.u32;
+    return epoll_ctl(a->epoll_fd_, op, ev.data.fd, &ev);
 }
 
-ChanStatsPair* poll_actor(Actor* actor, MsgBuffer* in, MsgBuffer* out) {
-    actor->in_->poll(in);
-    actor->out_->get_free_msgs(out);
-    actor->clear_in_event();
-    return actor->poll_telemetry();
+ChanStatsPair* poll_telemetry(Actor* a) { return a->poll_telemetry(); }
+
+EventBuffer* new_event_buffer(size_t cap) {
+    EventBuffer* eb = new EventBuffer{.cap = cap};
+    eb->events = (EpollEvent*)malloc(sizeof(EpollEvent*) * cap);
+    return eb;
+}
+
+void delete_event_buffer(EventBuffer* b) {
+    free(b->events);
+    delete b;
+}
+
+void poll_actor(Actor* actor, EventBuffer* evs, MsgBuffer* in, MsgBuffer* out, int timeout_ms) {
+
+    int msg_fd = actor->in_event_fd_;
+    int n = epoll_wait(
+        actor->epoll_fd_, 
+        actor->events_.data(), 
+        std::min(actor->events_.size(), evs->cap), 
+        timeout_ms
+    );
+
+    evs->size = n;
+
+    if (n > 0) {
+        bool is_polled = false;
+        EpollEvent* ee = evs->events;
+        for (int i = 0; i < n; i++) {
+            epoll_event& e = actor->events_[i];
+
+            if (e.data.fd == msg_fd) {
+                if (is_polled) continue;
+                is_polled = true;
+                actor->in_->poll(in);
+                actor->out_->get_free_msgs(out);
+                actor->clear_in_event();
+
+            } else {
+                ee->events  =   e.events;
+                ee->data.fd =   e.data.fd;
+                ee->data.u32 =  e.data.u32;
+                ee->data.u64 =  e.data.u64;
+                ee->data.ptr =  e.data.ptr;
+                ee++;
+            }
+        }
+    }
 }
 
 void update_actor(Actor* actor, size_t* in_processed, size_t* out_pending) {

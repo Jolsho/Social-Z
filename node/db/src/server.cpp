@@ -1,15 +1,27 @@
 #include <cstring>
 #include <format>
+#include <thread>
+#include "server.h"
 #include "handlers.h"
 #include "utils/path.h"
 #include "utils/vec.h"
 
-db::Server::Server(
+ActorThread* start_db(Actor* actor, DBConfig* conf) {
+    ActorThread* at = new ActorThread{.r = 0};
+    DB* db = new DB(actor, conf);
+    at->t = (void*)new std::thread([&] {
+        db->poll_loop();
+        delete db;
+    });
+    return at;
+}
+
+DB::DB(
     Actor* actor, 
-    DBConfig& conf
+    DBConfig* conf
 ) : 
     chans_(actor), 
-    db_(cpy_apnd(PATHS.data_dir, {"/db/lmdb"}).c_str(), conf.map_size),
+    db_(cpy_apnd(PATHS.data_dir, {"/db/lmdb"}).c_str(), conf->map_size),
     buffers_(BufferCaps{})
 {
 
@@ -42,13 +54,13 @@ db::Server::Server(
     };
 }
 
-void db::Server::shutdown() {
+void DB::shutdown() {
     sqlite3_close(sql_);
     for (auto& stmt: stmts_)
         sqlite3_finalize(stmt);
 }
 
-void db::Server::handle_msg(Error& e, Msg* msg) {
+void DB::handle_msg(Error& e, Msg* msg) {
 
     if (!msg->data) {
         e.msg = "Request has no body.";
@@ -72,5 +84,5 @@ void db::Server::handle_msg(Error& e, Msg* msg) {
     e.code = E_MALFORMED;
 }
 
-void db::Server::handle_error(Error& e) {
+void DB::handle_error(Error& e) {
 }

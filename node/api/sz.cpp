@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <sys/epoll.h>
+#include "internal.h"
 
 struct ActorMainView {
     Actor*      a = nullptr;
@@ -22,28 +23,34 @@ struct ActorMainView {
 class SZT {
 public:
 
-    int fd_ = 0;
+    int epoll_fd_ = 0;
     std::array<ActorMainView, ACTOR_COUNT>    actors_ = {};
 };
 
     
 SZT* new_sz() {
     SZT* sz = new SZT();
-    sz->fd_ = epoll_create(0);
+    sz->epoll_fd_ = epoll_create(0);
     return sz;
 }
 
 void stop(SZT* sz) { should_shutdown = true; }
 
-bool set_actor(SZT* sz, Actors idx, Actor* actor) {
-    if (idx >= ACTOR_COUNT || !actor) return false;
-    sz->actors_[idx] = {
+Actor* new_actor(SZT* sz, ActorConfig* conf) {
+    Actor* actor = create_actor(conf);
+    if (!actor) return nullptr;
+
+    if (conf->id >= ACTOR_COUNT) {
+        delete_actor(actor);
+        return nullptr;
+    }
+    sz->actors_[conf->id] = {
         .a = actor,
         .out_event_fd = out_event_fd(actor),
         .out = new_msg_buffer(512),
         .free_in = new_msg_buffer(512),
     };
-    return true;
+    return actor;
 }
 
 int run(SZT* sz) {
@@ -52,7 +59,10 @@ int run(SZT* sz) {
     // AND REGISTER THEIR OUT WITH EPOLL
     for (auto& a: sz->actors_) { 
         if (!a.a) return -1;
-        register_actor_output_with_epoll(a.out_event_fd, a.a);
+
+        epoll_event ev{.events = EPOLLIN, .data = { .fd = a.out_event_fd }};
+        int r = epoll_ctl(sz->epoll_fd_, EPOLL_CTL_ADD, a.out_event_fd, &ev);
+        if (r < 0) return r;
     }
 
 
@@ -62,7 +72,7 @@ int run(SZT* sz) {
     while (true) {
         if (should_shutdown) { return 0; }
 
-        int n = epoll_wait(sz->fd_, events, MAX_EVENTS, -1);
+        int n = epoll_wait(sz->epoll_fd_, events, MAX_EVENTS, 3000);
         for (int i = 0; i < n; ++i) {
             int fd = events[i].data.fd;
 
