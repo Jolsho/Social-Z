@@ -1,44 +1,56 @@
 #include "manager.h"
 #include "api/paths.h"
 #include "utils/vec.h"
+#include <algorithm>
 
 void FS::handle_internal_msgs() {
     while (Msg* msg = consume_msg(in_msgs_)) {
-        if (!msg->is_wiped && msg->data && msg->data->len > sizeof(FS_PATH)) {
+        if (
+            !msg->is_wiped && 
+            msg->data && 
+            (msg->data->len > sizeof(FS_PATH))
+        ) {
 
             // If no space just silently drop
-            Error e { 
-                .id = msg->id 
-            };
+            Error e { .id = msg->id };
 
             if (msg->from == ACTOR_P2P) {
                 switch (vec_read<FS_PATH>(msg->data)) {
-                    case FS_VOUCHER:   voucher(msg, e);   break;
-                    case FS_REDEEM:    redeem(msg, e);    break;
-                    case FS_REWARD:    reward(msg, e);    break;
+                    case FS_VOUCHER:   voucher      (msg, e);   break;
+                    case FS_REDEEM:    redeem_remote(msg, e);   break;
+                    case FS_REWARD:    reward       (msg, e);   break;
 
-                    case FS_GIVE:      give(msg, e);      break;
-                    case FS_SETTLE:    settle(msg, e);    break;
-                    case FS_ASK:       ask(msg, e);       break;
-                    case FS_REVOKE:    revoke(msg, e);    break;
+                    case FS_GIVE:      give_remote  (msg, e);   break;
+                    case FS_SETTLE:    settle_remote(msg, e);   break;
+                    case FS_ASK:       ask_remote   (msg, e);   break;
+                    case FS_REVOKE:    revoke_remote(msg, e);   break;
 
-                    default: break;
+                    default: {
+                        e.msg = "FS_internal_remote() :: invalid path";
+                        e.code = E_MALFORMED;
+                        break;
+                    }
                 }
             } else {
                 switch (vec_read<FS_PATH>(msg->data)) {
 
-                    case FS_GIVE:      local_give(msg, e);      break;
-                    case FS_SETTLE:    local_settle(msg, e);    break;
-                    case FS_ASK:       local_ask(msg, e);       break;
-                    case FS_REVOKE:    local_revoke(msg, e);    break;
+                    case FS_REDEEM:    redeem_local (msg, e);   break;
 
-                    default: break;
+                    case FS_GIVE:      give_local   (msg, e);   break;
+                    case FS_SETTLE:    settle_local (msg, e);   break;
+                    case FS_ASK:       ask_local    (msg, e);   break;
+                    case FS_REVOKE:    revoke_local (msg, e);   break;
+
+                    default: {
+                        e.msg = "FS_internal_local() :: invalid path";
+                        e.code = E_MALFORMED;
+                        break;
+                    }
                 }
             }
             if (e.is_err()) handle_err(e, (Actors)msg->from);
         }
         
-
         if (!msg->is_wiped) msg_wipe(msg);
 
         if (msg->from == ACTOR_FS) {
@@ -50,7 +62,6 @@ void FS::handle_internal_msgs() {
             m->priority = PRIORITY_WORK;
         }
 
-        update_actor(chans_, &in_msgs_->consumed_, &free_out_msgs_->consumed_);
     }
 }
 
@@ -58,16 +69,19 @@ void FS::handle_outbound() {
     const int MAX_OUTS_PER_ROUND = 8;
     for (int i = 0; i < MAX_OUTS_PER_ROUND; i++) {
         Session& s = outbound_.front();
+
         Msg* m = consume_msg(free_out_msgs_);
+        if (!m) break;
+
         m->priority = PRIORITY_WORK;
-        m->data = buffers_.grab(BufferSize::SU);
+        uint64_t si = std::min(static_cast<uint64_t>(BufferSize::SU), s.file->size - s.byte_count + SID_SZ + sizeof(uint64_t));
+        m->data = buffers_.grab(si);
         m->too = s.actor;
 
         vec_write(m->data, FS_REWARD);
         vec_write(m->data, s.id);
 
-        uint64_t offset = s.chunk_size * s.chunk_idx;
-        if (fseek(s.file->f, offset,  SEEK_SET) < 0) {
+        if (lseek(s.file->fd, s.byte_count,  SEEK_SET) < 0) {
             handle_err({
                 .code = E_INTERNAL,
                 .key = s.voucher.to,
@@ -75,7 +89,7 @@ void FS::handle_outbound() {
             }, (Actors)s.actor);
 
             if (s.file->ref_count == 1) {
-                fclose(s.file->f);
+                close(s.file->fd);
                 open_files_.erase(s.file->hash);
             }
             outbound_.pop_front();
@@ -85,31 +99,27 @@ void FS::handle_outbound() {
         }
 
 
-        uint64_t next_chunk_size = std::min(s.chunk_size, s.file->size - offset);
+        size_t remaining = vec_remaining(m->data) - sizeof(uint64_t);
 
-        size_t remaining = next_chunk_size;
-        unsigned char* c = m->data->c;
-        int n;
-        while (n > 0 && remaining > 0) {
-            n = fread(c, 1, remaining, s.file->f);
+        unsigned char* len_c = m->data->c;
+        uint64_t len = 0;
+
+        int n = 0;
+        while (n > 0 && 0 < remaining) {
+            n = read(s.file->fd ,m->data->c, remaining);
+
             if (n > 0) {
+                m->data->c += n;
+                m->data->len += n;
+                len += n;
                 remaining -= n;
-                c += n;
+            } else if (n == 0) {
+                break;
             }
         }
 
-        if (remaining == 0) {
-            s.chunk_idx++;
-
-            if (s.chunk_idx * s.chunk_size >= s.file->size) {
-                if (s.file->ref_count == 1) {
-                    fclose(s.file->f);
-                    open_files_.erase(s.file->hash);
-                }
-                outbound_.pop_front();
-            }
-
-        } else if (n < 0) {
+        s.byte_count += len;
+        if (n < 0 || s.byte_count > s.file->size) {
             handle_err({
                 .r = n,
                 .code = E_INTERNAL,
@@ -118,12 +128,22 @@ void FS::handle_outbound() {
             }, (Actors)s.actor);
 
             if (s.file->ref_count == 1) {
-                fclose(s.file->f);
+                close(s.file->fd);
                 open_files_.erase(s.file->hash);
             }
             outbound_.pop_front();
             unconsume_msg(free_out_msgs_);
             continue;
+        }
+
+        memcpy(len_c, &len, sizeof(uint64_t));
+
+        if (s.byte_count == s.file->size) {
+            if (s.file->ref_count == 1) {
+                close(s.file->fd);
+                open_files_.erase(s.file->hash);
+            }
+            outbound_.pop_front();
         }
     }
 }

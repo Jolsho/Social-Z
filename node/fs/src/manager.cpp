@@ -1,23 +1,16 @@
 #include "api/actor.h"
 #include "manager.h"
-#include "lmdb.h"
 #include "utils/path.h"
 #include "utils/shutdown.h"
 #include <cstdio>
 #include <cstring>
-#include <format>
+#include <filesystem>
 #include <sys/epoll.h>
 #include <thread>
 
 ActorThread* start_fs(Actor* actor, FSConfig* conf) {
     ActorThread* at = new ActorThread{.r = 0};
     FS* fs = new FS(actor, conf);
-
-    at->r = fs->initialize();
-    if (at->r < 0) {
-        delete fs;
-        return at;
-    }
 
     at->t = (void*)new std::thread([&] {
         fs->poll_loop();
@@ -29,17 +22,22 @@ ActorThread* start_fs(Actor* actor, FSConfig* conf) {
 FS::FS(Actor* chans, FSConfig* conf) : 
     chans_(chans), 
     fs_root_(cpy_apnd(PATHS.data_dir, {"/fs/f_tree"}).c_str()),
-    db_(cpy_apnd(PATHS.data_dir, {"/fs/lmdb"}).c_str(), conf->map_size),
+    db_( cpy_apnd(PATHS.data_dir,{"/fs/lmdb"}).c_str(), conf->map_size),
     buffers_(BufferCaps{})
 {
+
+    std::string tmp (fs_root_);
+    tmp.append("/tmp");
+    for (const auto& entry : std::filesystem::directory_iterator(tmp)) {
+        std::filesystem::remove_all(entry.path());  // Recursively deletes files/directories
+    }
 
     path_.reserve(fs_root_.size() + HASH_SIZE * 2);
     path_.append(fs_root_);
     path_.resize(fs_root_.size() + HASH_SIZE * 2);
 
-    open_files_.reserve(64);
-    sessions_.reserve(64);
-
+    open_files_.reserve(conf->concurrent_sessions);
+    sessions_.reserve(conf->concurrent_sessions);
 
     static constexpr time_t LOG_FLUSH_INTERVAL = 500; // ms
     logr_ = new LogAccumulator{
@@ -47,15 +45,8 @@ FS::FS(Actor* chans, FSConfig* conf) :
         buffers_, ACTOR_FS
     };
 
-}
+    allotted_space = conf->allotted_space;
 
-int FS::initialize() {
-    epoll_fd_ = epoll_create1(0);
-    if (epoll_fd_ < 0) {
-        logr_->log(std::format("EPOLL_CREATE1 FAILED: %d", epoll_fd_));
-        return epoll_fd_;
-    };
-    return 0;
 }
 
 void FS::poll_loop() {
@@ -82,23 +73,30 @@ void FS::poll_loop() {
 
         time_t now = time(nullptr);
         if (pending_perms_.front().expires > now) {
-            int r;
-            HashT h;
-            PendingPermBucket& ps = pending_perms_.front();
-            auto txn = db_.start_txn();
-            for (int del_cnt = 0; del_cnt < 12; del_cnt++) {
-                ps.take_next(h);
-                r = db_.del(h.b, HASH_SIZE, txn);
-                if (
-                    (r != 0 && r != MDB_NOTFOUND) || 
-                    ps.is_empty()
-                ) break;
-            }
-            db_.end_txn(txn, r);
-            buffers_.put(ps.buff);
             pending_perms_.pop_front();
         }
 
+        while (
+            session_expires_.size() > 0 && 
+            session_expires_.top().first < now
+        ) {
+            auto [exp, id] = session_expires_.top();
+
+            auto it = sessions_.find(id);
+            if (it != sessions_.end()) {
+                Session& s = it->second;
+
+                close(s.file->fd);
+                open_files_.erase(s.file->hash);
+                std::string path = derive_path(s.file->hash);
+                remove(path.c_str());
+                sessions_.erase(id);
+            }
+            session_expires_.pop();
+        }
+
         handle_outbound();
+
+        update_actor(chans_, &in_msgs_->consumed_, &free_out_msgs_->consumed_);
     }
 }

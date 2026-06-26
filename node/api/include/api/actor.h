@@ -37,14 +37,14 @@ struct ChanStatsPair {
 
 typedef struct Actor Actor;
 typedef uint8_t Actors; 
-#define ACTOR_P2P   0
-#define ACTOR_FS    1
-#define ACTOR_SZ    2
-#define ACTOR_DB    3
-#define ACTOR_LOG   4
-#define ACTOR_LEDG  5
-#define ACTOR_COUNT 6
-#define ACTOR_NONE  7
+#define ACTOR_P2P   ((Actors)0)
+#define ACTOR_FS    ((Actors)1)
+#define ACTOR_SZ    ((Actors)2)
+#define ACTOR_DB    ((Actors)3)
+#define ACTOR_LOG   ((Actors)4)
+#define ACTOR_LEDG  ((Actors)5)
+#define ACTOR_COUNT ((Actors)6)
+#define ACTOR_NONE  ((Actors)7)
 
 struct ActorConfig {
     Actors  id;

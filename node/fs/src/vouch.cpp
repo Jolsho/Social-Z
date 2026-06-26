@@ -3,11 +3,15 @@
 #include "manager.h"
 #include "fs_types.h"
 #include "utils/vec.h"
+#include <cerrno>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <fcntl.h>
 #include <format>
+#include <sodium/randombytes.h>
 #include <sys/stat.h>
+
 HashT hash_voucher(Voucher* v) {
     Hasher h {};
     h.update(v->to.b, KEY_SIZE);
@@ -31,14 +35,8 @@ void FS::voucher(const Msg* msg, Error& e) {
 
     Perm p {};
     Voucher v{};
-    if (
-        !vec_read(msg->data, p) ||
-        !vec_read(msg->data, v)
-    ) {
-        e.code = E_MALFORMED;
-        e.msg = "voucher() :: malformed perm || voucher";
-        return;
-    }
+    vec_read(msg->data, p);
+    vec_read(msg->data, v);
 
 
     if (!locals_.contains(v.to)) {
@@ -69,6 +67,23 @@ void FS::voucher(const Msg* msg, Error& e) {
     if (r == MDB_NOTFOUND) {
         e.code = E_PERM_NOT_EXIST;
         e.msg = "voucher() :: perm doesnt exist, or hasnt been accepted.";
+
+        Msg* m = consume_msg(free_out_msgs_);
+        if (!m) {
+            e.code = E_INTERNAL;
+            e.msg = "voucher() :: too_main_ no msgs.";
+            return;
+        }
+
+        m->priority = PRIORITY_WORK;
+        m->too = ACTOR_DB;
+        m->data = buffers_.grab(sizeof(Actors) + sizeof(FS_PATH) + sizeof(Perm));
+        m->code = DB_NEW_TASK;
+
+        vec_write(m->data, ACTOR_FS);
+        vec_write(m->data, FS_REVOKE);
+        vec_write(m->data, p);
+
         return;
     } else if (r != 0) {
         e.code = E_INTERNAL;
@@ -94,52 +109,122 @@ void FS::voucher(const Msg* msg, Error& e) {
     m->too = ACTOR_DB;
     m->data = buffers_.grab(sizeof(Voucher) + sizeof(DB_PATH));
 
-    if (
-        !vec_write(m->data, DB_VOUCHER_INSERT) ||
-        !vec_write(m->data, p_hash) ||
-        !vec_write(m->data, v)
-    ) {
-        e.code = E_INTERNAL;
-        e.msg = "voucher() :: marshal response";
-        buffers_.put(m->data);
-        msg_wipe(m);
-        return;
-    }
+    vec_write(m->data, DB_VOUCHER_INSERT);
+    vec_write(m->data, p_hash);
+    vec_write(m->data, v);
 };
 
 
-/// Someone is redeeming a voucher we sent them.
-void FS::redeem(const Msg* msg, Error& e) {
-    if (vec_remaining(msg->data) < sizeof(Voucher) + SID_SZ) {
+void FS::redeem_local(const Msg* msg, Error& e) {
+    if (vec_remaining(msg->data) < sizeof(Voucher)) {
         e.code = E_MALFORMED;
-        e.msg = "redeem() :: msg too small";
+        e.msg = "redeem_local() :: msg too small";
         return;
     }
 
     Voucher v {};
-    if (!vec_read(msg->data, v)) {
-        e.code = E_MALFORMED;
-        e.msg = "redeem() :: malformed  voucher";
+    vec_read(msg->data, v);
+
+    if (!locals_.contains(v.to)) {
+        e.code = E_NOTLOCAL;
+        e.msg = std::format("redeem_local() :: Not Local :: {}", key_to_str(v.from));
         return;
     }
+
+    if (allotted_space < total_fs_size + v.file_size) {
+        e.code = E_OVERSIZED;
+        e.msg = "redeem_local() :: allotted fs space would be exceeded by new file";
+        return;
+    }
+
+    SessionID id;
+
+    Session* s;
+
+    for (int i = 0; i < 3; i++) {
+        randombytes_buf(id.data(), id.size());
+        auto [it, is_new] = sessions_.emplace(id);
+        if (is_new) {
+            s = &it->second;
+            break;
+        }
+    }
+    if (!s) {
+        e.code = E_INTERNAL;
+        e.msg = "redeem_local() :: Couldnt generate sessionID ??";
+        return;
+    }
+
+    s->actor = msg->from;
+    s->voucher = v;
+    s->byte_count = 0;
+    s->id = id;
+    s->is_inbound = true;
+
+    std::string path = tmp_path(id);
+    
+    int fd = open(path.data(), O_RDWR | O_CREAT | O_EXCL, 0664);
+    if (fd < 0) {
+        if (errno == EEXIST) {
+            Msg* m = consume_msg(free_out_msgs_);
+            if (!m) {
+                e.code = E_INTERNAL;
+                e.msg = "reward() :: too_main_ no msgs.";
+                return;
+            }
+            m->priority = PRIORITY_WORK;
+            m->too = ACTOR_DB;
+            m->data = buffers_.grab(sizeof(DB_PATH) + sizeof(Voucher));
+            vec_write(m->data, DB_NEW_BLOB);
+            vec_write(m->data, v);
+
+            sessions_.erase(id);
+            return;
+        }
+
+        e.code = E_INTERNAL;
+        e.msg = "redeem_local() :: failed to create file.";
+        return;
+    }
+
+    FileHandle ffh {
+        .hash   = v.file_hash,
+        .fd     = fd,
+        .size   = v.file_size,
+        .ref_count = 1,
+    };
+
+    s->file = &ffh;
+    open_files_.insert({v.file_hash, ffh});
+}
+
+/// Someone is redeeming a voucher we sent them.
+void FS::redeem_remote(const Msg* msg, Error& e) {
+    if (vec_remaining(msg->data) < sizeof(Voucher) + SID_SZ) {
+        e.code = E_MALFORMED;
+        e.msg = "redeem_remote() :: msg too small";
+        return;
+    }
+
+    Voucher v {};
+    vec_read(msg->data, v);
 
     if (!locals_.contains(v.from)) {
         e.code = E_NOTLOCAL;
-        e.msg = std::format("redeem() :: Not Local :: {}", key_to_str(v.from));
+        e.msg = std::format("redeem_remote() :: Not Local :: {}", key_to_str(v.from));
         return;
     }
 
-
     if (v.expiration < time(nullptr)) {
         e.code = E_VOUCHER_EXPIRED;
-        e.msg = std::format("redeem() :: VOUCHER_EXPIRED");
+        e.msg = std::format("redeem_remote() :: VOUCHER_EXPIRED");
         return;
     }
 
     HashT v_hash = hash_voucher(&v);
     if (!valid_signature(v.from, v.signature, v_hash)) {
         e.code = E_UNAUTHORIZED;
-        e.msg = "redeem() :: Fake Voucher Signature";
+        e.msg = "redeem_remote() :: Fake Voucher Signature";
         return;
     }
 
@@ -148,11 +233,8 @@ void FS::redeem(const Msg* msg, Error& e) {
         .voucher = v,
         .actor = msg->from
     };
-    if (!vec_read(msg->data, session.id.data(), SID_SZ)) {
-        e.code = E_MALFORMED;
-        e.msg = "redeem() :: msg too small :: sessionID";
-        return;
-    }
+
+    vec_read(msg->data, session.id.data(), SID_SZ);
 
     FileHandle* fh;
     auto it = open_files_.find(v.file_hash);
@@ -162,20 +244,20 @@ void FS::redeem(const Msg* msg, Error& e) {
         struct stat st;
         if (stat(path.data(), &st) != 0) {
             e.code = E_FILE_NOT_EXIST;
-            e.msg = "redeem() :: File Not Exist, Stat";
+            e.msg = "redeem_remote() :: File Not Exist, Stat";
             return;
         }
         
-        FILE* f = fopen(path.data(), "wx");
-        if (!f) {
+        int fd = open(path.data(), O_RDONLY);
+        if (fd < 0) {
             e.code = E_FILE_NOT_EXIST;
-            e.msg = "redeem() :: File Not Exist, fopen";
+            e.msg = "redeem_remote() :: File Not Exist, fopen";
             return;
         }
 
         FileHandle ffh {
             .hash   = v.file_hash,
-            .f      = f,
+            .fd      = fd,
             .size   = static_cast<size_t>(st.st_size),
             .ref_count = 1,
         };
@@ -189,7 +271,6 @@ void FS::redeem(const Msg* msg, Error& e) {
     }
 
     session.file = fh;
-    session.chunk_size = std::min(BufferSize::SU - SID_SZ - 1, fh->size);
 
     outbound_.push_back(session);
 };
@@ -217,47 +298,52 @@ void FS::reward(const Msg* msg, Error& e) {
     uint64_t chunk_sz = vec_remaining(msg->data);
     s.hasher.update(msg->data->c, chunk_sz);
 
-    // TODO -- need a way to account for missing chunks...
-    // we can either automate a recovery by asking for those chunks...
-    //  or we just scrap the entire thing and let the client initiate it again.
-
     size_t remaining = chunk_sz;
     unsigned char* c = msg->data->c;
     while (remaining > 0) {
-        size_t n = fwrite(c, 1, remaining, s.file->f);
+        size_t n = write(s.file->fd, c, remaining);
         if (n < 0) {
             e.code = E_INTERNAL;
             e.msg = "reward() :: Failed chunk write";
 
-            fclose(s.file->f);
-            sessions_.erase(id);
+            close(s.file->fd);
             open_files_.erase(s.file->hash);
-            std::string path = derive_path(s.file->hash);
-            remove(path.c_str());
+            remove(tmp_path(s.id).data());
+            sessions_.erase(id);
             return;
         }
         remaining -= n;
         c += n;
+        s.byte_count += n;
     }
 
-    s.chunk_idx++;
 
     // if last pkt erase session w
-    if (s.chunk_idx * s.chunk_size >= s.file->size) {
+    if (s.byte_count >= s.file->size) {
 
         HashT& original_hash = s.file->hash;
         HashT final_hash = s.hasher.finalize();
 
-        fclose(s.file->f);
+        close(s.file->fd);
         open_files_.erase(original_hash);
-        sessions_.erase(id);
 
+        std::string tmp = tmp_path(s.id);
         if (final_hash != original_hash) {
-            std::string path = derive_path(original_hash);
-            remove(path.data());
-
             e.code = E_MALFORMED;
             e.msg = "reward() :: File hash doesnt match.";
+
+            remove(tmp.data());
+            sessions_.erase(id);
+            return;
+        }
+
+        std::string& real = derive_path(s.file->hash);
+        if (rename(tmp.data(), real.data()) < 0) {
+            e.code = E_INTERNAL;
+            e.msg = "reward() :: Failed to rename file.";
+
+            remove(tmp.data());
+            sessions_.erase(id);
             return;
         }
 
@@ -265,6 +351,9 @@ void FS::reward(const Msg* msg, Error& e) {
         if (!m) {
             e.code = E_INTERNAL;
             e.msg = "reward() :: too_main_ no msgs.";
+
+            remove(real.data());
+            sessions_.erase(id);
             return;
         }
 
@@ -273,5 +362,9 @@ void FS::reward(const Msg* msg, Error& e) {
         m->data = buffers_.grab(sizeof(DB_PATH) + sizeof(Voucher));
         vec_write(m->data, DB_NEW_BLOB);
         vec_write(m->data, s.voucher);
+
+        total_fs_size += s.byte_count;
+
+        sessions_.erase(id);
     }
 };

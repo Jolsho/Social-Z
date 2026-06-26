@@ -11,6 +11,8 @@ typedef struct FS FS;
 struct FSConfig {
     size_t      msgs_cap;
     size_t      map_size;
+    size_t      concurrent_sessions;
+    size_t      allotted_space;
 };
 
 ActorThread* start_fs(Actor* actor, FSConfig* conf);
@@ -32,6 +34,7 @@ struct Voucher {
     Key         from;
 
     HashT       file_hash;
+    size_t      file_size;
     time_t      expiration;
 
     Signature   signature;

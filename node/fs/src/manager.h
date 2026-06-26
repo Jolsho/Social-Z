@@ -1,4 +1,5 @@
 #pragma once
+#include <queue>
 #include <sodium/utils.h>
 #include "crypto.h"
 #include "utils/buffers.h"
@@ -17,44 +18,54 @@
 class FS {
 private:
 
-    const std::string       fs_root_;
-    static constexpr size_t PATH_PARTS = 4;
-    std::string             path_;
+    size_t                      total_fs_size;
+    size_t                      allotted_space;
 
-    LogAccumulator*     logr_;
+    const std::string           fs_root_;
+    static constexpr size_t     PATH_PARTS = 4;
+    std::string                 path_;
+    std::string                 tmp_path_;
+    LogAccumulator*             logr_;
 
-    int                 epoll_fd_;
-    Actor*              chans_;
-    BufferStore         buffers_;
+    Actor*                      chans_;
+    BufferStore                 buffers_;
 
-    std::set<Key, KeyCompare>          locals_;
-    LMDB                            db_;
+    std::set<Key, KeyCompare>   locals_;
+    LMDB                        db_;
 
-    std::unordered_map<HashT, FileHandle, HashFileHash>         open_files_;
-    std::unordered_map<SessionID, Session, HashSessionID>       sessions_;
-
-    std::deque<Session> outbound_;
+    std::unordered_map<HashT, FileHandle, HashFileHash>     open_files_;
+    std::unordered_map<SessionID, Session, HashSessionID>   sessions_;
+    std::priority_queue<std::pair<time_t, SessionID>>       session_expires_;
+    std::deque<Session>                                     outbound_;
 
     std::deque<PendingPermBucket>  pending_perms_;
 
     MsgBuffer*  free_out_msgs_;
     MsgBuffer*  in_msgs_;
 
-    void voucher(const Msg* msg, Error& e);
-    void redeem(const Msg* msg, Error& e);
-    void reward(const Msg* msg, Error& e);
+    void voucher        (const Msg* msg, Error& e);
+    void redeem_remote  (const Msg* msg, Error& e);
+    void reward         (const Msg* msg, Error& e);
+    void give_remote    (const Msg* msg, Error& e);
+    void settle_remote  (const Msg* msg, Error& e);
+    void ask_remote     (const Msg* msg, Error& e);
+    void revoke_remote  (const Msg* msg, Error& e);
 
-    void give(const Msg* msg, Error& e);
-    void local_give(const Msg* msg, Error& e);
+    void redeem_local   (const Msg* msg, Error& e);
+    void give_local     (const Msg* msg, Error& e);
+    void settle_local   (const Msg* msg, Error& e);
+    void ask_local      (const Msg* msg, Error& e);
+    void revoke_local   (const Msg* msg, Error& e);
 
-    void settle(const Msg* msg, Error& e);
-    void local_settle(const Msg* msg, Error& e);
-
-    void ask(const Msg* msg, Error& e);
-    void local_ask(const Msg* msg, Error& e);
-
-    void revoke(const Msg* msg, Error& e);
-    void local_revoke(const Msg* msg, Error& e);
+    std::string tmp_path(SessionID& id) {
+        std::string tmp(fs_root_);
+        tmp.append("tmp/");
+        const size_t b64_len = sodium_base64_encoded_len(SID_SZ, sodium_base64_VARIANT_ORIGINAL);
+        char id_str[b64_len];
+        sodium_bin2base64(id_str, b64_len, id.data(), HASH_SIZE, sodium_base64_VARIANT_ORIGINAL);
+        tmp.append(id_str);
+        return tmp;
+    }
 
     std::string& derive_path(HashT &file_hash) {
         path_.resize(fs_root_.size());
@@ -65,25 +76,25 @@ private:
 
         const size_t p_size {b64_len/PATH_PARTS};
         for (int i {0}; i < PATH_PARTS; i++) {
-            path_.append(hash + (i * p_size), p_size);
             path_.push_back('/');
+            path_.append(hash + (i * p_size), p_size);
         }
         return path_;
     }
 
     void shutdown() {
         for (auto& [i, s]: sessions_) {
-            if (--s.file->ref_count == 0) fclose(s.file->f);
+            if (--s.file->ref_count == 0) close(s.file->fd);
 
-            if (s.is_inbound && s.file->size > (s.chunk_size * s.chunk_idx)) {
+            if (s.is_inbound && s.file->size > (s.byte_count)) {
                 remove(derive_path(s.file->hash).data());
             }
         }
 
         for (auto& s: outbound_) {
-            if (--s.file->ref_count == 0) fclose(s.file->f);
+            if (--s.file->ref_count == 0) close(s.file->fd);
 
-            if (s.is_inbound && s.file->size > (s.chunk_size * s.chunk_idx)) {
+            if (s.is_inbound && s.file->size > s.byte_count) {
                 remove(derive_path(s.file->hash).data());
             }
         }
@@ -93,7 +104,6 @@ private:
         open_files_.clear();
 
 
-        close(epoll_fd_);
         logr_->log("File System Shutdown Successful.");
         logr_->flush(this->free_out_msgs_);
     }
@@ -109,12 +119,12 @@ private:
     void new_pending_perm(HashT& h) {
         time_t tomo = next_midnight();
         if (pending_perms_.back().expires == tomo) {
-            pending_perms_.back().put_next(h);
+            pending_perms_.back().hashes.emplace_back(h);
         } else {
             auto& pps = pending_perms_.emplace_back();
             pps.expires = tomo;
-            pps.buff = buffers_.grab(BufferSize::L);
-            pps.put_next(h);
+            pps.hashes.reserve(256);
+            pps.hashes.emplace_back(h);
         }
     }
     
@@ -123,6 +133,5 @@ private:
 
 public:
     FS(Actor* chans, FSConfig* conf);
-    int initialize();
     void poll_loop();
 };

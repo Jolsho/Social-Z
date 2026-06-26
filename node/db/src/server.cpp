@@ -68,7 +68,6 @@ void DB::handle_msg(Error& e, Msg* msg) {
         return;
     }
 
-
     uint64_t path_len = vec_read<uint64_t>(msg->data);
     std::string path;
     path.reserve(path_len);

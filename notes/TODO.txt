@@ -1,3 +1,10 @@
+The goal is to check off the next TODO box, not to complete the project.
+You don't know where the project will end, and that possibility/unknown is the fuel.
+If you try to make something of it all the fuel source becomes completion.
+However, great things are never complete, they grow and adapt forever.
+So if you are building something great and your goal is completion you will surely run out of fuel.
+If you want to build great things let the unknown fuel you, and focus on simply the next step.
+
 
 TODO --
     DoS prevention by rate limiting incoming connections
@@ -10,3 +17,11 @@ TODO --
 
     So I suppose you could overload with those notis, but those are tiny.
     That would be incredibly difficult.
+
+
+
+What to do?
+I am getting tired of the interworking of the FS
+Like I really just want to do something more interesting.
+But I have to stick it out a bit further.
+Just put up a bit longer.

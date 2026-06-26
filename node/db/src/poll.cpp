@@ -36,6 +36,7 @@ void DB::poll_loop() {
                     .id     = msg->id,
                     .code   = msg->code,
                 };
+
                 size_t size_r = sizeof(e.r);
                 if (msg->data->len > size_r) {
                     memcpy(msg->data, &e.r, size_r);

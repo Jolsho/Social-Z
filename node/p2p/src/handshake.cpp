@@ -30,7 +30,7 @@ Error conn::syn(Connection& conn, P2P& man) {
 Error conn::syn_ack(Connection& conn, P2P& man) {
 
     // AUTHORIZE INCOMING CONNECTION
-    conn.keys_.remote_auth_ = conn.rpkt_.get_key();
+     conn.rpkt_.get_key(&conn.keys_.remote_auth_);
     auto it = man.citizens_.map_.find(conn.keys_.remote_auth_);
     if (it == man.citizens_.map_.end()) {
         return {
@@ -67,8 +67,10 @@ Error conn::syn_ack(Connection& conn, P2P& man) {
     }
 
     // UPDATE VERSION TO MATCH
-    if (conn.rpkt_.get_version() < conn.version_) {
-        conn.version_ = conn.rpkt_.get_version();
+    uint64_t version;
+    conn.rpkt_.get_version(&version);
+    if (version < conn.version_) {
+        conn.version_ = version;
     }
 
     // BODY

@@ -5,58 +5,18 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
-
+#include <vector>
 
 
 struct PendingPermBucket {
-    time_t          expires;
-    Vec*            buff;
-
-    inline void take_next(HashT& h) {
-        memcpy(&h, buff->c - HASH_SIZE, HASH_SIZE);
-        buff->len -= HASH_SIZE;
-        buff->c -= HASH_SIZE;
-    }
-
-    inline bool put_next(HashT& h) {
-        if (buff->len + HASH_SIZE > buff->cap) return false;
-        memcpy(buff->c, &h, HASH_SIZE);
-        buff->len += HASH_SIZE;
-        buff->c += HASH_SIZE;
-        return true;
-    }
-
-    inline bool is_empty() { return buff->len < HASH_SIZE; };
-
-    inline bool remove_perm(HashT& target) {
-        int lo = 0;
-        int hi = buff->len / HASH_SIZE;
-        HashT tmp;
-
-        while (lo < hi) {
-            const size_t mid = lo + (hi - lo) / 2;
-
-            memcpy(&tmp.b, buff->b + mid, HASH_SIZE);
-            const int r = memcmp(tmp.b, target.b, HASH_SIZE);
-            if (r < 0) {
-                lo = mid + 1;
-            } else if (r > 0) {
-                hi = mid - 1;
-            } else {
-
-                unsigned char* cur = buff->b + mid;
-                memmove(cur, cur + HASH_SIZE, buff->len - mid - HASH_SIZE);
-                return true;
-            }
-        }
-        return false;
-    }
+    time_t              expires;
+    std::vector<HashT>  hashes;
 };
 
 
 struct FileHandle {
-    HashT        hash;
-    FILE*       f;
+    HashT       hash;
+    int         fd;
     uint64_t    size;
     uint8_t     ref_count = 0;
 };
@@ -77,8 +37,7 @@ struct Session {
     bool        is_inbound;
     FileHandle* file;
     Hasher      hasher;
-    int         chunk_idx = 0;
-    uint64_t    chunk_size;
+    uint64_t    byte_count;
     Voucher     voucher;
     uint8_t     actor;
 

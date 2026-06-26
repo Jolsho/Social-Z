@@ -1,4 +1,5 @@
 #pragma once
+#include "api/actor.h"
 #include "sodium/crypto_aead_chacha20poly1305.h"
 #include "utils/buffers.h"
 #include <cstddef>
@@ -7,7 +8,7 @@
 #include <sodium/randombytes.h>
 
 static constexpr const size_t ADLEN = 7;
-static constexpr const unsigned char AD[ADLEN] { 'S','o','c','i','a','l','z' };
+static constexpr const unsigned char AD[ADLEN] { 's','o','c','i','a','l','z' };
 
 class Packet {
 
@@ -31,11 +32,10 @@ private:
     static constexpr size_t TAG_LEN     = crypto_aead_chacha20poly1305_ABYTES;
 
     static constexpr size_t CODE_OFF    = TAG_OFF + TAG_LEN;
-    static constexpr size_t CODE_LEN    = sizeof(int);
+    static constexpr size_t CODE_LEN    = sizeof(PktCode);
 
-    static constexpr size_t FLAGS_OFF    = CODE_OFF + CODE_LEN;
-    static constexpr size_t FLAGS_LEN    = sizeof(uint8_t);
-
+    static constexpr size_t TOO_OFF     = CODE_OFF + CODE_LEN;
+    static constexpr size_t TOO_LEN     = sizeof(Actors);
 
 public:
     inline bool is_done() { return done; }
@@ -50,83 +50,29 @@ public:
     Vec*            buff_ = nullptr;
 
 
-    inline Packet(Vec* buff = nullptr) {
-        buff_ = buff;
-    }
+    inline Packet(Vec* buff = nullptr) { buff_ = buff; }
+    inline unsigned char* get_prefix_cursor() { return prefix_[prefix_cursor_]; }
+    inline unsigned char* get_body_cursor() { return &buff_->b[body_cursor_]; }
 
-    inline unsigned char* get_prefix_cursor() {
-        return prefix_[prefix_cursor_];
-    }
+    inline void get_len(uint64_t* len)  { memcpy(&len, prefix_ + LEN_OFF, LEN_LEN); }
+    inline void set_len(uint64_t len)   { memcpy(prefix_ + LEN_OFF, &len, LEN_LEN); }
 
+    inline void get_key(Key* key)       { memcpy(key->b, prefix_ + PUB_KEY_OFF, PUB_KEY_LEN); }
+    inline void set_key(const Key& key) { memcpy(prefix_ + PUB_KEY_OFF, key.b, KEY_SIZE); }
 
-    inline unsigned char* get_body_cursor() {
-        return &buff_->b[body_cursor_];
-    }
+    inline void get_version(uint64_t* v) { memcpy(&v, prefix_ + VERSION_OFF, VERSION_LEN); }
+    inline void set_version(uint64_t v) { memcpy(prefix_ + VERSION_OFF, &v, VERSION_LEN); }
 
-    uint64_t get_len() {
-        uint64_t len;
-        memcpy(&len, prefix_ + LEN_OFF, LEN_LEN);
-        return len;
-    }
-    inline void set_len(uint64_t len) {
-        memcpy(prefix_ + LEN_OFF, &len, LEN_LEN);
-    }
+    inline void get_nonce(Nonce& n)     { memcpy(&n, prefix_ + NONCE_OFF, NONCE_LEN); }
+    inline void new_nonce()             { randombytes_buf(prefix_ + NONCE_OFF, NONCE_LEN); }
 
-    Key get_key() {
-        Key key;
-        memcpy(key.b, prefix_ + PUB_KEY_OFF, PUB_KEY_LEN);
-        return key;
-    }
-    inline void set_key(const Key& key) {
-        memcpy(prefix_ + PUB_KEY_OFF, key.b, KEY_SIZE);
-    }
+    inline unsigned char* get_tag()     { return prefix_[TAG_OFF]; }
 
-    uint64_t get_version() {
-        uint64_t v;
-        memcpy(&v, prefix_ + VERSION_OFF, VERSION_LEN);
-        return v;
-    }
-    inline void set_version(uint64_t v) {
-        memcpy(prefix_ + VERSION_OFF, &v, VERSION_LEN);
-    }
+    inline void get_code(PktCode* c)    { memcpy(&c, prefix_ + CODE_OFF, CODE_LEN); }
+    inline void set_code(PktCode c)     { memcpy(prefix_ + CODE_OFF, &c, CODE_LEN); }
 
-    inline void get_nonce(Nonce& n) {
-        memcpy(&n, prefix_ + NONCE_OFF, NONCE_LEN);
-    }
-    inline void new_nonce() {
-        randombytes_buf(prefix_ + NONCE_OFF, NONCE_LEN);
-    }
-
-    inline unsigned char* get_tag() { return prefix_[TAG_OFF]; }
-
-    int get_code() {
-        int c;
-        memcpy(&c, prefix_ + CODE_OFF, CODE_LEN);
-        return c;
-    }
-    inline void set_code(uint64_t c) {
-        memcpy(prefix_ + CODE_OFF, &c, CODE_LEN);
-    }
-
-    static constexpr uint8_t PING = 1;
-    static constexpr uint8_t PONG = 2;
-    void mark_as_ping() {
-        memcpy(prefix_ + FLAGS_OFF, &PING, FLAGS_LEN);
-    }
-    bool is_ping() {
-        uint8_t flag;
-        memcpy(&flag, prefix_ + FLAGS_OFF, FLAGS_LEN);
-        return flag == PING;
-    }
-    void mark_as_pong() {
-        memcpy(prefix_ + FLAGS_OFF, &PONG, FLAGS_LEN);
-    }
-    bool is_pong() {
-        uint8_t flag;
-        memcpy(&flag, prefix_ + FLAGS_OFF, FLAGS_LEN);
-        return flag == PONG;
-    }
-
+    inline void get_too(Actors* c)     { memcpy(&c, prefix_ + TOO_OFF, TOO_LEN); }
+    inline void set_too(Actors c)      { memcpy(prefix_ + TOO_OFF, &c, TOO_LEN); }
 
     void wipe() {
         memset(&buff_->b, 0, buff_->cap);
@@ -141,9 +87,12 @@ public:
         Nonce nonce;
         get_nonce(nonce);
 
+        uint64_t len;
+        get_len(&len);
+
         int r = crypto_aead_chacha20poly1305_decrypt_detached(
             buff_->b, NULL,
-            buff_->b, get_len(), 
+            buff_->b, len, 
             get_tag(),
             AD, ADLEN, 
             nonce.b, 
@@ -164,10 +113,13 @@ public:
         memcpy(&buff_->b + NONCE_OFF, nonce.b, NONCE_LEN);
         unsigned long long mac_len = TAG_LEN;
 
+        uint64_t len;
+        get_len(&len);
+
         int r = crypto_aead_chacha20poly1305_encrypt_detached(
             buff_->b, 
             get_tag(), &mac_len,
-            buff_->b, get_len(),
+            buff_->b, len,
             AD, ADLEN, 
             NULL,
             nonce.b, tx_key.b

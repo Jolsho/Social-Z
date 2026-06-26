@@ -60,10 +60,17 @@ Error P2P::readable_conn(Connection& conn) {
 
     if (!e.is_err() && conn.rpkt_.is_done() && conn.status_ == conn::Status::Live) {
 
-        int code = conn.rpkt_.get_code();
+        PktCode code;
+        conn.rpkt_.get_code(&code);
+
+        Actors too;
+        conn.rpkt_.get_too(&too);
+
+        uint64_t len;
+        conn.rpkt_.get_len(&len);
 
         // MAKE SURE ITS NOT A (CTRL || INTERNAL) Code
-        if (code >= ACTOR_COUNT) {
+        if (too >= ACTOR_COUNT) {
             e = { 
                 -1, conn.id_, 
                 E_UNAUTHORIZED, 
@@ -73,17 +80,18 @@ Error P2P::readable_conn(Connection& conn) {
                 )
             };
 
-        } else if (code == ACTOR_P2P) {
+        } else if (too == ACTOR_P2P) {
             e = p2p_protocols(conn);
 
         } else if (Msg* msg = consume_msg(free_out_msgs_)) {
             msg->priority = PRIORITY_WORK;
-            msg->too = code;
-            msg->data = buffers_.grab(conn.rpkt_.get_len());
+            msg->too = too;
+            msg->code = code;
+            msg->data = buffers_.grab(len);
 
             // ROUTE TO HANDLER THREAD
             msg->id = conn.id_;
-            vec_write(msg->data, conn.rpkt_.get_body_cursor(), conn.rpkt_.get_len());
+            vec_write(msg->data, conn.rpkt_.get_body_cursor(), len);
         } else {
             e = { 
                 -1, conn.id_, 
@@ -111,10 +119,14 @@ Error P2P::p2p_protocols(Connection& c) {
     int mid = messenger_.new_msg(NULL);
     Msg& msg = messenger_.get_mut_msg(mid);
     Error e = ESUCCESS;
-    if (c.rpkt_.is_ping()) {
+
+    PktCode code;
+    c.rpkt_.get_code(&code);
+
+    if (code == P2P_PING) {
         e = marshal_pong(buffers_, msg, c.rpkt_.buff_);
 
-    } else if (c.rpkt_.is_pong()) {
+    } else if (code == P2P_PONG) {
         // TODO -- record
     }
 

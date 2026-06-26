@@ -2,7 +2,6 @@
 #include <unistd.h>
 #include "connection.h"
 #include "pkt.h"
-#include "api/paths.h"
 
 void conn::clear(Connection& conn) {
     conn.fd_ = -1;
@@ -45,7 +44,10 @@ Error conn::read_(
             conn.rpkt_.prefix_cursor_ += n;
 
             if (conn.rpkt_.prefix_cursor_ == Packet::PREFIX_LEN) {
-                if (conn.rpkt_.get_len() > Packet::MAX_LEN) {
+                uint64_t len;
+                conn.rpkt_.get_len(&len) ;
+
+                if (len > Packet::MAX_LEN) {
                     conn.rpkt_.wipe();
                     conn.status_ = conn::Status::Failed;
                     return { -1, conn.id_, 
@@ -63,7 +65,9 @@ Error conn::read_(
 
 
         // READING BODY
-        uint64_t target = conn.rpkt_.get_len();
+        uint64_t target;
+        conn.rpkt_.get_len(&target) ;
+
         if (target > 0 && !conn.rpkt_.buff_) {
             conn.rpkt_.buff_ = buffs.grab(target);
         }
@@ -102,15 +106,8 @@ int conn::write_(Connection& conn, P2P& man) {
         int mid = conn.pending_ids_.front();
         const Msg& m = man.messenger_.get_msg(mid);
 
-        if (m.code == P2P_PING) {
-            conn.wpkt_.mark_as_ping();
-            conn.wpkt_.set_code(ACTOR_P2P);
-        } else if (m.code == P2P_PONG) {
-            conn.wpkt_.mark_as_pong();
-            conn.wpkt_.set_code(ACTOR_P2P);
-        } else {
-            conn.wpkt_.set_code(m.code);
-        }
+        conn.wpkt_.set_code(m.code);
+        conn.wpkt_.set_too(m.too);
 
         conn.wpkt_.set_key(man.keys_.pub);
         conn.wpkt_.set_version(conn.version_);
@@ -131,7 +128,7 @@ int conn::write_(Connection& conn, P2P& man) {
         offset = &conn.wpkt_.prefix_cursor_;
         cursor = conn.wpkt_.get_prefix_cursor();
     } else {
-        total = conn.wpkt_.get_len();
+        conn.wpkt_.get_len(&total);
         offset = &conn.wpkt_.body_cursor_;
         cursor = conn.wpkt_.get_body_cursor();
     }

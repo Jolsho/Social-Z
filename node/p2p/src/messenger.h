@@ -1,4 +1,5 @@
 #pragma once
+#include "api/actor.h"
 #include "api/msgT.h"
 #include "utils/vec.h"
 #include <cstring>
@@ -31,22 +32,27 @@ public:
 
         if (!msg) return i;
 
-        uint16_t total_recipients = vec_read<uint16_t>(msg->data);
+        PktCode code;
+        vec_read(msg->data, code);
+
+        Actors too;
+        vec_read(msg->data, too);
+        
+
+        uint64_t total_recipients = vec_read<uint64_t>(msg->data);
 
         recipients[i].reserve(total_recipients);
 
         for (auto i { 0 }; i < total_recipients; i++) {
-            Key& pubkey = recipients[i].emplace_back();
-            vec_read(msg->data, pubkey.b, KEY_SIZE);
-            break;
+            vec_read(msg->data, recipients[i].emplace_back());
         };
 
-        uint64_t code;
-        vec_read(msg->data, code);
-        
         vec_shift_remaining(msg->data);
         msgs[i] = *msg;
         msgs[i].code = code;
+        msgs[i].too = too;
+
+        msg->data = NULL;
 
         return i;
     }

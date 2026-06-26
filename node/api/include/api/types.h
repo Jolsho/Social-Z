@@ -9,6 +9,7 @@ extern "C" {
 typedef uint16_t ConnID;
 typedef int SSID;
 typedef int TrxID;
+typedef int16_t PktCode;
 
 #define HASH_SIZE 32
 struct HashT {
