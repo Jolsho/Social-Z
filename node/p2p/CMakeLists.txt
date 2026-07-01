@@ -1,31 +1,9 @@
-set(LIBS ${CMAKE_SOURCE_DIR}/lib)
-
-file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS "src/*.cpp")
-
-add_library(p2p ${CORE_SOURCES})
+file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS "*.cpp")
+add_library(p2p OBJECT ${CORE_SOURCES})
 add_library(sz::p2p ALIAS p2p)
-
-target_include_directories(p2p
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include/socialz/p2p>
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
-
-target_link_libraries(p2p PRIVATE sz::api sz::utils sodium)
-set_target_properties(p2p PROPERTIES
-    OUTPUT_NAME "sz_p2p"
-    OUTPUT_NAME_DEBUG "sz_p2p"
-)
-
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
-    DESTINATION include/socialz
-)
-install(TARGETS p2p
-    EXPORT sz_targets
-    ARCHIVE DESTINATION lib
-)
+target_include_directories(p2p PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(p2p PRIVATE sz::core)
+install(FILES ${CMAKE_SOURCE_DIR}/include/sz/p2p.h DESTINATION include/sz/)
 
 # TESTING
 # option(NODE_BUILD_TESTS "Build node tests" ON)
@@ -47,7 +25,7 @@ install(TARGETS p2p
 #
 #     target_include_directories(p2p_tests
 #         PRIVATE
-#             ${CMAKE_CURRENT_SOURCE_DIR}/src
+#             ${CMAKE_SOURCE_DIR}/src
 #     )
 #
 #     target_link_libraries(p2p_tests

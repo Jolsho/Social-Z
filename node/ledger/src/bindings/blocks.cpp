@@ -19,18 +19,21 @@
 #include "utils/bitmap.h"
 #include "kzg/helpers.h"
 #include "blocks/processing.h"
+#include "sz/codec.h"
 
 int ledger_finalize(
     void* ledger, 
-    const Hash* block_hash, 
+    const HashT* block_hash, 
     void** out,
     size_t* out_size
 ) {
     if (!ledger || !block_hash) return NULL_PARAMETER;
+    Hash bh;
+    memcpy(bh.h, block_hash->b, HASH_SIZE);
+
     Hash h;
-    int rc = finalize_block(*(Ledger*)ledger, block_hash, &h);
+    int rc = finalize_block(*(Ledger*)ledger, &bh, &h);
     if (rc == 0) {
-        const size_t HASH_SIZE = sizeof(h.h);
 
         *out = malloc(HASH_SIZE);
         *out_size = HASH_SIZE;
@@ -42,20 +45,26 @@ int ledger_finalize(
 
 int ledger_prune(
     void* ledger,  
-    const Hash* block_hash
+    const HashT* block_hash
 ) {
     if (!ledger || !block_hash) return NULL_PARAMETER;
+    Hash bh;
+    memcpy(bh.h, block_hash->b, HASH_SIZE);
+
     auto l = reinterpret_cast<Ledger*>(ledger);
-    return prune_block(*l, block_hash);
+    return prune_block(*l, &bh);
 }
 
 int ledger_justify(
     void* ledger,  
-    const Hash* block_hash
+    const HashT* block_hash
 ) {
     if (!ledger || !block_hash) return NULL_PARAMETER;
     auto l = reinterpret_cast<Ledger*>(ledger);
-    return justify_block(*l, block_hash);
+    Hash bh;
+    memcpy(bh.h, block_hash->b, HASH_SIZE);
+
+    return justify_block(*l, &bh);
 }
 
 int ledger_generate_existence_proof(
@@ -64,7 +73,7 @@ int ledger_generate_existence_proof(
     uint8_t val_idx,
     void** out, 
     size_t* out_size,
-    const Hash* block_hash = nullptr
+    const HashT* block_hash = nullptr
 ) {
     if (!ledger || !key) return NULL_PARAMETER;
     if (val_idx < LEAF_ORDER) return VAL_IDX_RANGE;
@@ -80,7 +89,10 @@ int ledger_generate_existence_proof(
     std::vector<Proof> Pis;
     Bitmap<8> split_map{};
 
-    int rc = generate_proof(*l, Cs, Pis, &split_map, &key_hash, block_hash);
+    Hash bh;
+    memcpy(bh.h, block_hash->b, HASH_SIZE);
+
+    int rc = generate_proof(*l, Cs, Pis, &split_map, &key_hash, &bh);
     if (rc != OK) return rc;
 
     size_t total_size;
@@ -116,7 +128,7 @@ int ledger_validate_proof(
     void* ledger, 
     const unsigned char* key, size_t key_size,
 
-    const Hash* value_hash, uint8_t val_idx,
+    const HashT* value_hash, uint8_t val_idx,
 
     const unsigned char* proof, size_t proof_size
 ) {
@@ -154,8 +166,11 @@ int ledger_validate_proof(
     std::vector<size_t> Zs;
     std::vector<blst_scalar> Ys;
 
-    derive_Zs_n_Ys(*l, &key_hash, value_hash, &split_map, &Cs, &Pis, &Zs, &Ys);
+    Hash vh;
+    memcpy(vh.h, value_hash->b, HASH_SIZE);
 
-    return valid_proof(*l, &Cs, &Pis, &split_map, &key_hash, value_hash, val_idx);
+    derive_Zs_n_Ys(*l, &key_hash, &vh, &split_map, &Cs, &Pis, &Zs, &Ys);
+
+    return valid_proof(*l, &Cs, &Pis, &split_map, &key_hash, &vh, val_idx);
 }
 

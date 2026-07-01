@@ -1,5 +1,7 @@
 build
-deps
+wasm_build
+_deps
 lib
 .cache
 install
+wasm_install

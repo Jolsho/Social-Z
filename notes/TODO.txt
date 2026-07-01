@@ -20,8 +20,7 @@ TODO --
 
 
 
-What to do?
-I am getting tired of the interworking of the FS
-Like I really just want to do something more interesting.
-But I have to stick it out a bit further.
-Just put up a bit longer.
+Either work integrations or Testing suites for actors individually.
+GOING TO DO INTEGRATION...
+    I want to touch everything a little before moving on.
+    Cover the basics for now.
