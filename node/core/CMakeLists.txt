@@ -48,9 +48,6 @@ if(NOT EMSCRIPTEN)
     file(GLOB API_SRCS CONFIGURE_DEPENDS "api/*.c")
     target_sources(core PRIVATE ${API_SRCS})
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/sz/api    DESTINATION include/sz)
-
-    file(GLOB UTIL_SRCS CONFIGURE_DEPENDS "utils/*.cpp")
-    target_sources(core PRIVATE ${UTIL_SRCS})
     
     file(GLOB UTIL_SRCS CONFIGURE_DEPENDS "utils/*.c")
     target_sources(core PRIVATE ${UTIL_SRCS})

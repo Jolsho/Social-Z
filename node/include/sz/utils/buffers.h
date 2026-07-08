@@ -17,7 +17,7 @@ typedef uint64_t BufferSize;
 #define BUFF_XXL    ((BufferSize)32768)
 #define BUFF_SU     ((BufferSize)65386)
 
-const size_t BUFFER_SIZE_CNT = 8;
+#define BUFFER_SIZE_CNT 8
 
 typedef struct BufferCaps {
     size_t xxs;
@@ -30,10 +30,18 @@ typedef struct BufferCaps {
     size_t su;
 } BufferCaps;
 
-typedef struct BufferStore BufferStore;
+typedef struct {
+    BufferSize sizes_[BUFFER_SIZE_CNT];
+
+    Vec*** buffers_;
+    size_t sizes[BUFFER_SIZE_CNT];
+    size_t capacities[BUFFER_SIZE_CNT];
+
+} BufferStore;
+BufferCaps* default_caps();
 BufferStore* new_buffer_store(BufferCaps*);
-void put_buff(BufferStore* bs, Vec* v);
 Vec* grab_buff(BufferStore* bs, uint16_t size);
+void put_buff(BufferStore* bs, Vec* v);
 
 #ifdef __cplusplus
 }
