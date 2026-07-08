@@ -1,5 +1,0 @@
-#include "sz/api/actor.h"
-
-int out_event_fd(Actor* a);
-bool poll_actor_main_loop(Actor* actor, MsgBuffer* in, MsgBuffer* out);
-void update_actor_main_loop(Actor* actor, size_t* in_pending, size_t* out_processed);

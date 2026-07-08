@@ -3,7 +3,7 @@
 #include "conn_types.h"
 #include "citizens.h"
 #include "messenger.h"
-#include "sz/utils/ids.h"
+#include "sz/utils/ids.hpp"
 #include "sz/utils/accumulator.h"
 
 
@@ -20,7 +20,7 @@ public:
 
     // MSGING
     Actor*              chans_;
-    BufferStore         buffers_;
+    BufferStore*        buffers_;
 
     // TCP SERVER
     int                                             listen_fd_;
@@ -42,9 +42,9 @@ public:
     P2P(Actor* chan, P2PConfig* conf) : 
         chans_(chan), 
         messenger_(conf->wave, conf->broad_msgs),
-        buffers_(BufferCaps{}),
         Ids(MAX_CONNECTIONS)
     {
+        buffers_ = new_buffer_store(NULL);
         connections_.reserve(MAX_CONNECTIONS);
         sock_ids_.reserve(MAX_CONNECTIONS);
 
@@ -52,7 +52,7 @@ public:
         *conf_ = *conf;
 
         static constexpr time_t LOG_FLUSH_INTERVAL = 500; // ms
-        logr_ = new LogAccumulator{"P2P", LOG_FLUSH_INTERVAL, buffers_, ACTOR_P2P};
+        logr_ = new LogAccumulator{"P2P", LOG_FLUSH_INTERVAL, ACTOR_P2P};
     }
 
     void poll_loop();

@@ -32,10 +32,8 @@ void FS::voucher(const Msg* msg, Error& e) {
 
     if (!locals_.contains(v.to)) {
         e.code = E_NOTLOCAL;
-        char key_str[encoded_key_len()];
-        key_to_str(key_str, &p.recipient);
-        e.msg.append("voucher() :: Not Local :: ");
-        e.msg.append(key_str);
+        e.msg = "voucher() :: Not Local";
+        e.key = p.recipient;
         return;
     }
 
@@ -55,9 +53,9 @@ void FS::voucher(const Msg* msg, Error& e) {
         return;
     }
 
-    auto txn = db_.start_rd_txn();
-    int r = db_.exists(p_hash.b, HASH_SIZE, txn);
-    db_.end_txn(txn, r);
+    auto txn = start_rd_txn(db_);
+    int r = exists(db_, p_hash.b, HASH_SIZE, txn);
+    end_txn(db_, txn, r);
     if (r == MDB_NOTFOUND) {
         e.code = E_PERM_NOT_EXIST;
         e.msg = "voucher() :: perm doesnt exist, or hasnt been accepted.";
@@ -71,11 +69,13 @@ void FS::voucher(const Msg* msg, Error& e) {
 
         m->priority = PRIORITY_WORK;
         m->too = ACTOR_DB;
-        m->data = buffers_.grab(sizeof(Actors) + sizeof(FS_PATH) + PERM_SIZE_NOPAD);
+        m->data = grab_buff(buffers_, sizeof(Actors) + sizeof(FS_PATH) + PERM_SIZE_NOPAD);
         m->code = DB_NEW_TASK;
 
-        vec_write(m->data, ACTOR_FS);
-        vec_write(m->data, FS_REVOKE);
+        Actors dst = ACTOR_FS;
+        vec_write(m->data, &dst, sizeof(Actors));
+        FS_PATH pth = FS_REVOKE;
+        vec_write(m->data, &pth, sizeof(FS_PATH));
         m->data->len += marshal_perm(&m->data->c, &p);
 
         return;
@@ -101,10 +101,11 @@ void FS::voucher(const Msg* msg, Error& e) {
     }
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_DB;
-    m->data = buffers_.grab(sizeof(DB_PATH) + HASH_SIZE + VOUCH_SIZE_NOPAD);
+    m->data = grab_buff(buffers_, sizeof(DB_PATH) + HASH_SIZE + VOUCH_SIZE_NOPAD);
 
-    vec_write(m->data, DB_VOUCHER_INSERT);
-    vec_write(m->data, p_hash);
+    DB_PATH db_path = DB_VOUCHER_INSERT;
+    vec_write(m->data, &db_path, sizeof(DB_PATH));
+    vec_write(m->data, p_hash.b, HASH_SIZE);
     m->data->len += marshal_voucher(&m->data->c, &v);
 };
 
@@ -121,10 +122,8 @@ void FS::redeem_local(const Msg* msg, Error& e) {
 
     if (!locals_.contains(v.to)) {
         e.code = E_NOTLOCAL;
-        char key_str[encoded_key_len()];
-        key_to_str(key_str, &v.from);
-        e.msg.append("redeem_local() :: Not Local :: ");
-        e.msg.append(key_str);
+        e.msg = "redeem_local() :: Not Local ";
+        e.key = v.from;
         return;
     }
 
@@ -162,8 +161,9 @@ void FS::redeem_local(const Msg* msg, Error& e) {
             }
             m->priority = PRIORITY_WORK;
             m->too = ACTOR_DB;
-            m->data = buffers_.grab(sizeof(DB_PATH) + VOUCH_SIZE_NOPAD);
-            vec_write(m->data, DB_NEW_BLOB);
+            m->data = grab_buff(buffers_, sizeof(DB_PATH) + VOUCH_SIZE_NOPAD);
+            DB_PATH db_path = DB_NEW_BLOB;
+            vec_write(m->data, &db_path, sizeof(DB_PATH));
             m->data->len += marshal_voucher(&m->data->c, &v);
 
             sessions_.erase(id);
@@ -200,16 +200,14 @@ void FS::redeem_remote(const Msg* msg, Error& e) {
 
     if (!locals_.contains(v.from)) {
         e.code = E_NOTLOCAL;
-        char key_str[encoded_key_len()];
-        key_to_str(key_str, &v.from);
-        e.msg.append("redeem_remote() :: Not Local :: ");
-        e.msg.append(key_str);
+        e.msg = "redeem_remote() :: Not Local ";
+        e.key = v.from;
         return;
     }
 
     if (v.expiration < time(nullptr)) {
         e.code = E_VOUCHER_EXPIRED;
-        e.msg = std::format("redeem_remote() :: VOUCHER_EXPIRED");
+        e.msg = std::format("redeem_remote() :: VOUCHER_EXPIRED").c_str();
         return;
     }
 
@@ -351,8 +349,9 @@ void FS::reward(const Msg* msg, Error& e) {
 
         m->priority = PRIORITY_WORK;
         m->too = ACTOR_DB;
-        m->data = buffers_.grab(sizeof(DB_PATH) + VOUCH_SIZE_NOPAD);
-        vec_write(m->data, DB_NEW_BLOB);
+        m->data = grab_buff(buffers_, sizeof(DB_PATH) + VOUCH_SIZE_NOPAD);
+        DB_PATH db_path = DB_NEW_BLOB;
+        vec_write(m->data, &db_path, sizeof(DB_PATH));
         m->data->len += marshal_voucher(&m->data->c, &s.voucher);
 
         total_fs_size += s.byte_count;

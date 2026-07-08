@@ -21,12 +21,8 @@ void FS::give_local(const Msg* msg, Error& e) {
 
     if (!locals_.contains(p.giver)) {
         e.code = E_NOTLOCAL;
-
-        char key_str[encoded_key_len()];
-        key_to_str(key_str, &p.recipient);
-
-        e.msg.append("give_local() :: Not Local :: ");
-        e.msg.append(key_str);
+        e.msg = "give_local() :: Not Local";
+        e.key = p.recipient;
         return;
     }
 
@@ -49,15 +45,20 @@ void FS::give_local(const Msg* msg, Error& e) {
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_P2P;
     m->code = P2P_BROADCAST;
-    m->data = buffers_.grab(
+    m->data = grab_buff(buffers_, 
         sizeof(PktCode) + sizeof(Actors) + 
         sizeof(uint64_t) + (KEY_SIZE * 1) + 
         PERM_SIZE_NOPAD
     );
-    vec_write(m->data, FS_GIVE);
-    vec_write(m->data, ACTOR_FS);
-    vec_write(m->data, static_cast<uint64_t>(1));
-    vec_write(m->data, p.recipient);
+
+    FS_PATH p1 = FS_GIVE;
+    Actors dst = ACTOR_FS;
+    uint64_t recip_count = 1;
+
+    vec_write(m->data, &p1, sizeof(FS_PATH));
+    vec_write(m->data, &dst, sizeof(Actors));
+    vec_write(m->data, &recip_count, sizeof(uint64_t));
+    vec_write(m->data, p.recipient.b, KEY_SIZE);
     m->data->len += marshal_perm(&m->data->c, &p);
 }
 
@@ -75,11 +76,8 @@ void FS::give_remote(const Msg* msg, Error& e) {
 
     if (!locals_.contains(p.recipient)) {
         e.code = E_NOTLOCAL;
-
-        char key_str[encoded_key_len()];
-        key_to_str(key_str, &p.recipient);
-        e.msg.append("give_remote() :: Not Local :: ");
-        e.msg.append(key_str);
+        e.msg = "give_remote() :: Not Local ";
+        e.key = p.recipient;
         return;
     }
 
@@ -100,8 +98,11 @@ void FS::give_remote(const Msg* msg, Error& e) {
     }
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_DB;
-    m->data = buffers_.grab(sizeof(DB_PATH) + PERM_SIZE_NOPAD);
-    vec_write(m->data, DB_PERM_INSERT);
+    m->data = grab_buff(buffers_, sizeof(DB_PATH) + PERM_SIZE_NOPAD);
+
+    DB_PATH p1 = DB_PERM_INSERT;
+    vec_write(m->data, &p1, sizeof(DB_PATH));
+
     m->data->len += marshal_perm(&m->data->c, &p);
 };
 
@@ -121,10 +122,8 @@ void FS::settle_remote(const Msg* msg, Error& e) {
     // ENSURE WE SENT AND CURRENTLY HOLD THE PERMISSION
     if (!locals_.contains(p.giver)) {
         e.code = E_NOTLOCAL;
-        char key_str[encoded_key_len()];
-        key_to_str(key_str, &p.giver);
-        e.msg.append("settle_remote() :: Not Local :: ");
-        e.msg.append(key_str);
+        e.msg = "settle_remote() :: Not Local ";
+        e.key = p.giver;
         return;
     }
 
@@ -135,7 +134,8 @@ void FS::settle_remote(const Msg* msg, Error& e) {
     }
 
     // Extract whether the recipient has accepted the permission
-    auto flags = vec_read<uint8_t>(msg->data);
+    uint8_t flags;
+    vec_read(msg->data, &flags, sizeof(uint8_t));
 
     Hasher h;
     hash_update(&h, p_hash.b, HASH_SIZE);
@@ -156,9 +156,9 @@ void FS::settle_remote(const Msg* msg, Error& e) {
     if ((flags & ACCEPTED) == ACCEPTED) {
         mcode = NOTI_ACCEPTED;
 
-        auto txn = db_.start_txn();
-        e.r = db_.put(p_hash.b, HASH_SIZE, p_hash.b, HASH_SIZE, txn);
-        db_.end_txn(txn, e.r);
+        auto txn = start_txn(db_);
+        e.r = put(db_, p_hash.b, HASH_SIZE, p_hash.b, HASH_SIZE, txn);
+        end_txn(db_, txn, e.r);
         if (e.r != 0) {
             e.code = E_INTERNAL;
             e.msg = "settle_remote() :: Put perm hash";
@@ -176,7 +176,7 @@ void FS::settle_remote(const Msg* msg, Error& e) {
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_SZ;
     m->code = mcode;
-    m->data = buffers_.grab(PERM_SIZE_NOPAD);
+    m->data = grab_buff(buffers_, PERM_SIZE_NOPAD);
     m->data->len += marshal_perm(&m->data->c, &p);
 };
 
@@ -193,10 +193,8 @@ void FS::ask_local(const Msg* msg, Error& e) {
 
     if (!locals_.contains(p.recipient)) {
         e.code = E_NOTLOCAL;
-        char key_str[encoded_key_len()];
-        key_to_str(key_str, &p.giver);
-        e.msg.append("ask_local() :: Not Local :: ");
-        e.msg.append(key_str);
+        e.msg = "ask_local() :: Not Local ";
+        e.key = p.recipient;
         return;
     }
 
@@ -215,15 +213,19 @@ void FS::ask_local(const Msg* msg, Error& e) {
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_P2P;
     m->code = P2P_BROADCAST;
-    m->data = buffers_.grab(
+    m->data = grab_buff(buffers_, 
         sizeof(PktCode) + sizeof(Actors) + 
         sizeof(uint64_t) + (KEY_SIZE * 1) + 
         PERM_SIZE_NOPAD
     );
-    vec_write(m->data, FS_ASK);
-    vec_write(m->data, ACTOR_FS);
-    vec_write(m->data, static_cast<uint64_t>(1));
-    vec_write(m->data, p.recipient);
+    FS_PATH p1 = FS_ASK;
+    Actors dst = ACTOR_FS;
+    uint64_t recip_count = 1;
+
+    vec_write(m->data, &p1, sizeof(FS_PATH));
+    vec_write(m->data, &dst, sizeof(Actors));
+    vec_write(m->data, &recip_count, sizeof(uint64_t));
+    vec_write(m->data, p.recipient.b, KEY_SIZE);
     m->data->len += marshal_perm(&m->data->c, &p);
 }
 
@@ -243,10 +245,8 @@ void FS::ask_remote(const Msg* msg, Error& e) {
 
     if (!locals_.contains(p.giver)) {
         e.code = E_NOTLOCAL;
-        char key_str[encoded_key_len()];
-        key_to_str(key_str, &p.giver);
-        e.msg.append("ask_remote() :: Not Local :: ");
-        e.msg.append(key_str);
+        e.msg = "ask_remote() :: Not Local ";
+        e.key = p.giver;
         return;
     }
 
@@ -271,7 +271,7 @@ void FS::ask_remote(const Msg* msg, Error& e) {
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_DB;
     m->code = DB_PERM_INSERT;
-    m->data = buffers_.grab(PERM_SIZE_NOPAD);
+    m->data = grab_buff(buffers_, PERM_SIZE_NOPAD);
     m->data->len += marshal_perm(&m->data->c, &p);
 
     new_pending_perm(p_hash);
@@ -295,10 +295,8 @@ void FS::revoke_local(const Msg* msg, Error& e) {
 
     if (!locals_.contains(p.recipient)) {
         e.code = E_NOTLOCAL;
-        char key_str[encoded_key_len()];
-        key_to_str(key_str, &p.giver);
-        e.msg.append("revoke_local() :: Not Local :: ");
-        e.msg.append(key_str);
+        e.msg = "revoke_local() :: Not Local ";
+        e.key = p.giver;
         return;
     }
 
@@ -317,9 +315,9 @@ void FS::revoke_local(const Msg* msg, Error& e) {
         return;
     }
 
-    auto txn = db_.start_txn();
-    e.r = db_.del(p_hash.b, HASH_SIZE, txn);
-    db_.end_txn(txn, e.r);
+    auto txn = start_txn(db_);
+    e.r = del(db_, p_hash.b, HASH_SIZE, txn);
+    end_txn(db_, txn, e.r);
     if (e.r != 0) {
         e.code = E_PERM_NOT_EXIST;
         e.msg = "revoke_local() :: Del perm :: Not Exist";
@@ -335,17 +333,22 @@ void FS::revoke_local(const Msg* msg, Error& e) {
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_P2P;
     m->code = P2P_BROADCAST;
-    m->data = buffers_.grab(
+    m->data = grab_buff(buffers_, 
         sizeof(PktCode) + sizeof(Actors) + 
         sizeof(uint64_t) + (KEY_SIZE * 1) + 
         PERM_SIZE_NOPAD + SIGNATURE_SIZE
     );
-    vec_write(m->data, FS_REVOKE);
-    vec_write(m->data, ACTOR_FS);
-    vec_write(m->data, static_cast<uint64_t>(1));
-    vec_write(m->data, p.recipient.b);
+    FS_PATH p1 = FS_REVOKE;
+    Actors dst = ACTOR_FS;
+    uint64_t recip_count = 1;
+
+    vec_write(m->data, &p1, sizeof(FS_PATH));
+    vec_write(m->data, &dst, sizeof(Actors));
+    vec_write(m->data, &recip_count, sizeof(uint64_t));
+    vec_write(m->data, p.recipient.b, KEY_SIZE);
+
     m->data->len += marshal_perm(&m->data->c, &p);
-    vec_write(m->data, sig);
+    vec_write(m->data, sig.b, SIGNATURE_SIZE);
 
 }
 
@@ -365,10 +368,8 @@ void FS::revoke_remote(const Msg* msg, Error& e) {
 
     if (!locals_.contains(p.recipient)) {
         e.code = E_NOTLOCAL;
-        char key_str[encoded_key_len()];
-        key_to_str(key_str, &p.giver);
-        e.msg.append("revoke_remote() :: Not Local :: ");
-        e.msg.append(key_str);
+        e.msg = "revoke_remote() :: Not Local";
+        e.key = p.giver;
         return;
     }
 
@@ -387,9 +388,9 @@ void FS::revoke_remote(const Msg* msg, Error& e) {
         return;
     }
 
-    auto txn = db_.start_txn();
-    e.r = db_.del(p_hash.b, HASH_SIZE, txn);
-    db_.end_txn(txn, e.r);
+    auto txn = start_txn(db_);
+    e.r = del(db_, p_hash.b, HASH_SIZE, txn);
+    end_txn(db_, txn, e.r);
     if (e.r != 0) {
         e.code = E_PERM_NOT_EXIST;
         e.msg = "revoke_remote() :: Del perm :: Not Exist";
@@ -418,10 +419,8 @@ void FS::settle_local(const Msg* msg, Error& e) {
     // ENSURE WE SENT AND CURRENTLY HOLD THE PERMISSION
     if (!locals_.contains(p.recipient)) {
         e.code = E_NOTLOCAL;
-        char key_str[encoded_key_len()];
-        key_to_str(key_str, &p.giver);
-        e.msg.append("settle_local() :: Not Local :: ");
-        e.msg.append(key_str);
+        e.msg = "settle_local() :: Not Local";
+        e.key = p.giver;
         return;
     }
 
@@ -446,9 +445,9 @@ void FS::settle_local(const Msg* msg, Error& e) {
 
     int mcode = NOTI_DECLINED;
     if ((flags & ACCEPTED) == ACCEPTED) {
-        auto txn = db_.start_txn();
-        e.r = db_.put(p_hash.b, HASH_SIZE, p_hash.b, HASH_SIZE, txn);
-        db_.end_txn(txn, e.r);
+        auto txn = start_txn(db_);
+        e.r = put(db_, p_hash.b, HASH_SIZE, p_hash.b, HASH_SIZE, txn);
+        end_txn(db_, txn, e.r);
         if (e.r != 0) {
             e.code = E_INTERNAL;
             e.msg = "settle() :: Put perm hash";
@@ -466,10 +465,11 @@ void FS::settle_local(const Msg* msg, Error& e) {
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_P2P;
     m->code = ACTOR_FS;
-    m->data = buffers_.grab(sizeof(FS_PATH) + PERM_SIZE_NOPAD + sizeof(flags) + SIGNATURE_SIZE);
+    m->data = grab_buff(buffers_, sizeof(FS_PATH) + PERM_SIZE_NOPAD + sizeof(flags) + SIGNATURE_SIZE);
 
-    vec_write(m->data, FS_SETTLE);
+    FS_PATH p1 = FS_SETTLE;
+    vec_write(m->data, &p1, sizeof(FS_PATH));
     m->data->len += marshal_perm(&m->data->c, &p);
-    vec_write(m->data, &flags);
-    vec_write(m->data, sig);
+    vec_write(m->data, &flags, sizeof(uint8_t));
+    vec_write(m->data, sig.b, SIGNATURE_SIZE);
 };

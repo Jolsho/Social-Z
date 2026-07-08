@@ -33,18 +33,20 @@ public:
         if (!msg) return i;
 
         PktCode code;
-        vec_read(msg->data, code);
+        vec_read(msg->data, &code, sizeof(PktCode));
 
         Actors too;
-        vec_read(msg->data, too);
+        vec_read(msg->data, &too, sizeof(Actors));
         
 
-        uint64_t total_recipients = vec_read<uint64_t>(msg->data);
+        uint64_t total_recipients;
+        vec_read(msg->data, &total_recipients, sizeof(uint64_t));
 
         recipients[i].reserve(total_recipients);
 
         for (auto i { 0 }; i < total_recipients; i++) {
-            vec_read(msg->data, recipients[i].emplace_back());
+            auto& r = recipients[i].emplace_back();
+            vec_read(msg->data, r.b, KEY_SIZE);
         };
 
         vec_shift_remaining(msg->data);

@@ -7,7 +7,7 @@ const size_t HANDSHAKE_LEN = 128;
 Error conn::syn(Connection& conn, P2P& man) {
 
     // BUILD RESPONSE
-    conn.wpkt_.buff_ = man.buffers_.grab(HANDSHAKE_LEN);
+    conn.wpkt_.buff_ = grab_buff(man.buffers_, HANDSHAKE_LEN);
 
     conn.wpkt_.set_code(ACTOR_P2P);
     conn.wpkt_.set_version(conn.version_);
@@ -18,7 +18,7 @@ Error conn::syn(Connection& conn, P2P& man) {
     // ENCRYPT RESPONSE
     int r = conn.wpkt_.encrypt_body(conn.keys_.tx_);
     if (r != 0) {
-        man.buffers_.put(conn.wpkt_.buff_);
+        put_buff(man.buffers_, conn.wpkt_.buff_);
         return {r, conn.id_, E_INTERNAL, "syn(), encrypt"};
     }
 
@@ -90,7 +90,7 @@ Error conn::syn_ack(Connection& conn, P2P& man) {
 
 
     // BUILD RESPONSE
-    conn.wpkt_.buff_ = man.buffers_.grab(HANDSHAKE_LEN);
+    conn.wpkt_.buff_ = grab_buff(man.buffers_, HANDSHAKE_LEN);
 
     conn.wpkt_.set_code(ACTOR_P2P);
     conn.wpkt_.set_version(conn.version_);
@@ -101,7 +101,7 @@ Error conn::syn_ack(Connection& conn, P2P& man) {
     // ENCRYPT RESPONSE
     r = conn.wpkt_.encrypt_body(conn.keys_.tx_);
     if (r != 0) {
-        man.buffers_.put(conn.wpkt_.buff_);
+        put_buff(man.buffers_, conn.wpkt_.buff_);
         return {r, conn.id_, E_INTERNAL, "syn_ack(), encrypt"};
     }
 
@@ -130,14 +130,15 @@ Error conn::syn_ack(Connection& conn, P2P& man) {
     msg.reserve(10 + encoded_key_len());
     msg.append("NEW CONN: ");
     msg.append(key);
-    man.logr_->log(msg);
+    log_msg(man.logr_, msg.c_str(), 0, 0);
     return ESUCCESS;
 }
 
 Error conn::ack(Connection& conn, P2P& man) {
     // PARSE INCOMING SYNACK
 
-    uint8_t remote_version = vec_read<uint8_t>(conn.rpkt_.buff_);
+    uint8_t remote_version; 
+    vec_read(conn.rpkt_.buff_, &remote_version, sizeof(uint8_t));
     vec_read(conn.rpkt_.buff_, conn.keys_.remote_session_.b, KEY_SIZE);
 
     // ALTER STATE BASED ON SYN
@@ -170,7 +171,7 @@ Error conn::ack(Connection& conn, P2P& man) {
     msg.reserve(10 + encoded_key_len());
     msg.append("NEW CONN: ");
     msg.append(key);
-    man.logr_->log(msg);
+    log_msg(man.logr_, msg.c_str(), 0, 0);
 
     return ESUCCESS;
 }

@@ -1,9 +1,8 @@
 #include "sz/api/msgT.h"
-#include <cstddef>
-#include <cstdlib>
+#include <stdlib.h>
 
 Msg* msg_new(uint8_t from, size_t cap, uint8_t* bytes) {
-    Msg* m = new Msg{};
+    Msg* m = (Msg*)malloc(sizeof(Msg) * cap);
     m->is_wiped = false;
     m->too = 0;
     m->from = from;
@@ -55,7 +54,7 @@ int msg_resize(Msg* m, size_t new_cap) {
 
 
 MsgBuffer* new_msg_buffer(size_t cap) {
-    MsgBuffer* buff = new MsgBuffer();
+    MsgBuffer* buff = (MsgBuffer*)malloc(sizeof(MsgBuffer));
     buff->cap_ = cap;
     buff->msgs_ = (Msg**)malloc(sizeof(Msg*) * cap);
     return buff;
@@ -63,7 +62,7 @@ MsgBuffer* new_msg_buffer(size_t cap) {
 
 void delete_msg_buffer(MsgBuffer* buff) {
     if (buff->msgs_) free(buff->msgs_);
-    delete buff;
+    free(buff);
 }
 
 Msg* consume_msg(MsgBuffer* buff) {

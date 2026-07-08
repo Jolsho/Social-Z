@@ -1,31 +1,35 @@
 #include "sz/api/actor.h"
 #include "manager.h"
-#include "sz/utils/path.h"
+#include "sz/utils/accumulator.h"
+#include "sz/utils/buffers.h"
+#include "sz/utils/path.hpp"
 #include "sz/utils/shutdown.h"
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <sys/epoll.h>
-#include <thread>
+
+static void* start(void* p) {
+    ((FS*)p)->poll_loop();
+    delete (FS*)p;
+    return NULL;
+};
 
 ActorThread* start_fs(Actor* actor, FSConfig* conf) {
     ActorThread* at = new ActorThread{.r = 0};
     FS* fs = new FS(actor, conf);
 
-    at->t = (void*)new std::thread([&] {
-        fs->poll_loop();
-        delete fs;
-    });
+    pthread_create(&at->t, NULL, start, fs);
     return at;
 }
 
 FS::FS(Actor* chans, FSConfig* conf) : 
     chans_(chans), 
-    fs_root_(cpy_apnd(PATHS.data_dir, {"/fs/f_tree"}).c_str()),
-    db_( cpy_apnd(PATHS.data_dir,{"/fs/lmdb"}).c_str(), conf->map_size),
-    buffers_(BufferCaps{})
+    fs_root_(cpy_apnd(PATHS.data_dir, {"/fs/f_tree"}).c_str())
 {
+    buffers_ = new_buffer_store(NULL);
 
+    db_ = new_lmdb(cpy_apnd(PATHS.data_dir,{"/fs/lmdb"}).c_str(), conf->map_size);
     std::string tmp (fs_root_);
     tmp.append("/tmp");
     for (const auto& entry : std::filesystem::directory_iterator(tmp)) {
@@ -40,10 +44,10 @@ FS::FS(Actor* chans, FSConfig* conf) :
     sessions_.reserve(conf->concurrent_sessions);
 
     static constexpr time_t LOG_FLUSH_INTERVAL = 500; // ms
-    logr_ = new LogAccumulator{
+    logr_ = new_accumulator(
         "FS", LOG_FLUSH_INTERVAL, 
         buffers_, ACTOR_FS
-    };
+    );
 
     allotted_space = conf->allotted_space;
 
@@ -58,18 +62,18 @@ void FS::poll_loop() {
         poll_actor(chans_, events, in_msgs_, free_out_msgs_, 200);
 
         if (events->size < 0) {
-            should_shutdown = true;
+            sz_shutdown();
         }
 
-        if (should_shutdown) {
-            shutdown(); 
+        if (should_shutdown()) {
+            sz_shutdown(); 
             return;
         }
 
         handle_internal_msgs();
 
         auto stats = poll_telemetry(chans_);
-        if (stats != NULL) logr_->log(stats);
+        if (stats != NULL) log_stats(logr_, stats);
 
         time_t now = time(nullptr);
         if (pending_perms_.front().expires > now) {

@@ -1,7 +1,7 @@
 #pragma once
 #include <queue>
 #include <sodium/utils.h>
-#include "sz/utils/key.h"
+#include "sz/utils/key.hpp"
 #include "sz/utils/buffers.h"
 #include "sz/fs.h"
 #include "sz/lmdb.h"
@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <deque>
 #include <set>
+#include <string>
 #include <unistd.h>
 #include <unordered_map>
 #include "sz/utils/error.h"
@@ -28,10 +29,10 @@ private:
     LogAccumulator*             logr_;
 
     Actor*                      chans_;
-    BufferStore                 buffers_;
+    BufferStore*                buffers_;
 
     std::set<Key, KeyCompare>   locals_;
-    LMDB                        db_;
+    LMDB*                       db_;
 
     std::unordered_map<HashT, FileHandle, HashFileHash>     open_files_;
     std::unordered_map<SessionID, Session, HashSessionID>   sessions_;
@@ -104,15 +105,16 @@ private:
         open_files_.clear();
 
 
-        logr_->log("File System Shutdown Successful.");
-        logr_->flush(this->free_out_msgs_);
+        log_msg(logr_, "File System Shutdown Successful.", -1, -1);
+        flush(logr_, this->free_out_msgs_);
     }
 
     bool handle_err(Error  e, Actors too) {
         Msg* m = consume_msg(free_out_msgs_);
         if (!m) return false;
         m->priority = PRIORITY_CRIT;
-        marshal_error(e, m, too, [&](size_t s){ return buffers_.grab(s); });
+         //TODO
+        //marshal_error(&e, m, too, buffers_);
         return true;
     }
 

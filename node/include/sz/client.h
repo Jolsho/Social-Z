@@ -9,12 +9,11 @@ extern "C" {
 #endif
 
 
-#ifndef __EMSCRIPTEN__
+#ifdef NATIVE
 
-void some_networking_func();
+//void some_networking_func();
 
-#endif // !__EMSCRIPTEN__
-
+#endif
 
 
 typedef struct {
@@ -33,7 +32,6 @@ bool decrypt(CryptCtx* ctx, const uint8_t* buf, size_t len);
 bool encrypt(CryptCtx* ctx, const uint8_t* buf, size_t len);
 
 
-
 #define OBJ_CARD 1
 inline int obj_card() { return OBJ_CARD; }
 
@@ -48,30 +46,19 @@ typedef struct {
     int         obj_t;
 }Iterator;
 
-Iterator* iterator(const uint8_t* buf, size_t len, int obj_enum);
-size_t size(Iterator* it);
-size_t remaining(Iterator* it);
+// Iterator* iterator(const uint8_t* buf, size_t len, int obj_enum);
+// size_t size(Iterator* it);
+// size_t remaining(Iterator* it);
+//
+// Card* seek_card(Iterator* it, size_t idx);
+// Card* next_card(Iterator* it);
+// Card* prev_card(Iterator* it);
 
-Card* seek(Iterator* it, size_t idx);
-Card* next(Iterator* it);
-Card* prev(Iterator* it);
-
-
-uint32_t get_id(Card* c);
-float get_x(Card* c);
-float get_y(Card* c);
-
-
-// NEED AN ENTIRE CLIENT STATE
-// So like login returns a buffer.
-// Then we need to parse that data
-// to load in keys and what not
-
-// ARRAY OF CARDS
-//      Next()
-//      get_field()
-
-int defined_func();
+static inline int get_id(const Card* c) { return c->id; }
+static inline void set_id(Card* c, int id) { c->id = id; }
+static inline int get_created_at(const Card* c) { return c->created_at; }
+static inline void new_created_at(Card* c) { c->created_at = time(NULL); }
+static inline HashT* get_hash(Card* c) { return &c->hash; }
 
 #ifdef __cplusplus
 }

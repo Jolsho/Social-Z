@@ -1,0 +1,10 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: sz
+Description: sz library
+Version: @PROJECT_VERSION@
+
+Libs: -L${libdir} -lsz -lsz_core -lstdc++ -lsodium -llmdb -lblake3 -lsqlite
+Cflags: -I${includedir}

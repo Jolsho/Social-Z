@@ -44,7 +44,7 @@ Error P2P::writeable_conn(Connection& conn) {
                         m->priority = PRIORITY_CONT;
                         *consume_msg(free_out_msgs_) = m.value();
                     } else {
-                        buffers_.put(m->data);
+                        put_buff(buffers_, m->data);
                     }
                 }
                 break;
@@ -58,7 +58,7 @@ Error P2P::readable_conn(Connection& conn) {
 
     Error e = conn::read_(conn, buffers_); 
 
-    if (!e.is_err() && conn.rpkt_.is_done() && conn.status_ == conn::Status::Live) {
+    if (!is_err(&e) && conn.rpkt_.is_done() && conn.status_ == conn::Status::Live) {
 
         PktCode code;
         conn.rpkt_.get_code(&code);
@@ -71,12 +71,12 @@ Error P2P::readable_conn(Connection& conn) {
 
         // MAKE SURE ITS NOT A (CTRL || INTERNAL) Code
         if (too >= ACTOR_COUNT) {
-            e = { 
+            e = Error{ 
                 .r = -1, 
                 .id = conn.id_, 
                 .code = E_UNAUTHORIZED, 
                 .key = conn.keys_.remote_auth_,
-                .msg = std::format("read_() :: bad too code :: {}", code)
+                .msg = std::format("read_() :: bad too code :: {}", code).c_str()
             };
 
         } else if (too == ACTOR_P2P) {
@@ -86,7 +86,7 @@ Error P2P::readable_conn(Connection& conn) {
             msg->priority = PRIORITY_WORK;
             msg->too = too;
             msg->code = code;
-            msg->data = buffers_.grab(len);
+            msg->data = grab_buff(buffers_, len);
 
             // ROUTE TO HANDLER THREAD
             msg->id = conn.id_;
@@ -106,9 +106,9 @@ Error P2P::readable_conn(Connection& conn) {
         e = conn::ack(conn, *this);
     }
 
-    if (e.is_err() || conn.rpkt_.is_done()) {
+    if (is_err(&e) || conn.rpkt_.is_done()) {
         conn.rpkt_.wipe();
-        buffers_.put(conn.rpkt_.buff_);
+        put_buff(buffers_, conn.rpkt_.buff_);
     }
 
     return e;
@@ -129,18 +129,18 @@ Error P2P::p2p_protocols(Connection& c) {
         msg.from = ACTOR_P2P;
         msg.is_wiped = false;
         msg.priority = PRIORITY_WORK;
-        msg.data = buffers_.grab(c.rpkt_.buff_->len);
-        vec_read(c.rpkt_.buff_, msg.data);
+        msg.data = grab_buff(buffers_, c.rpkt_.buff_->len);
+        vec_read(c.rpkt_.buff_, msg.data, msg.data->len);
 
     } else if (code == P2P_PONG) {
         // TODO -- record
     }
 
-    if (e.is_err()) {
+    if (is_err(&e)) {
         auto r = messenger_.remove(mid);
         if (r.has_value()) {
             Msg& m = r.value();
-            buffers_.put(m.data);
+            put_buff(buffers_, m.data);
         }
         return e;
     }
@@ -173,7 +173,7 @@ void P2P::handle_error(Error e) {
             remove_socket(e.id);
         }
     }
-    logr_->log(e.msg, e.r, e.code);
+    log_msg(logr_, e.msg, e.r, e.code);
 }
 
 Error P2P::handle_msg(Msg* msg) {
@@ -191,7 +191,7 @@ Error P2P::handle_msg(Msg* msg) {
 
                 ConnID id;
                 auto res = connect(pubkey, &id);
-                if (res->is_err()) return res.value();
+                if (res.has_value() && is_err(&res.value())) return res.value();
                 
                 break;
             }
@@ -217,7 +217,7 @@ Error P2P::handle_msg(Msg* msg) {
                 Connection &conn = connections_[id];
                 if (memcmp(conn.keys_.remote_auth_.b, key.b, KEY_SIZE) != 0) {
                     auto r = connect(key, &id);
-                    if (r->is_err()) return r.value();
+                    if (r.has_value() && is_err(&r.value())) return r.value();
                     conn = connections_[id];
                 }
 
@@ -260,7 +260,7 @@ Error P2P::handle_msg(Msg* msg) {
 
         // INTERNAL ERROR MSG
         Error e {};
-        unmarshal_error(e, msg);
+        unmarshal_error(&e, msg);
         handle_error(e);
     }
 
@@ -268,7 +268,7 @@ Error P2P::handle_msg(Msg* msg) {
 
     if (msg->from == ACTOR_P2P && msg->data) {
 
-        buffers_.put(msg->data);
+        put_buff(buffers_, msg->data);
 
     } else if (msg->from != ACTOR_P2P && msg->data) {
         msg->priority = PRIORITY_CONT;

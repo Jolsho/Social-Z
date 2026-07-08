@@ -1,8 +1,7 @@
 file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS "*.cpp")
 add_library(p2p OBJECT ${CORE_SOURCES})
-add_library(sz::p2p ALIAS p2p)
 target_include_directories(p2p PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(p2p PRIVATE sz::core)
+target_link_libraries(p2p PRIVATE core)
 install(FILES ${CMAKE_SOURCE_DIR}/include/sz/p2p.h DESTINATION include/sz/)
 
 # TESTING

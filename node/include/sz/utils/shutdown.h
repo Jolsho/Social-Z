@@ -1,8 +1,12 @@
 #pragma once
 
-#include <atomic>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-static constexpr int SHUTDOWN_CODE = -6969;
+void sz_shutdown();
+bool should_shutdown();
 
-inline std::atomic_bool should_shutdown {false};
-
+#ifdef __cplusplus
+}
+#endif

@@ -4,8 +4,15 @@
 #include <cstring>
 #include <ctime>
 #include <fcntl.h>
+#include <pthread.h>
 #include <sys/epoll.h>
-#include <thread>
+#include <unistd.h>
+
+static void* start(void* p) {
+    ((LOG*)p)->poll_loop();
+    delete (LOG*)p;
+    return NULL;
+};
 
 ActorThread* start_log(Actor* actor, LogConfig* conf) {
     ActorThread* at = new ActorThread{.r = 0};
@@ -16,10 +23,9 @@ ActorThread* start_log(Actor* actor, LogConfig* conf) {
         delete log;
         return at;
     }
-    at->t = (void*)new std::thread([&] {
-        log->poll_loop();
-        delete log;
-    });
+
+    pthread_create(&at->t, NULL, start, log);
+
     return at;
 }
 
@@ -77,12 +83,12 @@ void LOG::poll_loop() {
         poll_actor(chans_, events, in_msgs_, free_out_msgs_, 3000);
 
         if (events->size < 0) {
-            should_shutdown = true;
+            sz_shutdown();
         }
 
         // short timeout
-        if (events->size == 0 && should_shutdown) {
-            shutdown();
+        if (events->size == 0 && should_shutdown()) {
+            sz_shutdown();
             return;
         }
         time_t now = time(nullptr);

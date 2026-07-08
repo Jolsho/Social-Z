@@ -14,8 +14,10 @@ void FS::handle_internal_msgs() {
             // If no space just silently drop
             Error e { .id = msg->id };
 
+            FS_PATH path;
+            vec_read(msg->data, &path, sizeof(FS_PATH));
             if (msg->from == ACTOR_P2P) {
-                switch (vec_read<FS_PATH>(msg->data)) {
+                switch (path) {
                     case FS_VOUCHER:   voucher      (msg, e);   break;
                     case FS_REDEEM:    redeem_remote(msg, e);   break;
                     case FS_REWARD:    reward       (msg, e);   break;
@@ -32,7 +34,7 @@ void FS::handle_internal_msgs() {
                     }
                 }
             } else {
-                switch (vec_read<FS_PATH>(msg->data)) {
+                switch (path) {
 
                     case FS_REDEEM:    redeem_local (msg, e);   break;
 
@@ -48,13 +50,13 @@ void FS::handle_internal_msgs() {
                     }
                 }
             }
-            if (e.is_err()) handle_err(e, (Actors)msg->from);
+            if (is_err(&e)) handle_err(e, (Actors)msg->from);
         }
         
         if (!msg->is_wiped) msg_wipe(msg);
 
         if (msg->from == ACTOR_FS) {
-            buffers_.put(msg->data);
+            put_buff(buffers_, msg->data);
         } else {
             // Return message
             Msg* m = consume_msg(free_out_msgs_);
@@ -74,12 +76,13 @@ void FS::handle_outbound() {
         if (!m) break;
 
         m->priority = PRIORITY_WORK;
-        uint64_t si = std::min(static_cast<uint64_t>(BufferSize::SU), s.file->size - s.byte_count + SID_SZ + sizeof(uint64_t));
-        m->data = buffers_.grab(si);
+        uint64_t si = std::min(static_cast<uint64_t>(BUFF_SU), s.file->size - s.byte_count + SID_SZ + sizeof(uint64_t));
+        m->data = grab_buff(buffers_, si);
         m->too = s.actor;
 
-        vec_write(m->data, FS_REWARD);
-        vec_write(m->data, s.id);
+        FS_PATH p = FS_REWARD;
+        vec_write(m->data, &p, sizeof(FS_PATH));
+        vec_write(m->data, s.id.data(), s.id.size());
 
         if (lseek(s.file->fd, s.byte_count,  SEEK_SET) < 0) {
             handle_err({

@@ -1,5 +1,5 @@
 #pragma once
-#include "sz/fs.h"
+#include "sz/api/actor.h"
 #include "sz/hash.h"
 #include <array>
 #include <cstdio>

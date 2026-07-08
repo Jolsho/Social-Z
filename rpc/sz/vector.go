@@ -1,7 +1,7 @@
 package sz
 
 /*
-#include <sz/api/types.h>
+#include <sz/api/vec.h>
 #include <stdint.h>
 */
 import "C"

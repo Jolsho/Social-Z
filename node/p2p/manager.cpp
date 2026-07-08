@@ -2,11 +2,15 @@
 #include "sz/p2p.h"
 #include "manager.h"
 #include <arpa/inet.h>
-#include <format>
 #include <sodium/crypto_box.h>
 #include <sys/epoll.h>
-#include <thread>
-#include "sz/utils/path.h"
+#include "sz/utils/path.hpp"
+
+static void* start(void* p) {
+    ((P2P*)p)->poll_loop();
+    delete (P2P*)p;
+    return NULL;
+};
 
 ActorThread* start_p2p(Actor* actor, P2PConfig* conf) {
     ActorThread* at = new ActorThread{.r = 0};
@@ -17,11 +21,8 @@ ActorThread* start_p2p(Actor* actor, P2PConfig* conf) {
         delete p2p;
         return at;
     }
-    at->t = (void*)new std::thread([&] {
-        p2p->poll_loop();
-        delete p2p;
-    });
 
+    pthread_create(&at->t, NULL, start, p2p);
     return at;
 }
 
@@ -31,7 +32,7 @@ int P2P::start_server() {
 
     int key_fd = open(key_path.c_str(), O_RDWR | O_CREAT, 0600);
     if (key_fd < 0) {
-        logr_->log(std::format("OPEN KEY_FILE FAILED %d", key_fd));
+        log_msg(logr_, "OPEN KEY_FILE FAILED", key_fd, 0);
         return -1;
     }
 
@@ -40,7 +41,7 @@ int P2P::start_server() {
 
         int r = crypto_box_keypair(keys_.pub.b, keys_.priv.b);
         if (r < 0) {
-            logr_->log(std::format("GENERATING KEYS FAILED %d", r));
+            log_msg(logr_, "GENERATING KEYS FAILED", r, 0);
             close(key_fd);
             remove(key_path.c_str());
             return -1;
@@ -50,7 +51,7 @@ int P2P::start_server() {
         if (write(key_fd, keys_.priv.b, KEY_SIZE) < KEY_SIZE) {
             close(key_fd);
             remove(key_path.c_str());
-            logr_->log("PERSISTING KEYS FAILED");
+            log_msg(logr_, "PERSISTING KEYS FAILED", key_fd, 0);
             return -1;
         }
     }
@@ -61,7 +62,7 @@ int P2P::start_server() {
     int opt = 1;
     int r = setsockopt(listen_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     if (r < 0) {
-        logr_->log(std::format("SOCKET OPT FAILED: %d", r));
+        log_msg(logr_, "SOCKET OPT FAILED", r, 0);
         return r;
     }
 
@@ -74,32 +75,32 @@ int P2P::start_server() {
         r = inet_pton(AF_INET, conf_->ip, &addr.sin_addr);
         if (r < 0) {
             close(listen_fd_);
-            logr_->log(std::format("INVALID IP: %d", r));
+            log_msg(logr_, "INVALID IP", r, 0);
             return r;
         }
     }
 
     r = bind(listen_fd_, (sockaddr*)&addr, sizeof(addr));
     if (r < 0) {
-        logr_->log(std::format("BIND FAILED: %d", r));
+        log_msg(logr_, "BIND FAILED", r, 0);
         return r;
     }
 
     r = listen(listen_fd_, SOMAXCONN);
     if (r < 0) {
-        logr_->log(std::format("LISTEN FAILED: %d", r));
+        log_msg(logr_, "LISTEN FAILED", r, 0);
         return r;
     }
     
     int flags = fcntl(listen_fd_, F_GETFL, 0);
     if (flags < 0) {
-        logr_->log(std::format("FCNTL FAILED: %d", r));
+        log_msg(logr_, "FCNTL FAILED", r, 0);
         return r;
     }
 
     r = fcntl(listen_fd_, F_SETFL, flags | O_NONBLOCK);
     if (r < 0) {
-        logr_->log(std::format("SET FLAGS FAILED: %d", r));
+        log_msg(logr_, "SET FLAGS FAILED", r, 0);
         return r;
     }
 
@@ -108,7 +109,7 @@ int P2P::start_server() {
     ev.data.fd = listen_fd_;
     r = ctl_epoll(chans_, &ev, EPOLL_CTL_ADD);
     if (r < 0) {
-        logr_->log(std::format("EPOLL ADDING FAILED: %d", r));
+        log_msg(logr_, "EPOLL ADDING FAILED", r, 0);
         return r;
     }
     return 0;
@@ -119,6 +120,6 @@ void P2P::shutdown() {
         remove_socket(c.id_);
     }
     close(listen_fd_);
-    logr_->log("Server Shutdown Successful.");
-    logr_->flush(this->free_out_msgs_);
+    log_msg(logr_, "Server Shutdown Successful.", 0, 0);
+    flush(logr_, this->free_out_msgs_);
 }

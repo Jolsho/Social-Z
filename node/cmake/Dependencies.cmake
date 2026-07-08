@@ -1,7 +1,7 @@
 include(FetchContent)
 include(ExternalProject)
 
-set(DEPS_DIR ${CMAKE_SOURCE_DIR}/_deps)
+set(DEPS_SRC_DIR ${CMAKE_BINARY_DIR}/_deps)
 
 set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
 
@@ -59,17 +59,17 @@ endif()
 if(USE_CRYPTO)
 
     if(EMSCRIPTEN)
-        set(CONFIGURE_CMD emconfigure ./configure --prefix=${DEPS_DIR}/sodium)
-        set(BUILD_CMD emmake make -j)
-        set(INSTALL_CMD emmake make install)
+        set(CONFIGURE_CMD emconfigure ./configure --prefix=${CMAKE_INSTALL_PREFIX} --disable-shared --without-pthreads --disable-ssp --disable-asm --disable-pie && emmake make clean)
+        set(BUILD_CMD emmake make -j2 install)
+        set(INSTALL_CMD "")
     else()
-        set(CONFIGURE_CMD ./configure --prefix=${DEPS_DIR}/sodium)
+        set(CONFIGURE_CMD ./configure --prefix=${CMAKE_INSTALL_PREFIX} --disable-shared)
         set(BUILD_CMD make -j)
         set(INSTALL_CMD make install)
     endif()
 
     ExternalProject_Add(sodium_ep
-        PREFIX ${DEPS_DIR}/sodium
+        PREFIX ${DEPS_SRC_DIR}/sodium
         URL https://download.libsodium.org/libsodium/releases/libsodium-1.0.21-stable.tar.gz
         CONFIGURE_COMMAND ${CONFIGURE_CMD}
         BUILD_COMMAND ${BUILD_CMD}
@@ -80,13 +80,12 @@ if(USE_CRYPTO)
     add_library(sodium STATIC IMPORTED GLOBAL)
     add_dependencies(sodium sodium_ep)
 
-    file(MAKE_DIRECTORY "${DEPS_DIR}/sodium/include")
+    file(MAKE_DIRECTORY "${CMAKE_INSTALL_PREFIX}/include")
 
     set_target_properties(sodium PROPERTIES
-        IMPORTED_LOCATION "${DEPS_DIR}/sodium/lib/libsodium.a"
-        INTERFACE_INCLUDE_DIRECTORIES "${DEPS_DIR}/sodium/include"
+        IMPORTED_LOCATION "${CMAKE_INSTALL_PREFIX}/lib/libsodium.a"
+        INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_INSTALL_PREFIX}/include"
     )
-
 endif()
 
 ##################################
@@ -94,7 +93,7 @@ endif()
 ##################################
 if(USE_LMDB)
     ExternalProject_Add(lmdb_ep
-        PREFIX ${DEPS_DIR}/lmdb
+        PREFIX ${DEPS_SRC_DIR}/lmdb
         GIT_REPOSITORY https://github.com/LMDB/lmdb.git
         GIT_TAG mdb.master3
         UPDATE_DISCONNECTED TRUE
@@ -105,7 +104,7 @@ if(USE_LMDB)
         INSTALL_COMMAND ""
     )
 
-    set(LMDB_SRC ${DEPS_DIR}/lmdb/src/lmdb_ep/libraries/liblmdb)
+    set(LMDB_SRC ${DEPS_SRC_DIR}/lmdb/src/lmdb_ep/libraries/liblmdb)
     file(MAKE_DIRECTORY ${LMDB_SRC})
 
     add_library(liblmdb STATIC IMPORTED GLOBAL)
@@ -113,7 +112,16 @@ if(USE_LMDB)
 
     set_target_properties(liblmdb PROPERTIES
         IMPORTED_LOCATION "${LMDB_SRC}/liblmdb.a"
-        INTERFACE_INCLUDE_DIRECTORIES "${LMDB_SRC}")
+        INTERFACE_INCLUDE_DIRECTORIES "${LMDB_SRC}"
+    )
+    install(
+        FILES "${LMDB_SRC}/liblmdb.a"
+        DESTINATION lib
+    )
+    install(FILES 
+        ${LMDB_SRC}/lmdb.h 
+        DESTINATION include/
+    )
 endif()
 
 ##################################
@@ -121,7 +129,7 @@ endif()
 ##################################
 if(USE_SQLITE)
 
-    set(SQLITE_DIR ${DEPS_DIR}/sqlite)
+    set(SQLITE_DIR ${DEPS_SRC_DIR}/sqlite)
     set(FETCHCONTENT_BASE_DIR "${SQLITE_DIR}")
 
 
@@ -143,7 +151,15 @@ if(USE_SQLITE)
             $<BUILD_INTERFACE:${sqlite_SOURCE_DIR}>
             $<INSTALL_INTERFACE:include>
     )
-
+    install(
+        TARGETS sqlite
+        ARCHIVE DESTINATION lib
+    )
+    install(FILES 
+        ${sqlite_SOURCE_DIR}/sqlite3.h 
+        ${sqlite_SOURCE_DIR}/sqlite3ext.h 
+        DESTINATION include/
+    )
 
 endif()
 
@@ -151,7 +167,7 @@ endif()
 ## BLAKE3
 ##################################
 if(USE_BLAKE3)
-    set(BLAKE_DIR ${DEPS_DIR}/blake3)
+    set(BLAKE_DIR ${DEPS_SRC_DIR}/blake3)
     set(FETCHCONTENT_BASE_DIR "${BLAKE_DIR}")
 
     FetchContent_Declare(blake3
@@ -169,6 +185,15 @@ if(USE_BLAKE3)
         add_subdirectory(${blake3_SOURCE_DIR}/c ${blake3_BINARY_DIR} EXCLUDE_FROM_ALL)
     endif()
 
+    install(
+        TARGETS blake3
+        ARCHIVE DESTINATION lib
+    )
+    install(FILES 
+        ${BLAKE_DIR}/src/c/blake3.h 
+        DESTINATION include/
+    )
+
 endif()
 
 
@@ -177,7 +202,7 @@ endif()
 ##################################
 if(USE_BLST)
     ExternalProject_Add(blst_ep
-        PREFIX ${DEPS_DIR}/blst
+        PREFIX ${DEPS_SRC_DIR}/blst
         GIT_REPOSITORY https://github.com/supranational/blst.git
         GIT_TAG v0.3.15
         UPDATE_DISCONNECTED TRUE
@@ -187,7 +212,7 @@ if(USE_BLST)
         INSTALL_COMMAND ""
     )
 
-    set(BLST_SRC ${DEPS_DIR}/blst/src/blst_ep)
+    set(BLST_SRC ${DEPS_SRC_DIR}/blst/src/blst_ep)
 
     add_library(blst STATIC IMPORTED GLOBAL)
     add_dependencies(blst blst_ep)
@@ -198,5 +223,15 @@ if(USE_BLST)
         IMPORTED_LOCATION ${BLST_SRC}/libblst.a
         INTERFACE_INCLUDE_DIRECTORIES ${BLST_SRC}/bindings
     )
+
+    install(
+        FILES "${BLST_SRC}/libblst.a"
+        DESTINATION lib
+    )
+    install(FILES 
+        ${BLST_SRC}/bindings/blst.h 
+        DESTINATION include/
+    )
+
 
 endif()

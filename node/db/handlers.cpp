@@ -8,7 +8,8 @@ void user_insert(DB& db, Error& e, const Msg* msg) {
     auto stmt = db.get_stmt(Stmts::UserInsert);
     int i = 0;
 
-    Key key = vec_read<Key>(msg->data);
+    Key key;
+    vec_read(msg->data, key.b, KEY_SIZE);
     sqlite3_bind_blob(stmt, ++i, key.b, KEY_SIZE, SQLITE_TRANSIENT);
 
     if (sqlite3_step(stmt) != SQLITE_DONE) {
@@ -22,7 +23,8 @@ void user_delete(DB& db, Error& e, const Msg* msg) {
     auto stmt = db.get_stmt(Stmts::UserDelete);
     int i = 0;
 
-    Key key = vec_read<Key>(msg->data);
+    Key key;
+    vec_read(msg->data, key.b, KEY_SIZE);
     sqlite3_bind_blob(stmt, ++i, key.b, KEY_SIZE, SQLITE_TRANSIENT);
 
     if (sqlite3_step(stmt) != SQLITE_DONE) {
@@ -43,8 +45,11 @@ void card_recent(DB& db_, Error& e, const Msg* msg) {
     auto stmt = db_.get_stmt(Stmts::CardRecent);
     int i = 0;
 
-    Key key = vec_read<Key>(msg->data);
-    uint64_t offset = vec_read<uint64_t>(msg->data);
+    Key key;
+    vec_read(msg->data, key.b, KEY_SIZE);
+
+    uint64_t offset;
+    vec_read(msg->data, &offset, sizeof(uint64_t));
     sqlite3_bind_blob(stmt, ++i, key.b, KEY_SIZE, SQLITE_TRANSIENT);
     sqlite3_bind_int64(stmt, ++i, offset);
 
@@ -53,7 +58,7 @@ void card_recent(DB& db_, Error& e, const Msg* msg) {
 
     uint8_t* len_p = r_buff->c;
     size_t len = 0;
-    vec_write(r_buff, len);
+    vec_write(r_buff, &len, sizeof(size_t));
 
     Card card;
     while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -64,9 +69,9 @@ void card_recent(DB& db_, Error& e, const Msg* msg) {
 
         card.created_at = sqlite3_column_int(stmt, 3);
 
-        vec_write(r_buff, card.id);
-        vec_write(r_buff, card.hash);
-        vec_write(r_buff, card.created_at);
+        vec_write(r_buff, &card.id, sizeof(int));
+        vec_write(r_buff, card.hash.b, HASH_SIZE);
+        vec_write(r_buff, &card.created_at, sizeof(int));
 
         len++;
     }
@@ -77,5 +82,5 @@ void card_recent(DB& db_, Error& e, const Msg* msg) {
     rmsg->id = msg->id;
     rmsg->code = msg->code;
     rmsg->data = r_buff;
-    rmsg->id = vec_read<ConnID>(msg->data);
+    vec_read(msg->data, &rmsg->id, sizeof(ConnID));
 }

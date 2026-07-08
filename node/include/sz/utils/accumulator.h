@@ -2,31 +2,40 @@
 #include "sz/utils/buffers.h"
 #include "sz/api/msgT.h"
 #include "sz/api/actor.h"
-#include <string>
+#include "sz/utils/buffers.h"
 
-class LogAccumulator {
-    std::string                 parent_str_;
-    time_t                      flush_time_;
-    time_t                      flush_interval_;
-    std::vector<Msg>            full_;
-    Msg                         l_;
-    BufferStore&                buffers_;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-    static constexpr size_t FIXED_LOG_PART  = 30 + sizeof(uint16_t);
-    static constexpr size_t PARENT_SIZE     = 6;
+const size_t FIXED_LOG_PART  = 30 + sizeof(uint16_t);
+const size_t PARENT_SIZE     = 6;
+typedef struct LogAccumulator {
+    const char*     parent_str_;
+    time_t          flush_time_;
+    time_t          flush_interval_;
+    Msg*            full_;
+    size_t          full_cap_;
+    size_t          full_size_;
+    Msg             l_;
+    BufferStore*    buffers_;
+} LogAccumulator;
 
-public:
 
-    LogAccumulator(
-        std::string parent_str, 
-        time_t flush_interval, 
-        BufferStore& buffers,
-        Actors from
-    );
+LogAccumulator* new_accumulator(
+    const char* parent_str, 
+    time_t flush_interval, 
+    BufferStore* buffers,
+    Actors from
+);
 
-    size_t flush(MsgBuffer* m);
+size_t flush(LogAccumulator* l, MsgBuffer* m);
+void log_msg(LogAccumulator* l, const char* msg, int r, int code);
+void log_stats(LogAccumulator* l, ChanStatsPair* stats);
 
-    void log(std::string msg, int r = 0, int code = 0);
-    void log(ChanStatsPair* stats);
-};
+#ifdef __cplusplus
+}
+#endif
+
+
 

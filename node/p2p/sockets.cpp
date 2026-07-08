@@ -88,8 +88,8 @@ void P2P::remove_socket(ConnID id) {
     put_back_id(id);
     key_to_conn_.erase(conn.keys_.remote_auth_);
 
-    buffers_.put(conn.rpkt_.buff_);
-    buffers_.put(conn.wpkt_.buff_);
+    put_buff(buffers_, conn.rpkt_.buff_);
+    put_buff(buffers_, conn.wpkt_.buff_);
 
     for (const int mid: conn.pending_ids_) {
         messenger_.next(mid);
@@ -185,7 +185,7 @@ std::optional<Error> P2P::connect(
     // START NEGOTIATION PROCESS
     Connection& c = connections_[*id];
     Error e = conn::syn(c, *this);
-    if (e.is_err()) {
+    if (is_err(&e)) {
         remove_socket(*id);
         return e;
     }

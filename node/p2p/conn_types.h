@@ -1,7 +1,7 @@
 #pragma once
 #include "sz/codec.h"
 #include "pkt.h"
-#include "sz/utils/lru.h"
+#include "sz/utils/lru.hpp"
 #include <deque>
 
 namespace  conn {

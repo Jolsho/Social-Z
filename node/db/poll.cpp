@@ -1,6 +1,8 @@
 #include "server.h"
-#include "sz/utils/lru.h"
+#include "sz/utils/lru.hpp"
 #include "sz/utils/shutdown.h"
+#include <cstring>
+#include <stdlib.h>
 #include <sys/epoll.h>
 
 static constexpr size_t MAX_CONNECTIONS     = 32;
@@ -17,11 +19,11 @@ void DB::poll_loop() {
         poll_actor(chans_, events, in_msgs_, free_out_msgs_, 200);
 
         if (events->size < 0) {
-            should_shutdown = true;
+            sz_shutdown();
         }
 
-        if (should_shutdown) {
-            shutdown(); 
+        if (should_shutdown()) {
+            sz_shutdown(); 
             return;
         }
 
@@ -37,16 +39,18 @@ void DB::poll_loop() {
                     .code   = msg->code,
                 };
 
+                // TODO --this is incorrect ... dont know what IM doing
                 size_t size_r = sizeof(e.r);
                 if (msg->data->len > size_r) {
                     memcpy(msg->data, &e.r, size_r);
-                    e.msg.resize(msg->data->len - size_r);
-                    if (e.msg.size() > 0) {
-                        e.msg.copy(
-                            reinterpret_cast<char*>(msg->data->b) + size_r, 
-                            msg->data->len - size_r
-                        );
+                    size_t s = msg->data->len - size_r;
+                    if (e.msg) {
+                        if (strlen(e.msg) > s) {
+                            free((char*)e.msg);
+                            e.msg = (char*)malloc(s);
+                        }
                     }
+                    memcpy((uint8_t*)e.msg, msg->data, msg->data->len);
                 }
                 handle_error(e);
             }
@@ -54,7 +58,7 @@ void DB::poll_loop() {
             if (!msg->is_wiped) msg_wipe(msg);
 
             if (msg->from == ACTOR_DB) {
-                buffers_.put(msg->data);
+                put_buff(buffers_, msg->data);
 
             } else {
                 // Return message
@@ -70,7 +74,7 @@ void DB::poll_loop() {
         }
 
         auto stats = poll_telemetry(chans_);
-        if (stats != NULL) logr_->log(stats);
+        if (stats != NULL) log_stats(logr_, stats);
 
         update_actor(chans_, &in_msgs_->cursor_, &free_out_msgs_->cursor_);
 

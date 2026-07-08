@@ -40,7 +40,7 @@ private:
 public:
     inline bool is_done() { return done; }
 
-    static constexpr size_t MAX_LEN     = BufferSize::SU;
+    static constexpr size_t MAX_LEN     = BUFF_SU;
     static constexpr size_t PREFIX_LEN  = LEN_LEN + VERSION_LEN + PUB_KEY_LEN + NONCE_LEN + TAG_LEN;
 
     uint64_t        prefix_cursor_ = 0;

@@ -1,9 +1,10 @@
 #pragma once
 #include "sz/utils/error.h"
-#include "sz/utils/key.h"
+#include "sz/utils/key.hpp"
 #include <cassert>
 #include <ctime>
 #include <fcntl.h>
+#include <string>
 #include <unistd.h>
 #include <unordered_map>
 

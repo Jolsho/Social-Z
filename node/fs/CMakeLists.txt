@@ -1,6 +1,5 @@
 file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS "*.cpp")
 add_library(fs OBJECT ${CORE_SOURCES})
-add_library(sz::fs ALIAS fs)
 target_include_directories(fs PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(fs PRIVATE sz::core)
+target_link_libraries(fs PRIVATE core)
 install(FILES ${CMAKE_SOURCE_DIR}/include/sz/fs.h DESTINATION include/sz/)

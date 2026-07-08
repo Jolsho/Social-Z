@@ -1,6 +1,5 @@
 file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS "*.cpp")
 add_library(log OBJECT ${CORE_SOURCES})
-add_library(sz::log ALIAS log)
 target_include_directories(log PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(log PRIVATE sz::core)
+target_link_libraries(log PRIVATE core)
 install(FILES ${CMAKE_SOURCE_DIR}/include/sz/log.h DESTINATION include/sz/)

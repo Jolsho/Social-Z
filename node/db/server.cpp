@@ -1,18 +1,23 @@
 #include <cstring>
 #include <format>
-#include <thread>
 #include "server.h"
 #include "handlers.h"
-#include "sz/utils/path.h"
+#include "sz/utils/buffers.h"
+#include "sz/utils/path.hpp"
 #include "sz/utils/vec.h"
+
+static void* start(void* p) {
+    ((DB*)p)->poll_loop();
+    delete (DB*)p;
+    return NULL;
+};
 
 ActorThread* start_db(Actor* actor, DBConfig* conf) {
     ActorThread* at = new ActorThread{.r = 0};
     DB* db = new DB(actor, conf);
-    at->t = (void*)new std::thread([&] {
-        db->poll_loop();
-        delete db;
-    });
+
+    pthread_create(&at->t, NULL, start, db);
+
     return at;
 }
 
@@ -20,11 +25,11 @@ DB::DB(
     Actor* actor, 
     DBConfig* conf
 ) : 
-    chans_(actor), 
-    db_(cpy_apnd(PATHS.data_dir, {"/db/lmdb"}).c_str(), conf->map_size),
-    buffers_(BufferCaps{})
+    chans_(actor)
 {
+    buffers_ = new_buffer_store(NULL);
 
+    db_ = new_lmdb(cpy_apnd(PATHS.data_dir, {"/db/lmdb"}).c_str(), conf->map_size);
     
     int rc = sqlite3_open(cpy_apnd(PATHS.data_dir, {"/db/sql"}).c_str(), &sql_);
     if (rc != SQLITE_OK) {
@@ -45,7 +50,7 @@ DB::DB(
     }
 
     static constexpr time_t LOG_FLUSH_INTERVAL = 500; // ms
-    logr_ = new LogAccumulator{"DB", LOG_FLUSH_INTERVAL, buffers_, ACTOR_DB };
+    logr_ = new_accumulator("DB", LOG_FLUSH_INTERVAL, buffers_, ACTOR_DB);
 
     handlers_ = {
         Handler { .path   = "user_insert", .handle = user_insert },
@@ -68,7 +73,9 @@ void DB::handle_msg(Error& e, Msg* msg) {
         return;
     }
 
-    uint64_t path_len = vec_read<uint64_t>(msg->data);
+    uint64_t path_len; 
+    vec_read(msg->data, &path_len, sizeof(uint64_t));
+
     std::string path;
     path.reserve(path_len);
     vec_read(msg->data, (uint8_t*)path.data(), path_len);
@@ -79,7 +86,7 @@ void DB::handle_msg(Error& e, Msg* msg) {
             return;
         }
     }
-    e.msg = std::format("Invalid Path: {}", path);
+    e.msg = std::format("Invalid Path: {}", path).c_str();
     e.code = E_MALFORMED;
 }
 

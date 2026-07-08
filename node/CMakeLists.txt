@@ -10,7 +10,6 @@ cmake_policy(SET CMP0126 NEW)
 
 project(libsz LANGUAGES C CXX)
 
-
 ## COMPONENTS ##################################
 
 option(DEFAULT      "Default Build"     ON)
@@ -34,6 +33,10 @@ if(DEFAULT)
 endif()
 
 if(EMSCRIPTEN)
+    set(BLAKE3_SIMD_TYPE "none" CACHE STRING "force portable build for WASM" FORCE)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msimd128")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msimd128")
+
     set(CLIENT      ON CACHE BOOL "" FORCE)
 
     set(DEFAULT     OFF CACHE BOOL "" FORCE)
@@ -48,15 +51,6 @@ endif()
 include(cmake/Dependencies.cmake)
 
 ## BUILDING ##############################
-
-add_library(sz STATIC)
-if(EMSCRIPTEN)
-    target_link_options(sz PRIVATE
-        "-sALLOW_MEMORY_GROWTH=1"
-        "-sMODULARIZE=1"
-        "-sEXPORT_ES6=1"
-    )
-endif()
 
 add_subdirectory(core)
 
@@ -74,41 +68,57 @@ add_feature_dir(P2P p2p)
 add_feature_dir(RPC rpc)
 add_feature_dir(LEDGER ledger)
 
-target_link_libraries(sz
-    PRIVATE
-        $<$<TARGET_EXISTS:sz::core>:sz::core>
-        $<$<TARGET_EXISTS:sz::db>:sz::db>
-        $<$<TARGET_EXISTS:sz::fs>:sz::fs>
-        $<$<TARGET_EXISTS:sz::p2p>:sz::p2p>
-        $<$<TARGET_EXISTS:sz::log>:sz::log>
-)
+if(NOT EMSCRIPTEN)
+    add_library(sz STATIC
+        $<TARGET_OBJECTS:db>
+        $<TARGET_OBJECTS:fs>
+        $<TARGET_OBJECTS:p2p>
+        $<TARGET_OBJECTS:log>
+    )
+    target_link_libraries(sz PUBLIC 
+        core
+        $<$<TARGET_EXISTS:db>:db>
+        $<$<TARGET_EXISTS:fs>:fs>
+        $<$<TARGET_EXISTS:log>:log>
+        $<$<TARGET_EXISTS:p2p>:p2p>
+    )
+    install(TARGETS sz
+        EXPORT sz_targets
+        ARCHIVE DESTINATION lib
+    )
 
-install(EXPORT sz_targets
-    FILE sz_targets.cmake
-    NAMESPACE sz::
-    DESTINATION lib/cmake/sz
-)
+    install(EXPORT sz_targets
+        FILE sz_targets.cmake
+        NAMESPACE sz::
+        DESTINATION lib/cmake/sz
+    )
 
-install(TARGETS sz
-    EXPORT sz_targets
-    ARCHIVE DESTINATION lib
-)
+endif()
 
 if(DEFAULT)
     add_executable(sz_exec main.cpp)
     target_link_libraries(sz_exec PRIVATE
-        sz::core
-        sz::ledger
-        sz::db
-        sz::fs
-        sz::log
-        sz::p2p
+        core
+        ledger
+        db
+        fs
+        log
+        p2p
     )
     set_target_properties(sz_exec PROPERTIES
         OUTPUT_NAME "socialz"
         OUTPUT_NAME_DEBUG "socialz"
     )
     install(TARGETS sz_exec RUNTIME DESTINATION bin)
-
 endif()
+
+configure_file(
+    cmake/sz.pc.in
+    ${CMAKE_BINARY_DIR}/sz.pc
+    @ONLY
+)
+install(
+    FILES ${CMAKE_BINARY_DIR}/sz.pc
+    DESTINATION lib/pkgconfig
+)
 

@@ -7,6 +7,7 @@
 #include "sqlite3.h"
 #include <functional>
 #include <vector>
+#include <string>
 #include "utils.h"
 
 class DB {
@@ -14,10 +15,10 @@ class DB {
 
     // MSGING
     int                         epoll_fd_;
-    BufferStore                 buffers_;
+    BufferStore*                 buffers_;
 
     // Stores
-    LMDB                        db_;
+    LMDB*                       db_;
     sqlite3*                    sql_;
 
     std::array<sqlite3_stmt*, Stmts::Count> stmts_;
@@ -51,6 +52,6 @@ public:
     }
     inline const char* get_err() { return sqlite3_errmsg(sql_); }
 
-    inline Vec* get_buffer(size_t sz) { return buffers_.grab(sz); }
+    inline Vec* get_buffer(size_t sz) { return grab_buff(buffers_, sz); }
 };
 

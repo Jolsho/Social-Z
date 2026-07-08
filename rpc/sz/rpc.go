@@ -1,8 +1,8 @@
 package sz
 
 /*
-#cgo CFLAGS: -I/workspace/sz/node/install/include
-#cgo LDFLAGS: -L/workspace/sz/node/install/lib -lsz
+#cgo pkg-config: sz
+
 
 #include <sz/api/sz.h>
 #include <sz/api/actor.h>

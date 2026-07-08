@@ -32,7 +32,7 @@ bool conn::disable_epollout(Connection& conn, Actor* a) {
 
 Error conn::read_(
     Connection& conn,
-    BufferStore& buffs
+    BufferStore* buffs
 ) {
     while (true) {
 
@@ -62,7 +62,7 @@ Error conn::read_(
         conn.rpkt_.get_len(&target) ;
 
         if (target > 0 && !conn.rpkt_.buff_) {
-            conn.rpkt_.buff_ = buffs.grab(target);
+            conn.rpkt_.buff_ = grab_buff(buffs, target);
         }
         if (conn.rpkt_.body_cursor_ > Packet::PREFIX_LEN) {
             ssize_t n = read(conn.fd_, conn.rpkt_.get_body_cursor(), target - conn.rpkt_.body_cursor_);
@@ -76,7 +76,7 @@ Error conn::read_(
         if (r != 0) {
             conn.rpkt_.wipe();
             conn.failure_count_++;
-            buffs.put(conn.rpkt_.buff_);
+            put_buff(buffs, conn.rpkt_.buff_);
             return { r, conn.id_, E_MALFORMED, conn.keys_.remote_auth_, "read_() :: decrypt" };
         }
 
@@ -99,7 +99,7 @@ int conn::write_(Connection& conn, P2P& man) {
 
         if (m.data->len > 0) {
             conn.wpkt_.set_len(m.data->len);
-            conn.wpkt_.buff_ = man.buffers_.grab(m.data->len);
+            conn.wpkt_.buff_ = grab_buff(man.buffers_, m.data->len);
             memcpy(conn.wpkt_.buff_->b, m.data->b, m.data->len);
         }
     }
@@ -127,7 +127,7 @@ int conn::write_(Connection& conn, P2P& man) {
     *offset += written;
 
     if (*offset == total) {
-        man.buffers_.put(conn.wpkt_.buff_);
+        put_buff(man.buffers_, conn.wpkt_.buff_);
         conn.wpkt_.buff_ = NULL;
         int mid = conn.pending_ids_.front();
         conn.pending_ids_.erase(conn.pending_ids_.begin());

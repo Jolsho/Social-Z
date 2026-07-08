@@ -1,100 +1,40 @@
 #pragma once 
 #include "sz/api/vec.h"
-#include <cstdlib>
-#include <cstring>
-#include <vector>
-#include <array>
+#include <stdint.h>
+#include <stddef.h>
 
-enum BufferSize : uint16_t{
-    XXS = 512,
-    XS  = 1024,
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-    S   = 2048,
-    M   = 4096,
-    L   = 8192,
+typedef uint64_t BufferSize; 
+#define BUFF_XXS    ((BufferSize)512)
+#define BUFF_XS     ((BufferSize)1024)
+#define BUFF_S      ((BufferSize)2048)
+#define BUFF_M      ((BufferSize)4096)
+#define BUFF_L      ((BufferSize)8192)
+#define BUFF_XL     ((BufferSize)16384)
+#define BUFF_XXL    ((BufferSize)32768)
+#define BUFF_SU     ((BufferSize)65386)
 
-    XL  = 16384,
-    XXL = 32768,
+const size_t BUFFER_SIZE_CNT = 8;
 
-    SU  = 65386
+typedef struct BufferCaps {
+    size_t xxs;
+    size_t xs;
+    size_t s;
+    size_t m;
+    size_t l;
+    size_t xl;
+    size_t xxl;
+    size_t su;
+} BufferCaps;
 
-    // 8 sizes
-};
-static constexpr size_t BUFFER_SIZE_CNT = 8;
+typedef struct BufferStore BufferStore;
+BufferStore* new_buffer_store(BufferCaps*);
+void put_buff(BufferStore* bs, Vec* v);
+Vec* grab_buff(BufferStore* bs, uint16_t size);
 
-struct BufferCaps {
-    size_t xxs  = 10;
-    size_t xs   = 10;
-    size_t s    = 10;
-    size_t m    = 10;
-    size_t l    = 10;
-    size_t xl   = 10;
-    size_t xxl  = 10;
-    size_t su   = 10;
-};
-
-class BufferStore {
-    std::array<BufferSize, BUFFER_SIZE_CNT> sizes_;
-    std::array<std::vector<Vec*>, BUFFER_SIZE_CNT> buffers_;
-
-public:
-    BufferStore(BufferCaps caps) {
-        sizes_ = {
-            BufferSize::XXS, BufferSize::XS, BufferSize::S,
-            BufferSize::M,
-            BufferSize::L, BufferSize::XL, BufferSize::XXL,
-            BufferSize::SU
-        };
-
-        buffers_[0].reserve(caps.xxs);
-        buffers_[1].reserve(caps.xs);
-        buffers_[2].reserve(caps.s);
-        buffers_[3].reserve(caps.m);
-        buffers_[4].reserve(caps.l);
-        buffers_[5].reserve(caps.xl);
-        buffers_[6].reserve(caps.xxl);
-        buffers_[7].reserve(caps.su);
-    }
-
-    Vec* grab(uint16_t size) {
-        if (size == 0) return NULL;
-
-        for (auto i { 0 }; i < sizes_.size(); i++) {
-            if (size <= sizes_[i]) {
-                auto &buffs = buffers_[i];
-                if (buffs.size() < 1) {
-                    Vec* v = new Vec{};
-                    v->b = (uint8_t*)malloc(size);
-                    v->cap = size;
-                    v->len = 0;
-                    v->c = v->b;
-                    return v;
-                }
-                Vec* v = buffs.back();
-                buffs.pop_back();
-                return v;
-            }
-        }
-        return nullptr;
-    }
-
-    void put(Vec* v) {
-        if (!v) return;
-
-        for (auto i { 0 }; i < sizes_.size(); i++) {
-            if (v->cap == sizes_[i]) {
-                auto &buffs = buffers_[i];
-                if (buffs.size() < buffs.capacity() - 1) {
-                    v->len = 0; 
-                    v->c = v->b;
-                    memset(v->b, 0, v->cap);
-                    buffs.push_back(v);
-                    return;
-                }
-            }
-        }
-        free(v->b);
-        delete v;
-    }
-};
-
+#ifdef __cplusplus
+}
+#endif

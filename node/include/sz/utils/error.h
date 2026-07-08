@@ -1,40 +1,51 @@
 #pragma once
 #include "sz/api/msgT.h"
 #include "sz/api/actor.h"
-#include <functional>
-#include <string>
 
-static constexpr int E_SUCCESS          = 0;
-static constexpr int E_INTERNAL         = -1;
-static constexpr int E_OVERSIZED        = -2;
-static constexpr int E_MALFORMED        = -3;
-static constexpr int E_UNAUTHORIZED     = -4;
-static constexpr int E_NOTLOCAL         = -5;
-static constexpr int E_PERM_NOT_EXIST   = -6;
-static constexpr int E_FILE_NOT_EXIST   = -7;
-static constexpr int E_VOUCHER_EXPIRED  = -8;
-static constexpr int E_UNDERSIZED       = -9;
-static constexpr int E_BAD_ANON         = -10;
-static constexpr int E_BANNED           = -11;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-struct Error {
-    int         r       = 0;
-    ConnID      id      = 0;
-    int         code    = E_SUCCESS;
-    Key         key     = {.b= {0}};
-    std::string msg;
+typedef int ErrorCode; 
+#define E_SUCCESS          ((ErrorCode)0)
+#define E_INTERNAL         ((ErrorCode)1)
+#define E_OVERSIZED        ((ErrorCode)2)
+#define E_MALFORMED        ((ErrorCode)3)
+#define E_UNAUTHORIZED     ((ErrorCode)4)
+#define E_NOTLOCAL         ((ErrorCode)5)
+#define E_PERM_NOT_EXIST   ((ErrorCode)6)
+#define E_FILE_NOT_EXIST   ((ErrorCode)7)
+#define E_VOUCHER_EXPIRED  ((ErrorCode)8)
+#define E_UNDERSIZED       ((ErrorCode)9)
+#define E_BAD_ANON         ((ErrorCode)10)
+#define E_BANNED           ((ErrorCode)11)
 
-    inline bool is_err() const {
-        return r != 0 || code != E_SUCCESS;
-    }
+typedef struct Error {
+    int         r;
+    ConnID      id;
+    int         code;
+    Key         key;
+    const char*       msg;
+} Error;
+
+inline bool is_err(Error* e) { return e->r != 0 || e->code != E_SUCCESS; }
+
+static Error ESUCCESS = {
+    .r = 0,
+    .id = 0,
+    .code = E_SUCCESS,
 };
-const Error ESUCCESS {0, 0, E_SUCCESS, {}};
 
+typedef Vec*GetBuff(size_t);
 
 int marshal_error(
-    Error& e, 
+    Error* e, 
     Msg* msg, 
     Actors too,
-    std::function<Vec*(size_t)> get_buffer
+    GetBuff get_buffer
 );
-void unmarshal_error(Error& e, Msg* m);
+void unmarshal_error(Error* e, Msg* m);
+
+#ifdef __cplusplus
+}
+#endif

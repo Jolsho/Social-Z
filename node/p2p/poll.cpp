@@ -13,17 +13,17 @@ void P2P::poll_loop() {
 
     while (true) {
         poll_actor(chans_, events, in_msgs_, free_out_msgs_, 500);
-        if (ChanStatsPair* stats = poll_telemetry(chans_)) logr_->log(stats);
+        if (ChanStatsPair* stats = poll_telemetry(chans_)) log_stats(logr_, stats);
 
         if (events->size < 0) {
-            logr_->log("p2p:poll returned error.", events->size);
-            should_shutdown = true;
+            log_msg(logr_, "p2p:poll returned error.", events->size, 0);
+            sz_shutdown();
         }
 
         // INTERNAL MSGS
         while (Msg* msg = consume_msg(in_msgs_)) {
             Error e = handle_msg(msg);
-            if (e.is_err()) handle_error(e);
+            if (is_err(&e)) handle_error(e);
         }
 
         // ALL OTHER EVENTS
@@ -67,11 +67,11 @@ void P2P::poll_loop() {
 
             if (ev.events & EPOLLIN) {
                 Error e = readable_conn(conn);
-                if (e.is_err()) handle_error(e);
+                if (is_err(&e)) handle_error(e);
             }
             if (ev.events & EPOLLOUT) {
                 Error e = writeable_conn(conn);
-                if (e.is_err()) handle_error(e);
+                if (is_err(&e)) handle_error(e);
             }
         }
 
@@ -94,8 +94,8 @@ void P2P::poll_loop() {
 
         update_actor(chans_, &in_msgs_->cursor_, &free_out_msgs_->cursor_);
 
-        if (should_shutdown) {
-            shutdown();
+        if (should_shutdown()) {
+            sz_shutdown();
             return;
         }
 

@@ -6,7 +6,7 @@ namespace conn {
 
 static constexpr size_t MAX_PENDING_OUT = 32;
 int write_(Connection& c, P2P& netman);
-Error read_(Connection& c, BufferStore& buffs);
+Error read_(Connection& c, BufferStore* buffs);
 
 inline bool is_epollout_enabled(Connection& c) { 
     return (c.events_ & EPOLLOUT) != 0; 

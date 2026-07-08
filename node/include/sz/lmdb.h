@@ -1,38 +1,42 @@
 #pragma once
 #include <lmdb.h>
-#include <vector>
 
-class LMDB {
-public:
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct LMDB{
     MDB_env* env_;
     MDB_dbi dbi_;
     int count_;
+} LMDB;
 
-    LMDB(const char* path, size_t map_size);
-    ~LMDB();
-    MDB_txn* start_txn();
-    MDB_txn* start_rd_txn();
+LMDB* new_lmdb(const char* path, size_t map_size);
+void close_lmdb(LMDB* db);
 
-    void end_txn(MDB_txn* trx, int rc = 0);
+MDB_txn* start_txn(LMDB* db);
+MDB_txn* start_rd_txn(LMDB* db);
+void end_txn(LMDB* db, MDB_txn* trx, int rc);
 
-    int put(const void* key_data, size_t key_size, 
-        const void* value_data, size_t value_size,
-        MDB_txn* trx
-    );
+int put(LMDB* db, const uint8_t* key_data, size_t key_size, 
+    const uint8_t* value_data, size_t value_size,
+    MDB_txn* trx
+);
 
-    int get(
-        const void* key_data, size_t key_size, 
-        std::vector<std::byte> &out, 
-        MDB_txn* trx
-    );
+int get(LMDB* db,
+    const uint8_t* key_data, size_t key_size, 
+    uint8_t** out, size_t* out_size,
+    MDB_txn* trx
+);
 
-    int get_raw(const void* key_data, size_t key_size,
-            void** value_data, size_t* value_size,
-             MDB_txn* trx
-    );
+int get_raw(LMDB* db, const uint8_t* key_data, size_t key_size,
+        uint8_t** value_data, size_t* value_size,
+         MDB_txn* trx
+);
 
-    int del(const void* key_data, size_t key_size,  MDB_txn* trx);
-    int exists(const void* key_data, size_t key_size,  MDB_txn* trx);
-};
+int del(LMDB* db, const uint8_t* key_data, size_t key_size,  MDB_txn* trx);
+int exists(LMDB* db, const uint8_t* key_data, size_t key_size,  MDB_txn* trx);
 
-
+#ifdef __cplusplus
+}
+#endif
