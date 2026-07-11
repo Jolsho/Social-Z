@@ -8,7 +8,7 @@
 #include <functional>
 #include <vector>
 #include <string>
-#include "utils.h"
+#include "utils.hpp"
 
 class DB {
     LogAccumulator*             logr_;

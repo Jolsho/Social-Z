@@ -5,8 +5,10 @@ emcmake cmake -B wasm_build \
 cmake --build wasm_build -j3
 cmake --install wasm_build
 
+mkdir -p wasm_dst
+
 emcc \
-  -o sz.js \
+  -o ./wasm_dst/sz.js \
   -O3 \
   -s WASM=1 \
   -s MODULARIZE=1 \

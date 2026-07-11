@@ -1,8 +1,8 @@
 package main
 
 import (
-	"sz_rpc/server"
-	"sz_rpc/sz"
+	"sz_proxy/server"
+	"sz_proxy/sz"
 )
 
 func main() {

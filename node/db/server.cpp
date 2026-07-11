@@ -1,7 +1,7 @@
 #include <cstring>
 #include <format>
-#include "server.h"
-#include "handlers.h"
+#include "server.hpp"
+#include "handlers.hpp"
 #include "sz/utils/buffers.h"
 #include "sz/utils/path.hpp"
 #include "sz/utils/vec.h"
@@ -15,9 +15,7 @@ static void* start(void* p) {
 ActorThread* start_db(Actor* actor, DBConfig* conf) {
     ActorThread* at = new ActorThread{.r = 0};
     DB* db = new DB(actor, conf);
-
     pthread_create(&at->t, NULL, start, db);
-
     return at;
 }
 

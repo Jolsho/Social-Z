@@ -1,4 +1,4 @@
-#include "server.h"
+#include "server.hpp"
 #include "sz/utils/lru.hpp"
 #include "sz/utils/shutdown.h"
 #include <cstring>

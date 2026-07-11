@@ -1,5 +1,6 @@
 build
 wasm_build
+wasm_dst
 _deps
 lib
 .cache

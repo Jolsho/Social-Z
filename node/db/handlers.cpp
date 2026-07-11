@@ -1,4 +1,4 @@
-#include "server.h"
+#include "server.hpp"
 #include "sqlite3.h"
 #include "sz/utils/error.h"
 #include "sz/utils/vec.h"

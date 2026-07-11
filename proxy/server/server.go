@@ -3,7 +3,7 @@ package server
 import (
 	"log"
 	"net/http"
-	"sz_rpc/sz"
+	"sz_proxy/sz"
 	"time"
 )
 

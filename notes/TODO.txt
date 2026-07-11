@@ -1,11 +1,3 @@
-The goal is to check off the next TODO box, not to complete the project.
-You don't know where the project will end, and that possibility/unknown is the fuel.
-If you try to make something of it all the fuel source becomes completion.
-However, great things are never complete, they grow and adapt forever.
-So if you are building something great and your goal is completion you will surely run out of fuel.
-If you want to build great things let the unknown fuel you, and focus on simply the next step.
-
-
 TODO --
     DoS prevention by rate limiting incoming connections
     I thought behaviour tracking did this though.
@@ -18,9 +10,3 @@ TODO --
     So I suppose you could overload with those notis, but those are tiny.
     That would be incredibly difficult.
 
-
-
-Either work integrations or Testing suites for actors individually.
-GOING TO DO INTEGRATION...
-    I want to touch everything a little before moving on.
-    Cover the basics for now.

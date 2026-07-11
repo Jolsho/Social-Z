@@ -1,6 +1,7 @@
 #pragma once
+#include <vector>
+#include "utils.hpp"
 #include "sz/db.h"
-#include "utils.h"
 #include "sz/utils/error.h"
 
 static const char* STMT_USER_INSERT =  
