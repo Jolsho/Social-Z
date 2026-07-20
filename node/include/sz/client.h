@@ -1,8 +1,10 @@
 #pragma once
+#include "sz/api/vec.h"
 #include "sz/codec.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,6 +19,7 @@ extern "C" {
 
 
 /*
+ *  TODO
  *  Create a user context when logging in.
  *  So this is either take in keys or name and password
  *      Maybe look for stored stuff....
@@ -51,16 +54,19 @@ typedef struct {
     KeyPair     keys;
 } UserCtx;
 
+#define TAG_LEN 16
 typedef struct {
-    Key     remote;
-    Key     sym;
-    Nonce   nonce;
+    Key             remote;
+    Key             sym;
+    Nonce           nonce;
+    unsigned char   tag[TAG_LEN];
+    unsigned char*  AD;
+    size_t          AD_LEN;
 }CryptCtx;
 
-CryptCtx* new_ctx(UserCtx* user, const uint8_t* head, size_t head_len);
-bool decrypt(CryptCtx* ctx, const uint8_t* buf, size_t len);
-bool encrypt(CryptCtx* ctx, const uint8_t* buf, size_t len);
-
+CryptCtx* new_ctx(UserCtx* user, uint8_t* head, size_t head_len);
+bool decrypt(CryptCtx* ctx, uint8_t* buf, size_t len);
+bool encrypt(CryptCtx* ctx, uint8_t* buf, size_t len);
 
 
 
@@ -70,27 +76,42 @@ inline int obj_card() { return OBJ_CARD; }
 #define OBJ_USER 2
 inline int obj_user() { return OBJ_USER; }
 
+
+// ITERATOR
 typedef struct {
-    uint8_t*    buf;
-    size_t      cursor;
-    size_t      size;
-    int         obj_t;
+    Vec**   bufs;
+    size_t  bufs_size;
+    size_t  bufs_cap;
+
+    size_t  buff_idx;
+    size_t  item_idx;
+    size_t  obj_size;
+
+    size_t* sizes;
+    size_t  size;
 }Iterator;
+Iterator* iterator_new(int obj_enum);
+size_t iterator_remaining(Iterator* it);
+static inline size_t iterator_size(Iterator* it) { return it->size; }
+void* iterator_seek(Iterator* it, size_t idx);
+void* iterator_next(Iterator* it);
+void* iterator_prev(Iterator* it);
 
 
-Iterator* iterator(const uint8_t* buf, size_t len, int obj_enum);
-size_t size(Iterator* it);
-size_t remaining(Iterator* it);
+// CARDS
+static inline Card* iterator_seek_card(Iterator* it, size_t idx) { return (Card*)iterator_seek(it, idx); }
+static inline Card* iterator_next_card(Iterator* it) { return (Card*)iterator_next(it); }
+static inline Card* iterator_prev_card(Iterator* it) { return (Card*)iterator_prev(it); }
 
-Card* seek_card(Iterator* it, size_t idx);
-Card* next_card(Iterator* it);
-Card* prev_card(Iterator* it);
+static inline Card* card_new() { return malloc(sizeof(Card)); }
+static inline void card_delete(Card* c) { free(c); }
+static inline int card_get_id(const Card* c) { return c->id; }
+static inline void card_set_id(Card* c, int id) { c->id = id; }
+static inline int card_get_created_at(const Card* c) { return c->created_at; }
+static inline void card_set_created_at(Card* c) { c->created_at = time(NULL); }
+static inline HashT* card_get_hash(Card* c) { return &c->hash; }
 
-static inline int get_id(const Card* c) { return c->id; }
-static inline void set_id(Card* c, int id) { c->id = id; }
-static inline int get_created_at(const Card* c) { return c->created_at; }
-static inline void new_created_at(Card* c) { c->created_at = time(NULL); }
-static inline HashT* get_hash(Card* c) { return &c->hash; }
+// TODO --> How to do card hashing??
 
 #ifdef __cplusplus
 }

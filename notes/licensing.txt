@@ -1,0 +1,38 @@
+
+MIT 
+    more accessible, widely used, but quitely.
+    THANKLESS, UNRECOGNIZED, LARGER CHANGE
+
+GPL
+    everything through you, larger project and community, less adoption
+    MORE RECOGNITION, EGOISM, AND GLORY
+
+LGPL
+    use it freely, make modifications open.
+    OWN YOUR ZONE.
+
+
+This is really a question of is there wisdom is restricting thing to yourself.
+Not neccessarily whether I deserve ownership, but is that what is inline with the goal.
+Then the question is what is the goal?
+    To unleash a free economic affiliation unto the world.
+    To offer everyone the ability to do so even in hostile environements.
+        And by requiring open source I am getting in the way of peoples will.
+        Im not sure using GPL is actually the right play here.
+        Like if people want to use their own crypto library and dont want to rewrite everything.
+        I really shouldn't require of them 
+
+More crucially though, the only reason for GPL is to squish competition.
+I mean fundamentally, or saying if you use this you must do what we have done with it.
+And I just dont know that is the right way to go about it.
+This is a big decision.
+
+
+MIT wins morally I think.
+Because its like may the best man win, and I don't own what I produce.
+Its the most trust in the universe being good, and me too.
+Like if I want to win I gotta outcompete everyone else as well.
+The hard part is that though, it requires everything of me most likely.
+Also there is no protection for me, a larger more competent team can take it from me.
+    That is why I thought LGPL first.
+        But even then I dont know I like this.

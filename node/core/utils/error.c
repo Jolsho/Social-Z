@@ -6,8 +6,7 @@
 int marshal_error(
     Error* e, 
     Msg* msg, 
-    Actors too,
-    GetBuff get_buffer
+    Actors too
 ) {
     msg->code = e->code;
     msg->id = e->id;
@@ -15,9 +14,9 @@ int marshal_error(
     msg->is_wiped = false;
 
     size_t msg_size = strlen(e->msg);
-
-    msg->data = get_buffer(KEY_SIZE + sizeof(e->r) + msg_size);
-    if (!msg->data) return -1;
+    if (!msg->data || msg->data->cap < msg_size) {
+        return -1;
+    }
     Vec* d = msg->data;
 
     vec_write(d, e->key.b, KEY_SIZE);

@@ -10,3 +10,19 @@ TODO --
     So I suppose you could overload with those notis, but those are tiny.
     That would be incredibly difficult.
 
+
+
+
+CLIENT::
+    Requests cards.
+        - Build request for cards.
+        - Send raw buffer to backend.
+        - Parse response into a card iterator.
+        - Do things as normal with card iterato
+
+
+When we receieve responses they are encrypted though.
+this means we have to frame for a nonce and mac.
+
+
+

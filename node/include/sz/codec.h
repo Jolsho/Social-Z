@@ -41,24 +41,22 @@ typedef struct Card {
     int     id;
     HashT   hash;
     int     created_at;
-} Card;
+} __attribute__((aligned(8))) Card;
 
 #define PERM_DATA_SIZE 256
-static const size_t PERM_SIZE_NOPAD = (KEY_SIZE * 2) + NONCE_SIZE + PERM_DATA_SIZE + SIGNATURE_SIZE;
 typedef struct Perm {
     Key         giver;
     Key         recipient;
     Nonce       nonce;
     uint8_t     data[PERM_DATA_SIZE];
     Signature   signature;
-} Perm;
+} __attribute__((aligned(8))) Perm;
 HashT hash_perm(Perm* p);
-size_t marshal_perm(uint8_t** pb, Perm* p);
-size_t unmarshal_perm(uint8_t** pb, Perm* p);
+size_t marshal_perm(uint8_t* pb, Perm* p);
+size_t unmarshal_perm(uint8_t* pb, Perm* p);
 
 
 #define VOUCH_DATA_SIZE 256
-static const size_t VOUCH_SIZE_NOPAD = (KEY_SIZE * 2) + HASH_SIZE + sizeof(size_t) + sizeof(time_t) + VOUCH_DATA_SIZE + SIGNATURE_SIZE;
 typedef struct Voucher {
     Key         to;
     Key         from;
@@ -68,13 +66,12 @@ typedef struct Voucher {
     time_t      expiration;
 
     unsigned char   data[VOUCH_DATA_SIZE];
-    Signature   signature;
+    Signature       signature;
 
-} Voucher;
+} __attribute__((aligned(8))) Voucher;
 HashT hash_voucher(Voucher* v);
-size_t marshal_voucher(uint8_t** pb, Voucher* v);
-size_t unmarshal_voucher(uint8_t** pb, Voucher* v);
-
+size_t marshal_voucher(uint8_t* pb, Voucher* v);
+size_t unmarshal_voucher(uint8_t* pb, Voucher* v);
 
 #ifdef __cplusplus
 }

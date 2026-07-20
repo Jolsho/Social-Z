@@ -113,8 +113,8 @@ private:
         Msg* m = consume_msg(free_out_msgs_);
         if (!m) return false;
         m->priority = PRIORITY_CRIT;
-         //TODO
-        //marshal_error(&e, m, too, buffers_);
+        m->data = grab_buff(buffers_, error_size(&e));
+        marshal_error(&e, m, too);
         return true;
     }
 

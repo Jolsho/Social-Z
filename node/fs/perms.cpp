@@ -17,7 +17,7 @@ void FS::give_local(const Msg* msg, Error& e) {
     }
 
     Perm p{};
-    unmarshal_perm(&msg->data->c, &p);
+    unmarshal_perm(msg->data->c, &p);
 
     if (!locals_.contains(p.giver)) {
         e.code = E_NOTLOCAL;
@@ -48,7 +48,7 @@ void FS::give_local(const Msg* msg, Error& e) {
     m->data = grab_buff(buffers_, 
         sizeof(PktCode) + sizeof(Actors) + 
         sizeof(uint64_t) + (KEY_SIZE * 1) + 
-        PERM_SIZE_NOPAD
+        sizeof(Perm)
     );
 
     FS_PATH p1 = FS_GIVE;
@@ -59,7 +59,7 @@ void FS::give_local(const Msg* msg, Error& e) {
     vec_write(m->data, &dst, sizeof(Actors));
     vec_write(m->data, &recip_count, sizeof(uint64_t));
     vec_write(m->data, p.recipient.b, KEY_SIZE);
-    m->data->len += marshal_perm(&m->data->c, &p);
+    m->data->len += marshal_perm(m->data->c, &p);
 }
 
 /// We receive a permission to post to a remote node.
@@ -72,7 +72,7 @@ void FS::give_remote(const Msg* msg, Error& e) {
     }
 
     Perm p{};
-    unmarshal_perm(&msg->data->c, &p);
+    unmarshal_perm(msg->data->c, &p);
 
     if (!locals_.contains(p.recipient)) {
         e.code = E_NOTLOCAL;
@@ -98,12 +98,12 @@ void FS::give_remote(const Msg* msg, Error& e) {
     }
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_DB;
-    m->data = grab_buff(buffers_, sizeof(DB_PATH) + PERM_SIZE_NOPAD);
+    m->data = grab_buff(buffers_, sizeof(DB_PATH) + sizeof(Perm));
 
     DB_PATH p1 = DB_PERM_INSERT;
     vec_write(m->data, &p1, sizeof(DB_PATH));
 
-    m->data->len += marshal_perm(&m->data->c, &p);
+    m->data->len += marshal_perm(m->data->c, &p);
 };
 
 /// Remote accepts or denies a permission we offered them.
@@ -115,7 +115,7 @@ void FS::settle_remote(const Msg* msg, Error& e) {
     }
 
     Perm p{};
-    unmarshal_perm(&msg->data->c, &p);
+    unmarshal_perm(msg->data->c, &p);
     
     HashT p_hash = hash_perm(&p);
 
@@ -176,8 +176,8 @@ void FS::settle_remote(const Msg* msg, Error& e) {
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_SZ;
     m->code = mcode;
-    m->data = grab_buff(buffers_, PERM_SIZE_NOPAD);
-    m->data->len += marshal_perm(&m->data->c, &p);
+    m->data = grab_buff(buffers_, sizeof(Perm));
+    m->data->len += marshal_perm(m->data->c, &p);
 };
 
 void FS::ask_local(const Msg* msg, Error& e) {
@@ -188,7 +188,7 @@ void FS::ask_local(const Msg* msg, Error& e) {
     }
 
     Perm p{};
-    unmarshal_perm(&msg->data->c, &p);
+    unmarshal_perm(msg->data->c, &p);
     HashT p_hash = hash_perm(&p);
 
     if (!locals_.contains(p.recipient)) {
@@ -216,7 +216,7 @@ void FS::ask_local(const Msg* msg, Error& e) {
     m->data = grab_buff(buffers_, 
         sizeof(PktCode) + sizeof(Actors) + 
         sizeof(uint64_t) + (KEY_SIZE * 1) + 
-        PERM_SIZE_NOPAD
+        sizeof(Perm)
     );
     FS_PATH p1 = FS_ASK;
     Actors dst = ACTOR_FS;
@@ -226,7 +226,7 @@ void FS::ask_local(const Msg* msg, Error& e) {
     vec_write(m->data, &dst, sizeof(Actors));
     vec_write(m->data, &recip_count, sizeof(uint64_t));
     vec_write(m->data, p.recipient.b, KEY_SIZE);
-    m->data->len += marshal_perm(&m->data->c, &p);
+    m->data->len += marshal_perm(m->data->c, &p);
 }
 
 
@@ -239,7 +239,7 @@ void FS::ask_remote(const Msg* msg, Error& e) {
     }
 
     Perm p{};
-    unmarshal_perm(&msg->data->c, &p);
+    unmarshal_perm(msg->data->c, &p);
 
     HashT p_hash = hash_perm(&p);
 
@@ -271,8 +271,8 @@ void FS::ask_remote(const Msg* msg, Error& e) {
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_DB;
     m->code = DB_PERM_INSERT;
-    m->data = grab_buff(buffers_, PERM_SIZE_NOPAD);
-    m->data->len += marshal_perm(&m->data->c, &p);
+    m->data = grab_buff(buffers_, sizeof(Perm));
+    m->data->len += marshal_perm(m->data->c, &p);
 
     new_pending_perm(p_hash);
 };
@@ -289,7 +289,7 @@ void FS::revoke_local(const Msg* msg, Error& e) {
     }
 
     Perm p{};
-    unmarshal_perm(&msg->data->c, &p);
+    unmarshal_perm(msg->data->c, &p);
 
     HashT p_hash = hash_perm(&p);
 
@@ -336,7 +336,7 @@ void FS::revoke_local(const Msg* msg, Error& e) {
     m->data = grab_buff(buffers_, 
         sizeof(PktCode) + sizeof(Actors) + 
         sizeof(uint64_t) + (KEY_SIZE * 1) + 
-        PERM_SIZE_NOPAD + SIGNATURE_SIZE
+        sizeof(Perm) + SIGNATURE_SIZE
     );
     FS_PATH p1 = FS_REVOKE;
     Actors dst = ACTOR_FS;
@@ -347,7 +347,7 @@ void FS::revoke_local(const Msg* msg, Error& e) {
     vec_write(m->data, &recip_count, sizeof(uint64_t));
     vec_write(m->data, p.recipient.b, KEY_SIZE);
 
-    m->data->len += marshal_perm(&m->data->c, &p);
+    m->data->len += marshal_perm(m->data->c, &p);
     vec_write(m->data, sig.b, SIGNATURE_SIZE);
 
 }
@@ -362,7 +362,7 @@ void FS::revoke_remote(const Msg* msg, Error& e) {
     }
 
     Perm p{};
-    unmarshal_perm(&msg->data->c, &p);
+    unmarshal_perm(msg->data->c, &p);
 
     HashT p_hash = hash_perm(&p);
 
@@ -412,7 +412,7 @@ void FS::settle_local(const Msg* msg, Error& e) {
     }
 
     Perm p{};
-    unmarshal_perm(&msg->data->c, &p);
+    unmarshal_perm(msg->data->c, &p);
 
     HashT p_hash = hash_perm(&p);
 
@@ -465,11 +465,11 @@ void FS::settle_local(const Msg* msg, Error& e) {
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_P2P;
     m->code = ACTOR_FS;
-    m->data = grab_buff(buffers_, sizeof(FS_PATH) + PERM_SIZE_NOPAD + sizeof(flags) + SIGNATURE_SIZE);
+    m->data = grab_buff(buffers_, sizeof(FS_PATH) + sizeof(Perm) + sizeof(flags) + SIGNATURE_SIZE);
 
     FS_PATH p1 = FS_SETTLE;
     vec_write(m->data, &p1, sizeof(FS_PATH));
-    m->data->len += marshal_perm(&m->data->c, &p);
+    m->data->len += marshal_perm(m->data->c, &p);
     vec_write(m->data, &flags, sizeof(uint8_t));
     vec_write(m->data, sig.b, SIGNATURE_SIZE);
 };

@@ -1,6 +1,7 @@
 #pragma once
 #include "sz/api/msgT.h"
 #include "sz/api/actor.h"
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,11 +39,14 @@ static Error ESUCCESS = {
 
 typedef Vec*GetBuff(size_t);
 
+inline size_t error_size(Error* e) {
+    return sizeof(int) + sizeof(ConnID) + sizeof(int) + KEY_SIZE + strlen(e->msg);
+}
+
 int marshal_error(
     Error* e, 
     Msg* msg, 
-    Actors too,
-    GetBuff get_buffer
+    Actors too
 );
 void unmarshal_error(Error* e, Msg* m);
 

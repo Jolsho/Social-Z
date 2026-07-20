@@ -24,10 +24,10 @@ void FS::voucher(const Msg* msg, Error& e) {
     }
 
     Perm p {};
-    unmarshal_perm(&msg->data->c, &p);
+    unmarshal_perm(msg->data->c, &p);
 
     Voucher v{};
-    unmarshal_voucher(&msg->data->c, &v);
+    unmarshal_voucher(msg->data->c, &v);
 
 
     if (!locals_.contains(v.to)) {
@@ -69,14 +69,14 @@ void FS::voucher(const Msg* msg, Error& e) {
 
         m->priority = PRIORITY_WORK;
         m->too = ACTOR_DB;
-        m->data = grab_buff(buffers_, sizeof(Actors) + sizeof(FS_PATH) + PERM_SIZE_NOPAD);
+        m->data = grab_buff(buffers_, sizeof(Actors) + sizeof(FS_PATH) + sizeof(Perm));
         m->code = DB_NEW_TASK;
 
         Actors dst = ACTOR_FS;
         vec_write(m->data, &dst, sizeof(Actors));
         FS_PATH pth = FS_REVOKE;
         vec_write(m->data, &pth, sizeof(FS_PATH));
-        m->data->len += marshal_perm(&m->data->c, &p);
+        m->data->len += marshal_perm(m->data->c, &p);
 
         return;
     } else if (r != 0) {
@@ -101,12 +101,12 @@ void FS::voucher(const Msg* msg, Error& e) {
     }
     m->priority = PRIORITY_WORK;
     m->too = ACTOR_DB;
-    m->data = grab_buff(buffers_, sizeof(DB_PATH) + HASH_SIZE + VOUCH_SIZE_NOPAD);
+    m->data = grab_buff(buffers_, sizeof(DB_PATH) + HASH_SIZE + sizeof(Voucher));
 
     DB_PATH db_path = DB_VOUCHER_INSERT;
     vec_write(m->data, &db_path, sizeof(DB_PATH));
     vec_write(m->data, p_hash.b, HASH_SIZE);
-    m->data->len += marshal_voucher(&m->data->c, &v);
+    m->data->len += marshal_voucher(m->data->c, &v);
 };
 
 
@@ -118,7 +118,7 @@ void FS::redeem_local(const Msg* msg, Error& e) {
     }
 
     Voucher v{};
-    unmarshal_voucher(&msg->data->c, &v);
+    unmarshal_voucher(msg->data->c, &v);
 
     if (!locals_.contains(v.to)) {
         e.code = E_NOTLOCAL;
@@ -161,10 +161,10 @@ void FS::redeem_local(const Msg* msg, Error& e) {
             }
             m->priority = PRIORITY_WORK;
             m->too = ACTOR_DB;
-            m->data = grab_buff(buffers_, sizeof(DB_PATH) + VOUCH_SIZE_NOPAD);
+            m->data = grab_buff(buffers_, sizeof(DB_PATH) + sizeof(Voucher));
             DB_PATH db_path = DB_NEW_BLOB;
             vec_write(m->data, &db_path, sizeof(DB_PATH));
-            m->data->len += marshal_voucher(&m->data->c, &v);
+            m->data->len += marshal_voucher(m->data->c, &v);
 
             sessions_.erase(id);
             return;
@@ -196,7 +196,7 @@ void FS::redeem_remote(const Msg* msg, Error& e) {
     }
 
     Voucher v{};
-    unmarshal_voucher(&msg->data->c, &v);
+    unmarshal_voucher(msg->data->c, &v);
 
     if (!locals_.contains(v.from)) {
         e.code = E_NOTLOCAL;
@@ -349,10 +349,10 @@ void FS::reward(const Msg* msg, Error& e) {
 
         m->priority = PRIORITY_WORK;
         m->too = ACTOR_DB;
-        m->data = grab_buff(buffers_, sizeof(DB_PATH) + VOUCH_SIZE_NOPAD);
+        m->data = grab_buff(buffers_, sizeof(DB_PATH) + sizeof(Voucher));
         DB_PATH db_path = DB_NEW_BLOB;
         vec_write(m->data, &db_path, sizeof(DB_PATH));
-        m->data->len += marshal_voucher(&m->data->c, &s.voucher);
+        m->data->len += marshal_voucher(m->data->c, &s.voucher);
 
         total_fs_size += s.byte_count;
 

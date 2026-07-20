@@ -39,18 +39,21 @@ void DB::poll_loop() {
                     .code   = msg->code,
                 };
 
-                // TODO --this is incorrect ... dont know what IM doing
                 size_t size_r = sizeof(e.r);
                 if (msg->data->len > size_r) {
-                    memcpy(msg->data, &e.r, size_r);
-                    size_t s = msg->data->len - size_r;
-                    if (e.msg) {
-                        if (strlen(e.msg) > s) {
-                            free((char*)e.msg);
-                            e.msg = (char*)malloc(s);
-                        }
+                    memcpy(&e.r, msg->data, size_r);
+                    size_t s = msg->data->len - size_r + 1;
+                    if (e.msg && strlen(e.msg) > s) {
+                        free((char*)e.msg);
+                        char* m = (char*)malloc(s);
+                        *(m + s) = '\0';
+                        e.msg = m;
+                    } else if (!e.msg) {
+                        char* m = (char*)malloc(s);
+                        *(m + s) = '\0';
+                        e.msg = m;
                     }
-                    memcpy((uint8_t*)e.msg, msg->data, msg->data->len);
+                    memcpy(&e.msg, msg->data, msg->data->len);
                 }
                 handle_error(e);
             }

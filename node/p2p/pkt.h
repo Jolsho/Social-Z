@@ -1,6 +1,6 @@
 #pragma once
 #include "sz/api/actor.h"
-#include "sodium/crypto_aead_chacha20poly1305.h"
+#include <sodium/crypto_aead_chacha20poly1305.h>
 #include "sz/utils/buffers.h"
 #include <cstddef>
 #include <cstdlib>
@@ -66,7 +66,7 @@ public:
     inline void get_nonce(Nonce& n)     { memcpy(&n, prefix_ + NONCE_OFF, NONCE_LEN); }
     inline void new_nonce()             { randombytes_buf(prefix_ + NONCE_OFF, NONCE_LEN); }
 
-    inline uint8_t* get_tag()     { return prefix_[TAG_OFF]; }
+    inline uint8_t* get_tag()           { return prefix_[TAG_OFF]; }
 
     inline void get_code(PktCode* c)    { memcpy(&c, prefix_ + CODE_OFF, CODE_LEN); }
     inline void set_code(PktCode c)     { memcpy(prefix_ + CODE_OFF, &c, CODE_LEN); }

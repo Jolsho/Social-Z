@@ -1,9 +1,6 @@
 file(GLOB_RECURSE CLIENT_SRCS CONFIGURE_DEPENDS "*.c")
 
-add_library(client STATIC 
-    ${CLIENT_SRCS}
-    $<TARGET_OBJECTS:core>
-)
+add_library(client STATIC ${CLIENT_SRCS})
 
 target_include_directories(client
     PUBLIC 
@@ -16,6 +13,8 @@ target_include_directories(client
 if(NOT EMSCRIPTEN)
     target_compile_definitions(client PRIVATE NATIVE)
 endif()
+
+target_link_libraries(client PRIVATE core)
 
 install(FILES ${CMAKE_SOURCE_DIR}/include/sz/client.h DESTINATION include/sz/)
 set_target_properties(client PROPERTIES OUTPUT_NAME "sz_client")

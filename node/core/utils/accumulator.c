@@ -86,4 +86,5 @@ void log_msg(LogAccumulator* l, const char* msg, int r, int code) {
 
 void log_stats(LogAccumulator* l, ChanStatsPair* stats) {
     // TODO
+
 }
