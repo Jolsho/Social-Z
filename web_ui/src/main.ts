@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jolsho
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 import './style.css'
 import { SocialState } from './social/state.ts';
 import { AppState } from './app.ts';

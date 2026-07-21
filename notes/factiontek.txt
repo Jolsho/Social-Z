@@ -1,5 +1,5 @@
-Faction Tek ( FT ) [ Real things = sharp edges & soft curves ]
-    P2PN-Z
+Faction 512 ( FFT ) [ Real things = sharp edges & soft curves ]
+    Social-Z
         Freedom of economic affiliation.
         
         What does economic affiliation mean?

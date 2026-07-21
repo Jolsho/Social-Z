@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Jolsho
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 emcmake cmake -B wasm_build \
     -DCMAKE_INSTALL_PREFIX=./wasm_install \
     -DCMAKE_BUILD_TYPE=Release

@@ -2,7 +2,7 @@
 
 Version 1.0
 
-Thank you for contributing to [Project Name].
+Thank you for contributing to Social-Z.
 
 By submitting a contribution to this project, you agree to the following terms:
 
@@ -12,7 +12,7 @@ By submitting a contribution to this project, you agree to the following terms:
 or additions to the project, that you intentionally submit for inclusion in
 the project.
 
-"Project Maintainer" means [Your Name / Organization].
+"Project Maintainer" means Tagma-256.
 
 ## 2. Copyright Ownership
 

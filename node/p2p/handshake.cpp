@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jolsho
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 #include "connection.h"
 #include "sz/crypto.h"
 #include <sodium/crypto_kx.h>

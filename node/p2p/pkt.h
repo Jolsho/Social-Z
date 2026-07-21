@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jolsho
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 #pragma once
 #include "sz/api/actor.h"
 #include <sodium/crypto_aead_chacha20poly1305.h>

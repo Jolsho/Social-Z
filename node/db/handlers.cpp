@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jolsho
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 #include "server.hpp"
 #include "sqlite3.h"
 #include "sz/utils/error.h"

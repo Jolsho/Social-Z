@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jolsho
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 #include "sz/api/paths.h"
 #include "logger.h"
 #include "sz/utils/shutdown.h"

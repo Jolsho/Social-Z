@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jolsho
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 import type { Feed } from "../feed";
 import { el } from "../helpers"
 import type { Msg } from "./msg";
