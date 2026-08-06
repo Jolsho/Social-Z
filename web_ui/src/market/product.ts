@@ -6,100 +6,73 @@
 
 import type { AppState } from "../app";
 import { el } from "../helpers";
-import { render_post_header } from "../social/post_head";
+
+export type RawProduct = {
+    from:       string;
+    text:       string;
+    created_at: string;
+    media:      string;
+    price:      number;
+};
 
 export class Product {
-    SIZE: number = 520;
-    extra: number = 0;
-    root: HTMLDivElement;
+    SIZE: number = 200;
+    element: HTMLDivElement;
 
-    from: string = "PERSON";
-    description: string = `
-        some fake description of a post
-        SOME FAKE DESCRIPTION OF A POST
-        some fake description of a post
-        SOME FAKE DESCRIPTION OF A POST
-        some fake description of a post
-        SOME FAKE DESCRIPTION OF A POST
-        some fake description of a post
-        SOME FAKE DESCRIPTION OF A POST
-        some fake description of a post
-        SOME FAKE DESCRIPTION OF A POST $$$
-        `
-    date: Date = new Date();
-    price:  number = 123;
-    type: string = "img";
-
-    grow: (extra: number) => void = () => {};
-
-    constructor(_app: AppState) {
-        this.root = el("div", {
+    constructor(_app: AppState, p: RawProduct) {
+        this.element = el("div", {
             className: "post"
         });
 
         let flex_container = el("div", {
             className: "post_container"
         });
-        this.root.appendChild(flex_container);
+        this.element.appendChild(flex_container);
 
-        render_post_header(flex_container, this.from, this.date);
+        let post_header = el("div", { className: "post_header", });
+        flex_container.appendChild(post_header);
 
-        if (this.type == "img") {
-            let post_img_container = el("div", {
-                className: "post_img",
-            });
-            flex_container.appendChild(post_img_container);
+        post_header.appendChild(el("div", {className: "profile_pic"}));
+        post_header.appendChild(el("h1", {textContent: p.from}));
+        post_header.appendChild(el("p", {textContent: p.created_at,}));
 
-            let post_img = el("img", {
-                src: "https://picsum.photos/500/500"
-            });
-            post_img_container.appendChild(post_img);
+        let icon_container = el("div", { className: "icon_container", });
+        post_header.appendChild(icon_container);
 
-            post_img_container.appendChild(el("h1", {
-                className: "post_price",
-                textContent: `$${this.price}`
-            }));
+        let arrow = el("img", { src: "icons/i_heart.png", });
+        arrow.addEventListener("click", () => { /* TODO */ });
+        icon_container.appendChild(arrow);
 
-            let post_desc = el("p", {
-                textContent: this.description,
-            });
-            let dropped = false;
-            post_desc.addEventListener("click", () => {
-                let e = 0;
-                if (!dropped) {
-                    let original_height = post_desc.clientHeight;
-                    post_desc.style.webkitLineClamp = "8";
-                    if (post_desc.clientHeight == original_height) {
-                        post_desc.style.webkitLineClamp = "4";
-                        return;
-                    }
-                    e = 4 * 16;
-                } else {
-                    post_desc.style.webkitLineClamp = "4";
-                    e = -4 * 16;
-                }
-                dropped = !dropped;
-                this.extra += e;
-                this.grow(e);
-            });
-            post_img_container.appendChild(post_desc);
-        }
+        let text_container = el("div", { className: "post_text_container", });
+        flex_container.appendChild(text_container);
+
+
+        let post_body = el("div", { className: "post_body", });
+        post_body.appendChild(el("img", { src: "https://picsum.photos/500/500" }));
+
+        let price_container = el("div", { className: "post_price", })
+        price_container.appendChild(el("div", { className: "filter", }));
+        price_container.appendChild(el("h1", { textContent: `$${p.price}` }));
+        post_body.appendChild(price_container);
+
+        let desc = el('p', { textContent: p.text });
+        desc.classList.add("clamped");
+        desc.addEventListener("click", () => { desc.classList.toggle("clamped"); });
+        post_body.appendChild(desc);
+
+        flex_container.appendChild(post_body);
     }
 
-    render(
-        feed: HTMLDivElement, y_pos: number, 
-        grow: (extra: number) => void
-    ): void {
-        this.grow = grow;
-        this.root.style.top =       `${y_pos}px`;
-        this.root.style.height =    `${this.SIZE + this.extra}px`;
+    render(feed: HTMLDivElement, y_pos: number): void {
+        this.element.style.top =       `${y_pos}px`;
+        //this.element.style.height =    `${this.SIZE + this.extra}px`;
 
-        if (this.root.isConnected) return;
-        feed.appendChild(this.root);
+        if (this.element.isConnected) return;
+        feed.appendChild(this.element);
     }
 
     remove(): void {
-        this.root?.remove();
+        this.element?.remove();
     }
 }
 

@@ -36,3 +36,8 @@ The hard part is that though, it requires everything of me most likely.
 Also there is no protection for me, a larger more competent team can take it from me.
     That is why I thought LGPL first.
         But even then I dont know I like this.
+
+Ive decided to start with LGPL and Contributor licensing agreement, so that I can go MIT later.
+And that is really the goal here, start with this and once we reach V1 go MIT.
+I dont want a larger corp or entity to take it before we can make it work for the public.
+I would hate some large institution to take this in a direction it shouldnt go before we get an alternative.

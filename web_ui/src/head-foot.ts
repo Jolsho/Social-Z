@@ -21,9 +21,16 @@ export class Header {
             className: "app_header"
         });
 
-        this.root.appendChild(el("img", {
-            src: "HEADER.png"
-        }));
+        let header = el("div", { className: "header_container" });
+        this.root.appendChild(header);
+
+        async function load_header() {
+            const svg = await fetch("/HEADER.svg").then(res => res.text());
+            header.innerHTML = svg;
+            const svg_e = header.querySelector("svg")!;
+            svg_e.setAttribute("preserveAspectRatio", "none");
+        };
+        load_header();
 
         this.pages = el("div", {
             className: "page_container",
@@ -128,14 +135,20 @@ export class Footer {
         });
         if (idx % 2 == 0) backdrop.classList.add("flipped");
 
-        backdrop.appendChild(el('img', {
-            src: "foot.png"
-        }));
-        backdrop.appendChild(el('img', {
-            id: icon.id, 
-            className: "hoverable_icon icon",
-            src: icon.src,
-        }));
+        async function load_foot_back() {
+            const svg = await fetch("/FOOT.svg").then(res => res.text());
+            backdrop.innerHTML = svg;
+            const svg_e = backdrop.querySelector("svg")!;
+            svg_e.setAttribute("preserveAspectRatio", "none");
+
+            backdrop.appendChild(el('img', {
+                id: icon.id, 
+                className: "hoverable_icon icon",
+                src: icon.src,
+            }));
+        };
+        load_foot_back();
+
         this.icon_container.appendChild(backdrop);
         this.icons.push(icon);
     }

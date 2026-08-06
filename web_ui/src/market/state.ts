@@ -9,14 +9,17 @@ import { VirtFeed } from "../feed";
 import type { Icon } from "../head-foot";
 import { el } from "../helpers";
 import { MARKET, MESSAGE, SETTINGS } from "../macros";
-import { Product } from "./product";
+import { Product, type RawProduct } from "./product";
 
 export class MarketState {
     is_temp:    boolean         = false;
     root:       HTMLDivElement;
     name:       string          = MARKET;
 
-    products:      VirtFeed<Product>      = new VirtFeed<Product>();
+    products:      VirtFeed<Product>;
+    has_more:   boolean         = true;
+    is_loading: boolean         = false;
+    page:       number          = 0;
 
     icons:      Icon[] = [];
 
@@ -27,9 +30,53 @@ export class MarketState {
         });
         this.root.addEventListener("click", this.handler);
 
-        for (let i = 0; i < 50; i++) {
-            this.products.add_item(new Product(app));
-        }
+        this.products = new VirtFeed<Product>(async () => {
+            if (!this.has_more || this.is_loading) return;
+
+            this.is_loading = true;
+
+            if (this.page <= 3) {
+                for (let i = 0; i < 10; i++) {
+                    let p: RawProduct = {
+                        from: `PERson ${this.page}${i}`,
+                        text: "this is a message",
+                        created_at: "6/7/28",
+                        media: "",
+                        price: (i + 1) * 69,
+                    };
+                    this.products.add_item(new Product(app, p));
+                }
+            } else {
+                this.has_more = false;
+            }
+
+            // let resp = await fetch(`/marketplace/products?page=${this.page}`, {
+            //     method: "GET", credentials: "include",
+            // });
+            //
+            // if (!resp.ok) {
+            //     this.has_more = false;
+            //     this.is_loading = false;
+            //     return;
+            // }
+            this.page++;
+
+            // await resp.bytes();
+
+            // TODO -- 
+            //      this is where you pass to wasm.
+            //      so it can parse the request.
+            //      and then it can give us an iterator.
+            //      this also means post doesnt have fields
+            //      like it has the Post* struct.
+            //      or whatever. then it calls get methods.
+            //      but that is it...
+            
+            // this.has_more = count > 0;
+
+            this.is_loading = false;
+        });
+
 
         this.icons= [
             {

@@ -52,16 +52,23 @@ export class AppState {
 
         let value = 0;
         let startX = 0;
+        let startY = 0;
 
         document.addEventListener("touchstart", (e) => {
             startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
         });
 
         document.addEventListener("touchend", (e) => {
             const endX = e.changedTouches[0].clientX;
-            const deltaX = endX - startX;
+            let deltaX = endX - startX;
 
-            const SWIPE_THRESHOLD = 25;
+            const endY = e.changedTouches[0].clientY;
+            const deltaY = endY - startY;
+
+            if (Math.abs(deltaY) / Math.abs(deltaX) > 1) return;
+
+            const SWIPE_THRESHOLD = 50;
 
             let next = value;
             if (deltaX > SWIPE_THRESHOLD) {

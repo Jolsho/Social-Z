@@ -8,10 +8,10 @@ emcmake cmake -B wasm_build \
 cmake --build wasm_build -j3
 cmake --install wasm_build
 
-mkdir -p wasm_dst
+mkdir -p $(pwd)/../web_ui/src/wasm/sz.js 
 
 emcc \
-  -o ./wasm_dst/sz.js \
+  -o $(pwd)/../web_ui/src/wasm/sz.js \
   -O3 \
   -s WASM=1 \
   -s MODULARIZE=1 \
@@ -19,7 +19,7 @@ emcc \
   -s ENVIRONMENT=node,web \
   -s ALLOW_MEMORY_GROWTH=1 \
   -s INITIAL_MEMORY=16MB \
-  -s EXPORTED_FUNCTIONS="['_malloc','_free','_new_ctx','_decrypt','_encrypt']" \
+  -s EXPORTED_FUNCTIONS="['_malloc','_free','_new_crypto_ctx','_decrypt','_encrypt']" \
   -s EXPORTED_RUNTIME_METHODS="[]" \
   -s ASSERTIONS=0 \
   -I$(pwd)/wasm_install/include \

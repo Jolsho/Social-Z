@@ -16,6 +16,6 @@ endif()
 
 target_link_libraries(client PRIVATE core)
 
-install(FILES ${CMAKE_SOURCE_DIR}/include/sz/client.h DESTINATION include/sz/)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/sz/client DESTINATION include/sz/)
 set_target_properties(client PROPERTIES OUTPUT_NAME "sz_client")
 install(TARGETS client ARCHIVE DESTINATION lib)

@@ -26,8 +26,8 @@ export function render_input(feed: Feed<Msg>): HTMLDivElement {
         if (input.clientHeight != height) {
             height = input.clientHeight;
             let bottom = feed.scrollable.scrollHeight - feed.scrollable.clientHeight;
-            if (bottom - feed.scroll_pos < (feed.spacer.clientHeight / 2)) {
-                feed.spacer.style.height = `${Math.max(height + 30, 70)}px`;
+            if (bottom - feed.scroll_pos < (feed.bottom_spacer.clientHeight / 2)) {
+                feed.bottom_spacer.style.height = `${Math.max(height + 30, 70)}px`;
                 requestAnimationFrame(() => {
                     feed.scroll_pos = feed.scrollable.scrollHeight - feed.scrollable.clientHeight;
                     feed.scrollable.scrollTop = feed.scroll_pos;
