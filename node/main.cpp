@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-#include "sz/api/actor.h"
-#include "sz/api/sz.h"
-#include "sz/db.h"
-#include "sz/fs.h"
-#include "sz/log.h"
-#include "sz/p2p.h"
+#include "sz_node/actor.h"
+#include "sz_node/sz.h"
+#include "sz_node/db.h"
+#include "sz_node/fs.h"
+#include "sz_node/log.h"
+#include "sz_node/p2p.h"
 
 int main() {
     SZT* szt = new_sz();

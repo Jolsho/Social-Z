@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 find . \
-  \( -path './node/build' -o \
-     -path './node/install' -o \
+  \( -path './build' -o \
+     -path './install' -o \
      -path './web_ui/node_modules' -o \
      -path './web_ui/dist' -o \
-     -path './node/wasm_install' -o \
-     -path './node/wasm_build' \
+     -path './wasm_install' -o \
+     -path './wasm_build' \
   \) -prune -o \
   \( -name '*.c' -o \
      -name '*.cc' -o \
@@ -25,5 +25,8 @@ find . \
 
 
 # 6/29/26 = 17,536
+
 # 7/07/26 = 17,985
 # 7/21/26 = 18,469
+
+# 8/28/26 = 20,050

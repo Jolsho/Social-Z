@@ -1,5 +1,0 @@
-file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS "*.cpp")
-add_library(db OBJECT ${CORE_SOURCES})
-target_include_directories(db PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(db PRIVATE core sqlite)
-install(FILES ${CMAKE_SOURCE_DIR}/include/sz/db.h DESTINATION include/sz/)
