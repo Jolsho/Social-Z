@@ -6,7 +6,6 @@
 
 #include "manager.h"
 #include "sz/api/paths.h"
-#include "sz/utils/vec.h"
 #include <algorithm>
 
 void FS::handle_internal_msgs() {

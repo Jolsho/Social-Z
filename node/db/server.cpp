@@ -10,7 +10,6 @@
 #include "handlers.hpp"
 #include "sz/utils/buffers.h"
 #include "sz/utils/path.hpp"
-#include "sz/utils/vec.h"
 
 static void* start(void* p) {
     ((DB*)p)->poll_loop();

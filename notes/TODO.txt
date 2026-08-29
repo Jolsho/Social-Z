@@ -12,15 +12,47 @@ TODO --
 
 
 CLIENT::
-    Requests cards.
-        - Build request for cards.
-        - Send raw buffer to backend.
-        - Parse response into a card iterator.
-        - Do things as normal with card iterato
+    
+
+    POST
+        holds fixed size data and hash user to request media
+        this one is just for posts but it could be used for a product or message also
+        Kept small so we dont need to refetch them.
+
+    MEDIA
+        This is variable size data that is is managed by media manager
+        This is to prevent memory explosions.
+        We need to have control over what is allocated because they are large.
+
+    Iterator
+        Moves over fixed size things like POST
+        Reallocs when you append.
+        So you have to copy data from it, you can use the pointer to it for long.
+            This can be done by just painting the thing.
 
 
-When we receieve responses they are encrypted though.
-this means we have to frame for a nonce and mac.
+    Login which means get encrypted user data and decrypt return UserCtx.
+    Use UserCtx to build requests for stuff.
 
+    => EVERY REQUEST HAS TO BE SIGNED BY THE PUB KEY
+        -> doesn't matter what the payload is.
+        -> I dont know this is necessary though.
+        -> maybe other requests but not get ones.
+        Gets should just be simple.
+        But if you aren't the person you shouldn't be able to overload memory 
 
+    Parse responses from backend. (Get)
+        - decrypt using user data key.
+        - meta data header, and main body is iterator over items.
 
+    Just parse ID in response or something. (Post, Put, Delete)
+        - Needs to be hashed and signed in order for backend to accept it.
+        - but it has to be encrypted so it has to be both.
+            (encrypted and signed ciphertext)
+
+        - These require broadcasting though.
+        - meaning encrypt once with ephemeral key.
+        - then generate vouchers per recipient (means need recipients)
+        - sign and with a shared secret encrypt each voucher
+            - maybe encrypt?
+        - marshal all and send to backend

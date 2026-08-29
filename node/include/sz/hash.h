@@ -21,7 +21,16 @@ Hasher new_hasher();
 void hash_update(Hasher* hr, const uint8_t* data, size_t size);
 HashT hash_finalize(Hasher* hr);
 
-bool is_zero_hash(const HashT* h);
+static inline bool is_zero_hash(const HashT* h) { 
+    for (int i = 0; i < HASH_SIZE; i++) {
+        if (h->b[i] != 0) return false;
+    }
+    return true;
+}
+
+static inline bool hash_is_equal(const HashT* h1, const HashT* h2) { 
+    return memcmp(h1, h2, HASH_SIZE) == 0;
+}
 
 #ifdef __cplusplus
 }

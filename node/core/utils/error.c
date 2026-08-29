@@ -5,7 +5,6 @@
  */
 
 #include "sz/utils/error.h"
-#include "sz/utils/vec.h"
 #include <string.h>
 #include <stdlib.h>
 

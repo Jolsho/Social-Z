@@ -4,90 +4,60 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-#include "sz/client/client.h"
-#include "sz/api/vec.h"
-#include "sz/utils/vec.h"
-#include <sodium/crypto_aead_chacha20poly1305.h>
-#include <sodium/crypto_pwhash.h>
-#include <string.h>
+#include "client.h"
+#include "context.h"
 #include <stdlib.h>
-#include <sodium.h>
 
-#define USER_DATA_REQUEST_SIZE 64
-Vec* marshal_user_data_request(uint8_t* pub_key) {
-    Vec* v = new_vec(USER_DATA_REQUEST_SIZE);
-    vec_write(v, pub_key, KEY_SIZE);
-    return v;
+
+Client* init_client_state() {
+    Client* cs = malloc(sizeof(Client));
+
+    if (buffer_pool_init(&cs->pool, 
+        256,   1024,   // 1024 × 256 B  =  262,1144
+        4096,  256,    // 256 × 4 KiB   =  1,048,576
+        65536, 64      // 64 × 64 KiB   =  4,194,304
+    ) != 0) {
+        free(cs);
+        return NULL;
+    }
+
+    #define BLOB_STORE_SIZE 1024 * 1024 * 25 // 25 MB
+    if (store_setup(&cs->blob_store, BLOB_STORE_SIZE) != STORE_OK) {
+        buffer_pool_destroy(&cs->pool);
+        free(cs);
+        return NULL;
+    }
+
+    return cs;
 }
 
-
-UserCtx* create_user_ctx_from_user_data_response(
-    uint8_t* priv_key, 
-    uint8_t* resp, size_t len
-) {
-    size_t remaining = len - (NONCE_SIZE + sizeof(size_t) + crypto_pwhash_saltbytes());
-    if (remaining <= 0) { return NULL; }
-
-    uint8_t* c = resp;
-    UserCtx* ctx = (UserCtx*)malloc(sizeof(UserCtx));
-    memcpy(ctx->keys.priv.b, priv_key, KEY_SIZE);
-
-    memcpy(
-        ctx->keys.pub.b,
-        ctx->keys.priv.b + crypto_sign_SEEDBYTES,
-        crypto_sign_PUBLICKEYBYTES
-    );
-
-    if (crypto_scalarmult_base(ctx->keys.pub.b, ctx->keys.priv.b) != 0) {
-        free(ctx);
-        return NULL;
-    }
-
-    uint8_t salt[crypto_pwhash_saltbytes()];
-    memcpy(salt, c, crypto_pwhash_saltbytes());
-    c += crypto_pwhash_saltbytes();
-
-    Nonce nonce;
-    memcpy(nonce.b, c, NONCE_SIZE);
-    c += NONCE_SIZE;
-
-    size_t pswd_len = 0;
-    memcpy(&pswd_len, c, sizeof(size_t));
-    c += sizeof(size_t);
-
-    if ((remaining -= pswd_len) <= 0) {
-        free(ctx);
-        return NULL;
-    }
-
-    if (crypto_pwhash(
-        ctx->user_data_key.b, KEY_SIZE,
-        (char*)c, remaining,
-        salt,
-        crypto_pwhash_OPSLIMIT_MODERATE,
-        crypto_pwhash_MEMLIMIT_MODERATE,
-        crypto_pwhash_ALG_DEFAULT
-    ) != 0) {
-        free(ctx);
-        return NULL;
-    }
-
-    unsigned long long usr_data_len = remaining;
-    if (crypto_aead_chacha20poly1305_decrypt(
-        c, &usr_data_len, 
-        NULL,
-        c, remaining,
-        NULL, 0,
-        nonce.b, 
-        ctx->user_data_key.b
-    ) != 0) {
-        free(ctx);
-        return NULL;
-    }
-
-    // TODO -- start parsing user data.
-
-    return ctx;
+ContextID client_new_context(Client* cli) {
+    if (cli->ids_size <= 0) return -1;
+    ContextID id = cli->ids[cli->ids_size - 1];
+    cli->ids_size--;
+    cli->states[id].state = CON_IDLE;
+    return id;
 }
 
+void client_free_context(Client* cli, ContextID id) {
+    if (cli->ids_size >= ID_CAP || !valid_id(id)) return;
 
+    memset(&cli->states[id], 0, sizeof(ConState));
+    cli->since_used_last[id] = 0;
+
+    context_release_recv_buffer(cli, id);
+
+    context_release_send_buffer(cli, id);
+
+    cli->ids[cli->ids_size++] = id;
+}
+
+int client_parse_response(Client* cli, ContextID id, uint8_t* b, uint64_t l) {
+    if (!valid_id(id)) return CLIENT_INVALID_ID;
+
+     ConState state = cli->states[id];
+
+    if (state.parser_id >= cli->parsers_count) return CLIENT_ERR;
+
+    return cli->parsers[state.parser_id](cli, id, b, l);
+}

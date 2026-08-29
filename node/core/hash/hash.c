@@ -24,10 +24,4 @@ HashT hash_finalize(Hasher* h) {
     return hash;
 }
 
-bool is_zero_hash(const HashT* h) { 
-    for (int i = 0; i < HASH_SIZE; i++) {
-        if (h->b[i] != 0) return false;
-    }
-    return true;
-}
 

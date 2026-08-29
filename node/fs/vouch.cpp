@@ -10,7 +10,6 @@
 #include "sz/fs.h"
 #include "manager.h"
 #include "fs_types.h"
-#include "sz/utils/vec.h"
 #include <cerrno>
 #include <cstddef>
 #include <cstdio>

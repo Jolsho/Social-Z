@@ -5,7 +5,6 @@
  */
 
 #include "sz/utils/accumulator.h"
-#include "sz/utils/vec.h"
 #include <string.h>
 #include <stdlib.h>
 

@@ -9,7 +9,7 @@
 
 Vec* new_vec(size_t cap) {
     uint8_t* bytes = (uint8_t*)malloc(cap);
-    Vec* v = (Vec*)malloc(sizeof(Vec));
+    Vec* v = malloc(sizeof(Vec));
     v->b = bytes;
     v->c = bytes;
     v->len = 0;

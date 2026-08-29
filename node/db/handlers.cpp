@@ -7,7 +7,6 @@
 #include "server.hpp"
 #include "sqlite3.h"
 #include "sz/utils/error.h"
-#include "sz/utils/vec.h"
 
 void user_insert(DB& db, Error& e, const Msg* msg) {
 

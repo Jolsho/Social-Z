@@ -10,7 +10,6 @@
 #include "sz/crypto.h"
 #include "manager.h"
 #include "sz/hash.h"
-#include "sz/utils/vec.h"
 
 
 static constexpr uint8_t ACCEPTED{ 1 };

@@ -5,6 +5,8 @@
  */
 
 #pragma once
+#include <assert.h>
+#include <string.h>
 #include <time.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -79,16 +81,7 @@ HashT hash_voucher(Voucher* v);
 size_t marshal_voucher(uint8_t* pb, Voucher* v);
 size_t unmarshal_voucher(uint8_t* pb, Voucher* v);
 
-typedef struct Post {
-    char    from[20];
-    char    *text;
-    char    created_at[9];
-    char    *media;
-    HashT   hash;
-    size_t  id;
-} __attribute__((aligned(8))) Post;
-
-
 #ifdef __cplusplus
 }
 #endif
+

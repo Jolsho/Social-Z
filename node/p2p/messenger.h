@@ -7,7 +7,6 @@
 #pragma once
 #include "sz/api/actor.h"
 #include "sz/api/msgT.h"
-#include "sz/utils/vec.h"
 #include <cstring>
 #include <optional>
 #include <vector>

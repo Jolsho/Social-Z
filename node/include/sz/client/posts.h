@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2026 Jolsho
  *
@@ -6,46 +5,52 @@
  */
 
 #pragma once
-#include "sz/client/client.h"
-#include "sz/client/iterator.h"
+#include "sz/api/vec.h"
 #include "sz/codec.h"
-#include <stdlib.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+typedef uint8_t* PostView;
 
-#ifdef NATIVE
+#define POST_ORIGIN_OFFSET      0
+#define POST_CREATED_AT_OFFSET  (POST_ORIGIN_OFFSET + KEY_SIZE)
+#define POST_CREATED_AT_SIZE    sizeof(int64_t)
+#define POST_HASH_COUNT_OFFSET  (POST_CREATED_AT_OFFSET + POST_CREATED_AT_SIZE)
+#define POST_HASH_OFFSET        (POST_HASH_COUNT_OFFSET + 1)
 
-//void some_networking_func();
+// Must have atleast one associated data hash.
+#define MINIMUM_POST_SIZE       (POST_HASH_OFFSET + HASH_SIZE)
 
-#endif
+static inline void post_get_originator(PostView p, Key* k) {
+    memcpy(k->b, p + POST_ORIGIN_OFFSET, KEY_SIZE); 
+}
 
-bool marshal_request(UserCtx* ctx, void* r, size_t r_size, uint8_t* buff, size_t len);
+static inline int64_t post_get_created_at(PostView p) { 
+    int64_t created_at;
+    memcpy(&created_at, p + POST_CREATED_AT_OFFSET, POST_CREATED_AT_SIZE); 
+    return created_at;
+}
 
-typedef struct {
-    int page;
-    bool pending;
-} GetPostRequest;
-static inline void get_posts_req_set_page(GetPostRequest* r, int page) { r->page = page; }
-static inline void get_posts_req_set_pending(GetPostRequest* r, bool is_pending) { r->pending = is_pending; }
+static inline uint8_t post_get_hash_count(PostView p) { 
+    return *(p + POST_HASH_COUNT_OFFSET);
+}
 
+static inline void post_get_hash(PostView p, HashT* h, size_t idx) { 
+    memcpy(h->b, p + POST_HASH_OFFSET + (HASH_SIZE * idx), HASH_SIZE); 
+}
 
-// Posts
-static inline Post* iterator_seek_post(Iterator* it, size_t idx) { return (Post*)iterator_seek(it, idx); }
-static inline Post* iterator_next_post(Iterator* it) { return (Post*)iterator_next(it); }
-static inline Post* iterator_prev_post(Iterator* it) { return (Post*)iterator_prev(it); }
+static inline size_t post_get_size(PostView p) {
+    return POST_HASH_OFFSET + (*(p + POST_HASH_COUNT_OFFSET) * HASH_SIZE);
+}
 
+static inline bool post_is_valid(PostView p) {
+    uint8_t hash_count = post_get_hash_count(p);
+    return hash_count <= 5 && hash_count > 0;
+}
 
-static inline Post* post_new() { return malloc(sizeof(Post)); }
-static inline void post_delete(Post* c) { free(c); }
-static inline int post_get_id(const Post* c) { return c->id; }
-static inline void post_set_id(Post* c, int id) { c->id = id; }
-static inline const char* post_get_created_at(const Post* c) { return c->created_at; }
-char* post_set_created_at(Post* c);
-static inline size_t post_created_at_len() { return 8; }
-static inline HashT* post_get_hash(Post* c) { return &c->hash; }
 
 
 #ifdef __cplusplus

@@ -5,44 +5,32 @@
  */
 
 #pragma once
-#include "sz/api/vec.h"
-#include "sz/codec.h"
 #include <stdint.h>
-#include <stddef.h>
 #include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// USER
+#define CLIENT_PARSE_DONE   1
+#define CLIENT_OK           0
+#define CLIENT_ERR          -1
+#define CLIENT_CONN_BUSY    -2
+#define CLIENT_SMALL_BUFFER -3
+#define CLIENT_INVALID_ID   -4
 
-typedef struct {
-    KeyPair     keys;
-    Key         user_data_key;
-} UserCtx;
+struct Client;
 
-Vec* marshal_user_data_request(uint8_t* pub_key);
-UserCtx* create_user_ctx_from_login_response(uint8_t* buff, size_t len); 
+typedef int16_t ContextID;
 
+#define ID_CAP 32767
 
+struct Client* init_client_state();
 
-// CRYPTO
+ContextID client_new_context(struct Client* cli);
+void client_free_context(struct Client* cli, ContextID id);
 
-#define TAG_LEN 16
-typedef struct CryptCtx {
-    Key             remote;
-    Key             sym;
-    Nonce           nonce;
-    unsigned char   tag[TAG_LEN];
-    unsigned char*  AD;
-    size_t          AD_LEN;
-} CryptCtx;
-
-CryptCtx* new_crypto_ctx(UserCtx* user, uint8_t* head, size_t head_len);
-bool decrypt(CryptCtx* ctx, uint8_t* buf, size_t len);
-bool encrypt(CryptCtx* ctx, uint8_t* buf, size_t len);
-
+int client_parse_response(struct Client* cli, ContextID id, uint8_t* b, uint64_t l);
 
 #ifdef __cplusplus
 }
