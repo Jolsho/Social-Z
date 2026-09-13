@@ -5,14 +5,14 @@
  */
 
 #include "sz_client/client.h"
-#include "context.h"
-#include "parsers.h"
+#include "networking/context.h"
+#include "networking/parsers.h"
 #include <sodium.h>
 
 #define USER_DATA_REQUEST_SIZE      KEY_SIZE
 
 int marshal_get_user_data_request(
-    Client* cli, ContextID id, Key* pub_key
+    struct Client* cli, ContextID id
 ) {
     if (!valid_id(id)) return CLIENT_INVALID_ID;
 
@@ -20,24 +20,31 @@ int marshal_get_user_data_request(
     if (state->state != CON_IDLE) return CLIENT_CONN_BUSY;
 
 
-    Buffer* buff = &cli->send_buffers[id];
-    if (buffer_ensure_min_cap(cli, buff, USER_DATA_REQUEST_SIZE) != CLIENT_OK)
-        return CLIENT_ERR;
-    uint8_t* b = buff->b;
+    size_t cap = USER_DATA_REQUEST_SIZE;
+    uint8_t* bytes = buffer_pool_pop(&cli->pool, &cap);
+
+    Buffer buff = {
+        .b = bytes,
+        .cap = cap,
+        .size = 0,
+    };
 
 
-    memcpy(b, pub_key->b, KEY_SIZE);
-    b += KEY_SIZE;
-    buff->size += KEY_SIZE;
+
+    memcpy(buff.b, cli->keys.pub.b, KEY_SIZE);
+    buff.b += KEY_SIZE;
+    buff.size += KEY_SIZE;
 
     state->parser_id = PARSER_ID_USER_DATA;
     state->state = CON_SENDING;
+
+    // TODO => append to send buffers.
 
     return CLIENT_OK;
 }
 
 int parse_user_data(
-    Client* cli, ContextID id, 
+    struct Client* cli, ContextID id, 
     uint8_t* b, uint64_t len
 ) {
 

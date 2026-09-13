@@ -6,7 +6,7 @@
 #include "client.h"
 #include <stdlib.h>
 
-int parse_blob(Client* cli, ContextID id, uint8_t* b, uint64_t len) {
+int parse_blob(struct Client* cli, ContextID id, uint8_t* b, uint64_t len) {
     HashT h;
     StoreItem* item;
 
@@ -23,8 +23,6 @@ int parse_blob(Client* cli, ContextID id, uint8_t* b, uint64_t len) {
         item = store_assign_item(&cli->blob_store, &h, b, blob_size, &cli->pool);
         if (!item) return CLIENT_ERR;
     }
-
-
 
     return CLIENT_PARSE_DONE;
 }

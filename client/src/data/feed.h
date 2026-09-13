@@ -11,12 +11,12 @@
 #define FEED_OK     0
 #define FEED_ERR    -1
 
-typedef struct ItemIndex {
+typedef struct {
     uint32_t offset;
     uint32_t size;
 } ItemIndex;
 
-typedef struct Feed {
+typedef struct {
 
     // offsets and lengths into *data.
     ItemIndex*  index;
@@ -37,7 +37,7 @@ int feed_init(Feed* f, size_t min_item_len) {
 
     f->size = 0;
     f->cap = 100;
-    f->index = calloc(f->cap, sizeof(struct ItemIndex));
+    f->index = calloc(f->cap, sizeof(ItemIndex));
 
     f->data_size = 0;
     f->data_cap = min_item_len * f->cap;

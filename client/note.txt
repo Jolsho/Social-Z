@@ -1,0 +1,95 @@
+OPERATING ALGORITHM
+
+    Given Raw Data (Posts, Products, Threads, etc)
+    Create Entities when favorable to do so.
+        -> figure out when to pull data into ECS.
+        -> call some function which given data and parameters can do so.
+
+    Frustrum Cull Entities.
+    Sort Entites IDs.
+        -> decide what to render and organize them effeciently.
+
+    Render them effeciently.
+        -> call the backend render on those entites.
+        -> or maybe we do something like pipelines?
+        -> so render like they are VULKAN pipelines.
+
+
+
+RENDERER
+        VULKAN || OPENGL ?? (Desktop)
+        -> have to be able to compile for wasm or desktop
+
+
+IMAGES
+    Keep Compressed images in CPU cache.
+    -> know when things are approaching in the feed and load it.
+
+    -> Upload a subset to GPU.(Rendered each frame)
+
+    1024x1024 full resolution images
+        -> maybe 8 - 10 of them ==> 64 MiB
+        -> CPU cache of compressed images => 64 MiB 
+        TOTAL => 128 MiB
+
+    NOT SURE HOW TO HANDLE VIDEO BUT WE CAN FIGURE THAT OUT.
+
+
+
+
+
+GOING CLIENT CENTRIC FOR USER RELATED ACTION.
+SERVER PRIMARILY FOR PERSISTENCE, CONSENSUS, PROXIMITY.
+    ( Hold Personal Data, Represent Global State, Proxy The Network )
+
+    NO DB ACTOR
+        Server doesn't care about relational data.
+        Its all just cipher blobs.
+
+    VIRTUAL SPACE PARTITIONS FOR HOME USERS (mini parts for guests)
+        Guests will normally use this machine as a proxy to their own.
+        Home user clients handle their own cleanup.
+
+    FORWARD PACKETS THROUGH P2P Actors
+        Remote Machine just verifies requester is HOME USER.
+
+
+    FILE SYSTEM DATA STRUCTURES:
+
+        ( FEED || CHAT || MARKET ) BLOBS:
+            Chained together via IDs( UserKey, (thread kind), blob_idx ) makes it deterministic.
+            User data has starting blob indices.
+            You allocate a blob then fill it, then allocate the next sequentially.
+
+        PERMISSIONS:
+            Blobs of UNORDERED [ H(Perm) + (REC || GIV) ] (33 bytes). 
+                Blobs chained by IDs( UserKey, PERM(uint8), blob_idx )
+                Perm data stored under hash.
+            Retrieve blob, then request the specific perm data.
+                You then send the RECIEVED perms and hash to the remote node when posting.
+                Or revoke/append GIVE perms and send to remote node.
+                Create new blobs when necessary.
+
+        FINANCE DATA:
+            Custom data structure.
+            Probably has some header, and then history blobs.
+            Or something like that.
+
+
+
+SENDING A POST:
+    Generate Key for the post.
+    Hash and Encrypt Entire Post Meta, Media, Everything into a single blob.
+
+    Hash ( encrypted Post & Cleartext Hash), then sign it.
+    Send the encrypted Post & Cleartext Hash to server with signature.
+        Server then saves that encrypted data under that hash.
+
+    Take (key to encrypt, cleartext hash, and ciphertext hash).
+    Encrypt key and clearHash with shared(derived) key with desired recipient.
+    Send the encrypted key and hash along with the ciphertext hash and signature. 
+    And of course the appropriate permission.
+
+    Later the recipient can request the cleartext hash because they have permission to do so.
+    Or we do some voucher system to prevent constant access.
+

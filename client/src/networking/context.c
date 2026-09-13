@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-#include "context.h"
+#include "networking/context.h"
 
-int context_release_recv_buffer(Client* cli, ContextID id) {
+int context_release_recv_buffer(struct Client* cli, ContextID id) {
     if (!valid_id(id)) CLIENT_INVALID_ID;
 
     Buffer* b = &cli->recv_buffers[id];
@@ -19,7 +19,7 @@ int context_release_recv_buffer(Client* cli, ContextID id) {
     return CLIENT_OK;
 }
 
-int context_release_send_buffer(Client* cli, ContextID id) {
+int context_release_send_buffer(struct Client* cli, ContextID id) {
     if (!valid_id(id)) CLIENT_INVALID_ID;
 
     Buffer* b = &cli->send_buffers[id];
@@ -33,7 +33,7 @@ int context_release_send_buffer(Client* cli, ContextID id) {
 }
 
 int buffer_ensure_min_cap(
-    Client* cli, Buffer* buff, uint32_t minimum
+    struct Client* cli, Buffer* buff, uint32_t minimum
 ) {
 
     if (buff->b && buff->cap < minimum) {

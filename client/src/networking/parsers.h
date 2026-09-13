@@ -8,13 +8,13 @@
 #include "client.h"
 
 #define PARSER_ID_USER_DATA 1
-int parse_user_data(Client* cli, ContextID id, uint8_t* b, uint64_t len);
+int parse_user_data(struct Client* cli, ContextID id, uint8_t* b, uint64_t len);
 
 #define PARSER_ID_POST_FEED 2
-int parse_post_feed_response(Client* cli, ContextID id, uint8_t* b, uint64_t len);
+int parse_post_feed_response(struct Client* cli, ContextID id, uint8_t* b, uint64_t len);
 
 #define PARSER_ID_BLOB 3
-int parse_blob(Client* cli, ContextID id, uint8_t* b, uint64_t len);
+int parse_blob(struct Client* cli, ContextID id, uint8_t* b, uint64_t len);
 
 
 #define PARSER_ID_CAP 4

@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "buffers.h"
+#include "utils/buffers.h"
 
 
 typedef struct BufferNode {
@@ -105,16 +105,19 @@ uint8_t *buffer_pool_pop(BufferPool *pool, size_t* size)
 
 
 int
-buffer_pool_push(BufferPool *pool, void *buffer, size_t size)
+buffer_pool_push(BufferPool *pool, void *buffer, size_t cap)
 {
     /*
      * `size` is the bucket size, not necessarily the original
      * requested size.
      */
+
+    if (pool->buckets[BUFFER_BUCKETS - 1].buffer_size < cap) return -1;
+
     for (size_t i = 0; i < BUFFER_BUCKETS; ++i) {
         BufferBucket *bucket = &pool->buckets[i];
 
-        if (bucket->buffer_size != size)
+        if (bucket->buffer_size != cap)
             continue;
 
         BufferNode *node = buffer;

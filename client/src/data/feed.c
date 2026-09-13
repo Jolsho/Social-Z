@@ -28,16 +28,16 @@ int feed_append(
 
     if (f->cap - f->size == (len / min_item_len)) {
         f->cap += (len / min_item_len);
-        uint8_t* new_idx = calloc(f->cap, sizeof(struct ItemIndex));
+        uint8_t* new_idx = calloc(f->cap, sizeof(ItemIndex));
         if (!new_idx) {
             memset(f->data + (f->data_size - len), 0, len);
             f->data_size -= len;
             return FEED_ERR;
         }
 
-        memcpy(new_idx, f->index, f->size * sizeof(struct ItemIndex));
+        memcpy(new_idx, f->index, f->size * sizeof(ItemIndex));
         free(f->index);
-        f->index = (struct ItemIndex*) new_idx;
+        f->index = (ItemIndex*) new_idx;
     }
 
 
@@ -47,8 +47,8 @@ int feed_append(
         b += size;
         len -= size;
 
-        struct ItemIndex* prev = f->index + (f->size - 1);
-        struct ItemIndex* curr = f->index + (f->size);
+        ItemIndex* prev = f->index + (f->size - 1);
+        ItemIndex* curr = f->index + (f->size);
         curr->offset = prev->offset + prev->size;
         curr->size = size;
         f->size++;

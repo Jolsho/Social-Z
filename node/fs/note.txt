@@ -1,0 +1,19 @@
+
+PERMISSIONS:
+    What if permissions had a sequence number next to them (Not inside them)
+    Each time person uses the perm they increment seq_num and sign (perm + seq_num).
+        Then we can check when retrieving perm via hash.
+        If bad signature or seq_num wrong we know its bad actor.
+    Otherwise update that seq_num in perm.
+        The prevents people from using those to take up memory/time.
+        Because currently we bring in the entire blob and then hash it.
+        That just allows for more data to be loaded.
+
+    ? Also seq_num lets us link blobs to perms. (IF NECESSARY, MIGHT NOT BE)
+        Prefix each blob with the sequence number.
+        And have that be apart of the blob hash and signature.
+
+    This stuff add some book keeping.
+    Which I don't quite like, but I think we can make it work.
+    The amount of time/memory to do the book keeping might be worth the risk.
+    Especially if we can optimize the DB a bit better.

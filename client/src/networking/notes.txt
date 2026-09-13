@@ -1,0 +1,26 @@
+
+
+
+    The order is 
+      create_context -> marshal -> ?encrypt -> send
+      ?decrypt -> validate -> parse -> ?close
+
+    --------------------------------------------
+
+    marshal_next_feed_page_request(Client*, uint8_t*, size_t)
+    parse_feed_page_response(Client*, uint8_t*, size_t)
+
+    marshal_next_feed_reipient_request(Client*, uint8_t*, size_t)
+    parse_feed_recipient_response(Client*, uint8_t*, size_t)
+
+    marshal_blob_request(Client*, HashT*, uint8_t*, size_t)
+    parse_blob_response(Client*, uint8_t*, size_t)
+
+
+    --------------------------------------------
+
+    Connection_ID
+      -> State
+      -> Last_Used
+      -> Parser
+

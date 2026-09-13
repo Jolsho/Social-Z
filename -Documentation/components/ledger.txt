@@ -1,0 +1,87 @@
+So ledger is going to be re-written entirely.
+Not using blst, going to build a Pasta library for doing this stuff.
+
+
+ANATOMY 
+
+    Each shard is 2^15 accounts = 2^16 slots
+    A shard is a polynomial of degree 2^16
+
+    One should keep track of what index their account is in.
+    Accounts are assigned places sequentially.
+
+    Each person tracks can track multiple shards.
+    The record every transaction and will commit to the state when their time comes.
+
+
+    ACCOUNT ENTRY:
+        [ Key,  $(8) | META(8) | IP6(16) ]
+            META: Version(1), Role(1), Trust_Score(2), USER_ZEROS(4)
+                -> use USER_ZEROS to determine USER vs HASH entry
+
+    HASH ENTRY:
+        [ H( Key, Encrypt($) ) ]
+        [ H( Contract, Param ) ]
+
+
+    
+    users * slots   = degree
+    32,768 * 4      = 131,072
+    32,768 * 2      = 65,536
+    65,536 * 2      = 131,072
+
+
+    All of these are referenced by IDs(uint64).
+    You recieve the ID from the user.
+    So like you keep track of the ID for the storage slot of this person.
+    And the person can give different IDs depending on what they need.
+
+    You then multiply that times (32*2) to get the global offset.
+    but then % shard size to get the offset within the shard.
+
+    Generally Ledger has two slot strides
+        For hash entry use first bit of ID to decide A, or B in the 2 slot stride
+
+    Maybe the first contract is finding out how to create a new account.
+    Like maybe you have to be assigned to a specific shard?
+    Everyone in the shard has the same first THREE bytes.
+    Those three bytes tell you which shard they are in.
+        Is that useful?
+
+------------------------------------------------
+
+FUNCTIONALY
+
+    A block is proposed every 24 seconds.
+    Each block slot has a commity of voters for each shard.
+    Those voters vote on the commitement to that shard once the block is processed.
+    This continues on for 32 blocks.
+    Every person does compute state root at every slot.
+    So every 24 seconds. could bump that up, and increase block size.
+        Since its logarithmic this should be useful.
+
+    At the end of that epoch a new commity is chosen.
+    They then vote on the root commitment.
+    Everyone derives that root commitment from what they see as the heaviest.
+
+
+    TIME SLOTS
+        Each Shard has a commitee for each time slot.
+        Everyone commits each block. (Validate/invalidate blocks this way.)
+
+        You dont choose one proposer globally.
+        You choose one from each shard.
+        They then all choose a block together.
+        Which they then execute their share, and derive a new root.
+        They do this together and then release the block along with the gloabl commitment, and the local one.
+            Then anyone can prove their representative did it wrong if they want.
+            If they do that entire branch is shot, and the proposer loses its money.
+
+    The hard part is getting all that data into the right hands quickly
+    And being able to aggregate attestations rapidly.
+        There will need to be some structure for doing so.
+        So as to keep data transmission at something like log10(n) complexity
+    Because this means every 24 seconds there is a new state transition.
+    This means all that voting and shit has to happen pretty quickly.
+
+------------------------------------------------

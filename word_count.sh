@@ -4,6 +4,8 @@
 find . \
   \( -path './build' -o \
      -path './install' -o \
+     -path './-Development' -o \
+     -path './-Documentation' -o \
      -path './web_ui/node_modules' -o \
      -path './web_ui/dist' -o \
      -path './wasm_install' -o \
@@ -29,4 +31,4 @@ find . \
 # 7/07/26 = 17,985
 # 7/21/26 = 18,469
 
-# 8/28/26 = 20,050
+# 9/01/26 = 17,504

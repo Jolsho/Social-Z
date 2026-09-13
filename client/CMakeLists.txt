@@ -12,6 +12,11 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 
 endif()
 
+if (NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "wasm32")
+
+
+endif()
+
 
 file(GLOB_RECURSE CLIENT_SRCS CONFIGURE_DEPENDS "src/*.c")
 

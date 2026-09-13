@@ -12,7 +12,7 @@ See LICENSE for the full license text.
 
     What does economic affiliation mean?
     In the modern world economics refers to the allocation of scarce resources generally.
-    To affiliate in this sense is to agree or cooperate with others who share how they want to allocate those resources.
+    To affiliate in this sense is to cooperate with others who share how they want to allocate those resources.
 
     Currently affiliation is dictated by ones existence within physical boundaries (state lines). 
     But there is no more land free from this, so there is a false sense of choice. (Maybe beside the point). 
@@ -33,7 +33,7 @@ See LICENSE for the full license text.
     Also all the traffic is encrypted, meaning it is unintelligble even if intercepted.
     There are even ways to obfuscate who one is communicating with entirely through onion routing.
 
-    Now, Before going deeper into technical spec I want to talk about what an economy is and how can we do this virtually.
+    Now, Before going deeper into technical specs I want to talk about what an economy is and how can we do this virtually.
     One of the cornerstones of an efficient and resilient economy is a currency. 
     Since people don’t have access to printing presses and distribution infrastructure you need digital currencies.
 
@@ -45,7 +45,7 @@ See LICENSE for the full license text.
 
     Taxes are of course some inevitable force, and within a digital economy like this taxes are programmed.
     So a currency can be programmed such that every transaction can automatically taxed without any paperwork at all.
-    The essential information from the marketplace post you clicked purchaseon can be used to determine what kind of tax.
+    The essential information from the marketplace post you clicked purchase on can be used to determine what kind of tax.
     And it can be done before it ever hits the sellers account.
 
     Now in a world where one does not have freedom of economic affiliation things like digital currencies and automated taxes

@@ -5,10 +5,10 @@
  */
 
 #pragma  once
+#include "input/input.h"
 #include "sz_client/client.h"
 #include "utils/store.h"
 #include "data/feed.h"
-
 
 #ifdef NATIVE
 
@@ -26,46 +26,27 @@
 
 #endif
 
-/*
- *  The order is 
- *      create_context -> marshal -> ?encrypt -> send
- *      ?decrypt -> validate -> parse -> ?close
- *
- *  --------------------------------------------
- *
- *  marshal_next_feed_page_request(Client*, uint8_t*, size_t)
- *  parse_feed_page_response(Client*, uint8_t*, size_t)
- *
- *  marshal_next_feed_reipient_request(Client*, uint8_t*, size_t)
- *  parse_feed_recipient_response(Client*, uint8_t*, size_t)
- *
- *  marshal_blob_request(Client*, HashT*, uint8_t*, size_t)
- *  parse_blob_response(Client*, uint8_t*, size_t)
- *
- *
- *  --------------------------------------------
- *
- *  Connection_ID
- *      -> State
- *      -> Last_Used
- *      -> Parser
- */
 
 typedef int (*Parser) (struct Client* cli, ContextID id, uint8_t* b, uint64_t l);
 
-typedef struct __attribute__((packed)) Buffer {
+typedef struct __attribute__((packed)) {
     uint8_t*    b;
     uint32_t    cap;
     uint32_t    size;
 }Buffer;
 
-typedef struct __attribute__((packed)) ConState {
+typedef struct __attribute__((packed)) {
     uint8_t     state;
     uint8_t     parser_id;
+
+#ifndef PLATFORM_WASM
+    int         fd;
+#endif
+
 } ConState;
 
 
-typedef struct Client {
+struct Client {
     ///////////// USER //////////////
     KeyPair     keys;
     Key         data_key;
@@ -79,10 +60,10 @@ typedef struct Client {
     BufferPool  pool;
 
 
-    /////////// CONTEXTS ///////////
+    /////////// NETWORKING ///////////
 
     /* IDs */
-    ContextID*  ids;
+    ContextID*  ids; // TODO -> REUSE ConState for freeLIST
     uint16_t    ids_size;
 
     /* Components */
@@ -99,4 +80,18 @@ typedef struct Client {
 
     ///////////////////////////////
 
-} Client;
+    InputState  input;
+
+};
+
+#if defined(PLATFORM_LINUX) || defined(PLATFORM_MACOS)
+#include "sys/socket.h"
+
+inline void send_request(Client* cli, ContextID id, Buffer* b) {
+
+    // TODO --> this is very naive. You need to enqueue these things.
+
+    uint64_t n = send(cli->states[id].fd, b->b, b->size, 0);
+    buffer_pool_push(&cli->pool, b->b, b->cap);
+}
+#endif

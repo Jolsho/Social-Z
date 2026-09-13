@@ -13,7 +13,9 @@
 
 void _destroy_store_item_callback(void* ctx, void* itemp) {
     StoreItem* si = itemp;
-    buffer_pool_push(si->pool, si->b, si->size);
+    if (si->b && buffer_pool_push(si->pool, si->b, si->size) < 0) {
+        free(si->b);
+    }
     memset(si, 0, sizeof(StoreItem));
 }
 
