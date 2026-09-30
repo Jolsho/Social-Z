@@ -29,6 +29,9 @@ Use `ctest --preset tests -N` to list the registered tests after configuring.
 An empty selection reports an error rather than a successful test run.
 The existing ledger tests are not included in this setup.
 
+The store eviction test prepares its own table storage to isolate eviction behavior.
+It does not validate `store_setup()` or the hash table allocator, which have separate known defects.
+
 ## Memory checks
 
 For GCC or Clang builds, use the sanitizer preset.

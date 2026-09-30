@@ -37,7 +37,8 @@ typedef struct StoreItem {
 
 int store_setup(Store* s, uint64_t max_memory);
 
-// Takes ownership of uint8_t *b and stores in a hash table
+// Takes ownership of uint8_t *b on success; the caller keeps ownership on failure.
+// Items larger than the store's memory limit are rejected.
 StoreItem* store_assign_item(
     Store* s, HashT* h, 
     uint8_t* b, uint64_t size,

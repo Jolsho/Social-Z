@@ -60,6 +60,7 @@ StoreItem* store_assign_item(
     uint8_t* b, uint64_t size,
     BufferPool* pool
 ) {
+    if (size > s->mem_max) return NULL;
 
     if (s->counter == 0) s->counter = UINT64_MAX / 2;
 
@@ -89,6 +90,7 @@ StoreItem* store_assign_item(
 
 StoreItem* store_get_item(Store* s, HashT* h) {
     StoreItem* si = HT_LOOKUP_AS(StoreItem, &s->table, h);
+    if (!si) return NULL;
 
     if (s->counter == 0) s->counter = UINT64_MAX / 2;
     uint64_t new_prio = s->counter++;
@@ -152,11 +154,11 @@ int store_copy_from_item(
 }
 
 void store_evict(Store* s) {
-    while (s->mem < s->mem_max && !pq_is_empty(&s->pq)) {
+    while (s->mem > s->mem_max && !pq_is_empty(&s->pq)) {
         PQNode node;
-        assert(pq_pop(&s->pq, &node) > 0);
+        if (!pq_pop(&s->pq, &node)) break;
 
-        StoreItem* item = store_get_item(s, &node.h);
+        StoreItem* item = HT_LOOKUP_AS(StoreItem, &s->table, &node.h);
         if (!item || item->priority != node.priority) continue;
 
         s->mem -= item->size;
