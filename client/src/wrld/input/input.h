@@ -6,7 +6,7 @@
  */
 
 #pragma once
-#include "input/keys.h"
+#include "wrld/input/keys.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -29,4 +29,7 @@ typedef struct {
     uint64_t    keys_released[2]; // released this frame
 } InputState;
 
-bool input_button_is_pressed(InputState* in, BUTTON btn);
+bool input_button_was_pressed(InputState* in, BUTTON btn);
+bool input_key_was_pressed(InputState* in, KeyCode key);
+bool input_button_was_released(InputState* in, BUTTON btn);
+bool input_key_was_released(InputState* in, KeyCode key);

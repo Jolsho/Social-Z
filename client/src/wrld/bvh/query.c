@@ -3,49 +3,58 @@
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
-#include "ecs/bvh/bvh.h"
-#include <math.h>
+#include "sz_common/pqueue.h"
+#include "wrld/bvh/bvh.h"
 
-EntityID bvh_raycast(const BVH* bvh, Ray ray) {
+typedef struct {
+    BVHNodeID   id;
+    float       t;
+} Hit;
 
-    float closes_t = INFINITY;
-    EntityID id = ENTITY_ID_INVALID;
+int compare_hit(void* n1, void* n2) {
+    int dif = ((Hit*)n1)->t - ((Hit*)n2)->t;
+    if (dif > 0) return 1;
+    else if (dif < 0) return -1;
+    return 0;
+}
 
-    uint32_t stack[64];
-    uint32_t stack_size = 0;
+void bvh_raycast(const BVH* bvh, Ray ray, EntityID* hits, size_t* hit_cnt) {
+    size_t hit_cap = *hit_cnt;
+    *hit_cnt = 0;
+
+    PriorityQueue queue;
+    pq_init(&queue, sizeof(Hit), 64, compare_hit);
+
+    float t_far;
+    Hit curr, child;
+    curr.id = bvh->root;
+
+    pq_push(&queue, &curr);
 
     BVHNode* node;
-    uint32_t index;
-    float t_near, t_far;
+    while (!pq_is_empty(&queue) && (hit_cap - 1) > *hit_cnt) {
 
-    stack[stack_size++] = bvh->root;
+        pq_pop(&queue, &curr);
 
-    while (stack_size) {
-        index = stack[--stack_size];
-
-        node = &bvh->nodes[index];
-
-
-        if (!aabb_ray_intersect(node->bounds, ray, &t_near, &t_far))
-            continue;
-
-        /*
-         * Already have something closer.
-         * This entire node cannot produce a better result.
-         */
-        if (t_near > closes_t) continue;
-
+        node = &bvh->nodes[curr.id];
         if (_bvh_node_is_leaf(node)) {
-            closes_t = t_near;
-            id = node->entity;
+            hits[*hit_cnt] = node->entity;
+            (*hit_cnt)++;
             continue;
         }
 
-        stack[stack_size++] = node->left;
-        stack[stack_size++] = node->right;
+        child.id = bvh->nodes[curr.id].left;
+        if (aabb_ray_intersect(bvh->nodes[child.id].bounds, ray, &child.t, &t_far)) {
+            pq_push(&queue, &child);
+        }
+
+        child.id = bvh->nodes[curr.id].right;
+        if (aabb_ray_intersect(bvh->nodes[child.id].bounds, ray, &child.t, &t_far)) {
+            pq_push(&queue, &child);
+        }
     }
 
-    return id;
+    return;
 }
 
 void bvh_query_aabb(

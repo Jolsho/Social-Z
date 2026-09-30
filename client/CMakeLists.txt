@@ -12,11 +12,6 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 
 endif()
 
-if (NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "wasm32")
-
-
-endif()
-
 
 file(GLOB_RECURSE CLIENT_SRCS CONFIGURE_DEPENDS "src/*.c")
 
@@ -30,6 +25,7 @@ target_include_directories(client
         $<INSTALL_INTERFACE:include>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/deps
 )
 
 target_link_libraries(client PRIVATE common)
@@ -37,3 +33,13 @@ target_link_libraries(client PRIVATE common)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/sz_client DESTINATION include)
 
 install(TARGETS client ARCHIVE DESTINATION lib)
+
+if (NOT ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "wasm32")
+
+    find_package(OpenGL REQUIRED)
+    find_package(glfw3 REQUIRED)
+
+    target_link_libraries(client PRIVATE glfw OpenGL)
+
+endif()
+

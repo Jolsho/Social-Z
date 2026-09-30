@@ -5,8 +5,8 @@
  */
 
 #pragma  once
-#include "input/input.h"
-#include "sz_client/client.h"
+#include "wrld/wrld.h"
+#include "netwrk/networker.h"
 #include "utils/store.h"
 #include "data/feed.h"
 
@@ -27,61 +27,26 @@
 #endif
 
 
-typedef int (*Parser) (struct Client* cli, ContextID id, uint8_t* b, uint64_t l);
-
-typedef struct __attribute__((packed)) {
-    uint8_t*    b;
-    uint32_t    cap;
-    uint32_t    size;
-}Buffer;
-
-typedef struct __attribute__((packed)) {
-    uint8_t     state;
-    uint8_t     parser_id;
-
-#ifndef PLATFORM_WASM
-    int         fd;
-#endif
-
-} ConState;
-
-
 struct Client {
     ///////////// USER //////////////
-    KeyPair     keys;
-    Key         data_key;
+    KeyPair         keys;
+    Key             data_key;
 
     ///////// DATA STORES ///////////
-    Feed        post_feed;
-    Store       blob_store;
+    Feed            post_feed;
+    Store           blob_store;
 
 
     /////////// BUFFERS /////////////
-    BufferPool  pool;
+    BufferPool      pool;
 
 
-    /////////// NETWORKING ///////////
+    /////////// NETWORKING /////////////
+    Networker       net;
 
-    /* IDs */
-    ContextID*  ids; // TODO -> REUSE ConState for freeLIST
-    uint16_t    ids_size;
 
-    /* Components */
-    ConState*   states;
-    uint32_t*   since_used_last;
-
-    /* Buffers */
-    Buffer*     recv_buffers;
-    Buffer*     send_buffers;
-
-    /* Parsers */
-    Parser*     parsers;
-    uint16_t    parsers_count;
-
-    ///////////////////////////////
-
-    InputState  input;
-
+    /////////// ECS WORLD STATE /////////////
+    World           wrld;
 };
 
 #if defined(PLATFORM_LINUX) || defined(PLATFORM_MACOS)

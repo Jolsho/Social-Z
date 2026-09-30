@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-#include "ecs/bvh/bvh.h"
+#include "wrld/bvh/bvh.h"
 #include <string.h>
 
 BVHNodeID _bvh_alloc_node(BVH *bvh) {

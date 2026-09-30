@@ -30,7 +30,6 @@ struct Client* init_client();
 
 /// An ID for an abstraction over a connection.
 typedef int16_t ContextID;
-#define ID_CAP 32767
 
 
 /// Buffer is used as a reference to WASM buffers.
@@ -58,14 +57,13 @@ void input_press_key(struct InputState*, uint8_t key);
 void input_release_key(struct InputState*, uint8_t key);
 void input_reset(struct InputState*);
 
+
 /* UI STATE & RENDERER */
 void client_set_input_state(struct Client*, struct InputState*);
-void client_update_state(struct Client*);
+bool client_update_wrld(struct Client*);
 void client_render_frame(struct Client*);
 
 /*
- *  TODO =>
- *
  *      JS IMPLEMENTATION
  *      -------------------
  *

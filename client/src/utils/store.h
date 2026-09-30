@@ -22,7 +22,7 @@ extern "C" {
 
 typedef struct Store {
     HashTable       table;
-    PriorityQueue*  pq;
+    PriorityQueue   pq;
     uint64_t        counter;
     uint64_t        mem;
     uint64_t        mem_max;

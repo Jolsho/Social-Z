@@ -5,63 +5,71 @@
  */
 
 #pragma once
-#include "ecs/bvh/bvh.h"
-#include "input/input.h"
-#include <stdint.h>
+#include "wrld/camera.h"
+#include "wrld/input/input.h"
+#include "sz_client/client.h"
+#include "wrld/bvh/bvh.h"
 
-struct World;
+typedef void (*HandleFn) (EntityID, struct Client*);
+typedef struct {
+    HandleFn key_pres;
+    HandleFn click;
+    HandleFn hover;
+    HandleFn update;
+    HandleFn destroy;
+} Handler;
+
+
+typedef enum {
+    MEDIA = 0,
+    THREAD,
+    MARKET,
+    TWO_DIM,
+
+    DEFAULT,
+
+    THREE_DIM,
+} ViewState;
+
+typedef struct {
+
+    int     scroll_height;
+    int     anchor_item_idx;
+
+} ScrollState;
 
 
 typedef struct {
-    void (*click)   (EntityID, InputState*, struct World*);
-    void (*destroy) (EntityID, struct World*);
-    void (*update)  (EntityID, struct World*);
-    void (*hover)   (EntityID, InputState*, struct World*);
-} Handler;
+    BVH         bvh;
+    Handler     handlers[MAX_HANDLER_ID];
+    
+    InputState  input;
 
-struct World {
-    struct Posts*   posts;
-    struct People*  people;
+    Camera      camera;
+    float       screen_x;
+    float       screen_y;
 
-    Handler         handlers[MAX_HANDLER_ID];
+    EntityID    focused;
 
-};
+    ViewState   view_state;
 
+    ScrollState scrolls[TWO_DIM];
 
-static void find_and_queue_mouse_click(struct World* w, BVH* bvh, InputState* in) {
-    HandlerID h_id;
-    GlobalID g_id;
-    Ray r;
+} World;
 
-    // TODO -> find r given in->mouse
+int wrld_init(World* wrld);
 
-    EntityID id = bvh_raycast(bvh, r);
-
-    if ((g_id = entity_global(id)) == 0) return;
-
-    if ((h_id = entity_handler(id)) < MAX_HANDLER_ID) {
-
-        Handler h = w->handlers[h_id];
-
-        if (in->mouse.btns_pressed > 0) {
-            if (h.click != NULL)
-                h.click(id, in, w);
-        }
-
-        if (h.hover != NULL) 
-            h.hover(id, in, w);
-    }
+static inline void wrld_register_handler(World* wrld, uint8_t h_idx, Handler h) {
+    wrld->handlers[h_idx] = h;
 }
 
+static inline int wrld_new_entity(World* wrld, EntityID eid, AABB bounds) {
+    if (!bvh_insert(&wrld->bvh, eid, bounds, 0.0f)) return CLIENT_ERR;
+    return CLIENT_OK;
+}
+
+
 /*
- *  Logical position is an offset within the feed we keep track of exactly.
- *
- *
- *  We cache a pair which is an object index and its logical offset.
- *      then we can navigate from that to the updated offset.
- *      and if we go over an entire post we can cache that posts offset & index.
- *
- *
  *  What are the data types though?
  *      Everything is an entity.
  *      Only entitize the "visible" buffer of posts.

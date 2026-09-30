@@ -5,8 +5,8 @@
  */
 
 #include "sz_client/client.h"
-#include "networking/context.h"
-#include "networking/parsers.h"
+#include "netwrk/context.h"
+#include "netwrk/parsers.h"
 
 #define GET_POST_REQUEST_SIZE   KEY_SIZE + sizeof(int)
 
@@ -16,7 +16,7 @@ int marshal_get_post_request(
     if (!valid_id(id)) return CLIENT_INVALID_ID;
 
 
-    ConState* s = &cli->states[id];
+    ConState* s = &cli->net.states[id];
     if (s->state != CON_IDLE) 
         return CLIENT_CONN_BUSY;
 

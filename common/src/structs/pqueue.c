@@ -5,21 +5,24 @@
  */
 
 #include "sz_common/pqueue.h"
+#include <string.h>
 #include <stdlib.h>
 
-static void pq_swap(PQNode *a, PQNode *b)
+static void pq_swap(uint8_t *a, uint8_t *b, size_t node_size)
 {
-    PQNode tmp = *a;
-    *a = *b;
-    *b = tmp;
+    while (node_size--) {
+        unsigned char tmp = *a;
+        *a++ = *b;
+        *b++ = tmp;
+    }
 }
 
-int pq_init(PriorityQueue *pq, size_t initial_capacity)
+int pq_init(PriorityQueue *pq, size_t size_of_node, size_t initial_capacity, CompareNode cmp)
 {
     if (initial_capacity == 0)
         initial_capacity = 16;
 
-    pq->nodes = malloc(initial_capacity * sizeof(PQNode));
+    pq->nodes = malloc(initial_capacity * size_of_node);
     if (!pq->nodes)
         return 0;
 
@@ -42,13 +45,12 @@ static int pq_grow(PriorityQueue *pq)
 {
     size_t new_capacity = pq->capacity * 2;
 
-    PQNode *new_nodes = realloc(
+    uint8_t *new_nodes = realloc(
         pq->nodes,
-        new_capacity * sizeof(PQNode)
+        new_capacity * pq->size_of_node
     );
 
-    if (!new_nodes)
-        return 0;
+    if (!new_nodes) return 0;
 
     pq->nodes = new_nodes;
     pq->capacity = new_capacity;
@@ -56,7 +58,7 @@ static int pq_grow(PriorityQueue *pq)
     return 1;
 }
 
-int pq_push(PriorityQueue *pq, uint64_t priority, HashT *h)
+int pq_push(PriorityQueue *pq, void* node)
 {
     if (pq->len == pq->capacity) {
         if (!pq_grow(pq))
@@ -65,20 +67,22 @@ int pq_push(PriorityQueue *pq, uint64_t priority, HashT *h)
 
     size_t i = pq->len++;
 
-    pq->nodes[i] = (PQNode) {
-        .priority = priority,
-        .h = *h
-    };
+    memcpy(pq->nodes + (i * pq->size_of_node), node, pq->size_of_node);
+
+    uint8_t tmp[pq->size_of_node];
 
     /* Bubble upward. */
     while (i > 0) {
         size_t parent = (i - 1) / 2;
 
+        uint8_t* p_node = pq->nodes + (parent * pq->size_of_node);
+        uint8_t* node = pq->nodes + (i * pq->size_of_node);
+
         // if parent prio is less than this stop
-        if (pq->nodes[parent].priority <= pq->nodes[i].priority)
+        if (pq->cmp(p_node, node) <= 0)
             break;
 
-        pq_swap(&pq->nodes[parent], &pq->nodes[i]);
+        pq_swap(p_node, node, pq->size_of_node);
 
         i = parent;
     }
@@ -86,27 +90,23 @@ int pq_push(PriorityQueue *pq, uint64_t priority, HashT *h)
     return 1;
 }
 
-PQNode *pq_peek(PriorityQueue *pq)
+void* pq_peek(PriorityQueue *pq)
 {
     if (pq->len == 0)
         return NULL;
-
-    return &pq->nodes[0];
+    return pq->nodes;
 }
 
-PQNode pq_pop(PriorityQueue *pq)
+int pq_pop(PriorityQueue *pq, void* node)
 {
-    PQNode result = {0};
-
     if (pq->len == 0)
-        return result;
+        return 0;
 
-    result = pq->nodes[0];
+    memcpy(node, pq->nodes, pq->size_of_node);
 
     pq->len--;
 
-    if (pq->len == 0)
-        return result;
+    if (pq->len == 0) return 1;
 
     pq->nodes[0] = pq->nodes[pq->len];
 
@@ -119,22 +119,26 @@ PQNode pq_pop(PriorityQueue *pq)
         size_t smallest = i;
 
         if (left < pq->len &&
-            pq->nodes[left].priority < pq->nodes[smallest].priority)
+            pq->cmp(pq->nodes + (left * pq->size_of_node), 
+                    pq->nodes + (smallest * pq->size_of_node)
+                    ) < 0)
             smallest = left;
 
         if (right < pq->len &&
-            pq->nodes[right].priority < pq->nodes[smallest].priority)
+            pq->cmp(pq->nodes + (right * pq->size_of_node), 
+                    pq->nodes + (smallest * pq->size_of_node)
+                    ) < 0)
             smallest = right;
 
         if (smallest == i)
             break;
 
-        pq_swap(&pq->nodes[i], &pq->nodes[smallest]);
+        pq_swap(pq->nodes + (i * pq->size_of_node), pq->nodes + (smallest * pq->size_of_node), pq->size_of_node);
 
         i = smallest;
     }
 
-    return result;
+    return 1;
 }
 
 size_t pq_size(const PriorityQueue *pq) {

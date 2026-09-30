@@ -5,8 +5,8 @@
  */
 
 #include "sz_client/client.h"
-#include "networking/context.h"
-#include "networking/parsers.h"
+#include "netwrk/context.h"
+#include "netwrk/parsers.h"
 #include <sodium.h>
 
 #define USER_DATA_REQUEST_SIZE      KEY_SIZE
@@ -16,7 +16,7 @@ int marshal_get_user_data_request(
 ) {
     if (!valid_id(id)) return CLIENT_INVALID_ID;
 
-    ConState* state = &cli->states[id];
+    ConState* state = &cli->net.states[id];
     if (state->state != CON_IDLE) return CLIENT_CONN_BUSY;
 
 

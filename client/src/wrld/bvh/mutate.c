@@ -3,9 +3,9 @@
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
-#include "ecs/bvh/bvh.h"
+#include "wrld/bvh/bvh.h"
 
-bool bvh_insert(BVH *bvh, EntityID entity, AABB bounds) {
+bool bvh_insert(BVH *bvh, EntityID entity, AABB bounds, float margin) {
     uint32_t g_id = entity_global(entity);
 
     if (bvh->entity_to_leaf[g_id] != BVH_NULL) return false;
@@ -16,7 +16,7 @@ bool bvh_insert(BVH *bvh, EntityID entity, AABB bounds) {
 
     BVHNode *node = &bvh->nodes[leaf];
 
-    node->bounds = aabb_fatten(bounds, 0.1f);
+    node->bounds = aabb_fatten(bounds, margin);
     node->parent = BVH_NULL;
     node->left   = BVH_NULL;
     node->right  = BVH_NULL;

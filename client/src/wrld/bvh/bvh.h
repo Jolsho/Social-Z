@@ -5,7 +5,7 @@
  */
 
 #pragma once
-#include "ecs/id.h"
+#include "wrld/id.h"
 #include "math/aabb.h"
 #include "math/frustrum.h"
 #include <stdint.h>
@@ -39,13 +39,13 @@ typedef struct {
     BVHNodeID   free_list;
 } BVH;
 
-bool bvh_insert(BVH*, EntityID, AABB);
+int bvh_init(BVH*);
+
+bool bvh_insert(BVH*, EntityID, AABB, float margin);
 bool bvh_remove(BVH*, EntityID);
 bool bvh_update(BVH*, EntityID, AABB);
 
-EntityID bvh_raycast(const BVH*, Ray);
-// could just chain these calls together for collats.
-// just change origin to persons back. using t_far.
+void bvh_raycast(const BVH* bvh, Ray ray, EntityID* hits, size_t* hit_cnt);
 
 
 // TODO -> these individually used callbacks arent right.

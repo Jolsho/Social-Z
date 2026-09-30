@@ -28,7 +28,10 @@ struct Client* init_client_state() {
         return NULL;
     }
 
-    memset(&cs->input, 0, sizeof(cs->input));
+    if (wrld_init(&cs->wrld) != CLIENT_OK) {
+        free(cs);
+        return NULL;
+    }
 
     return cs;
 }
@@ -37,19 +40,14 @@ void start_client() {
     struct Client* cli = init_client_state();
 
     for (;;) {
-
-        // TODO -> capture input and update cli->input
-
-        client_update_state(cli);
+        if (!client_update_wrld(cli)) break;
         client_render_frame(cli);
     }
 }
 
-void client_update_state(struct Client* cli) {
-    // TODO -> RUN SOME CHECKS TO SEE WHAT IS GOING ON HERE
-    // like update the fucking state...
-}
-
 void client_render_frame(struct Client* client) {
     // TODO
+    //  frustrum culling.
+    //  order entities into groups.
+    //  render groups.
 }

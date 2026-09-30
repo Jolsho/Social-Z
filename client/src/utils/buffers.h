@@ -10,6 +10,12 @@
 
 #define BUFFER_BUCKETS 3
 
+typedef struct __attribute__((packed)) {
+    uint8_t*    b;
+    uint32_t    cap;
+    uint32_t    size;
+}Buffer;
+
 typedef struct BufferBucket {
     uint32_t buffer_size;
     uint32_t capacity;

@@ -1,6 +1,7 @@
 #ifndef VEC3_H
 #define VEC3_H
 
+#include <math.h>
 typedef struct {
     float v[3];
 } Vec3;
@@ -50,5 +51,17 @@ static inline Vec3 vec3_cross(Vec3 a, Vec3 b) {
 static inline float vec3_length_squared(Vec3 v) {
     return vec3_dot(v, v);
 }
+
+static inline Vec3 vec3_normalize(Vec3 v)
+{
+    float len = sqrtf(vec3_dot(v, v));
+
+    if (len == 0.0f)
+        return (Vec3){0};
+
+    return vec3_mul(v, 1.0f / len);
+}
+
+
 
 #endif

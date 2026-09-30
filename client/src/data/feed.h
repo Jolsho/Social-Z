@@ -5,7 +5,7 @@
  */
 
 #pragma once
-#include "sz_client/post.h"
+#include "data/post.h"
 #include <stdlib.h>
 
 #define FEED_OK     0

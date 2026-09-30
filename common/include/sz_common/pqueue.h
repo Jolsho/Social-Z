@@ -7,35 +7,33 @@
 #ifndef PRIORITY_QUEUE_H
 #define PRIORITY_QUEUE_H
 
-#include "sz_common/codec.h"
 #include <stdint.h>
 #include <stddef.h>
 
-typedef struct {
-    uint64_t priority;
-    HashT   h;
-} PQNode;
+typedef int (*CompareNode) (void* n1, void* n2);
 
 typedef struct {
-    PQNode *nodes;
-    size_t len;
-    size_t capacity;
+    size_t      size_of_node;
+    CompareNode cmp;
+    uint8_t*    nodes;
+    size_t  len;
+    size_t  capacity;
 } PriorityQueue;
 
 /* Initialize a priority queue. */
-int pq_init(PriorityQueue *pq, size_t initial_capacity);
+int pq_init(PriorityQueue *pq, size_t size_of_node, size_t initial_capacity, CompareNode cmp);
 
 /* Free the queue's internal storage. */
 void pq_destroy(PriorityQueue *pq);
 
 /* Insert an item. Returns 1 on success, 0 on allocation failure. */
-int pq_push(PriorityQueue *pq, uint64_t priority, HashT* h);
+int pq_push(PriorityQueue *pq, void* node);
 
 /* Return the highest-priority item without removing it. */
-PQNode *pq_peek(PriorityQueue *pq);
+void *pq_peek(PriorityQueue *pq);
 
 /* Remove and return the highest-priority item. */
-PQNode pq_pop(PriorityQueue *pq);
+int pq_pop(PriorityQueue *pq, void* node);
 
 /* Return the number of items in the queue. */
 size_t pq_size(const PriorityQueue *pq);

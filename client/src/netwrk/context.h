@@ -6,7 +6,9 @@
 
 #pragma once
 #include "sz_client/client.h"
-#include "client.h"
+#include "utils/buffers.h"
+
+#define ID_CAP 32767
 
 #define CON_DEAD       ((uint8_t) 0 )
 #define CON_IDLE       ((uint8_t) 1 )
