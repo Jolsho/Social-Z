@@ -1,0 +1,51 @@
+Common is meant to give the client and node a shared foundation.
+The same key, hash, and message types should mean the same thing on both sides.
+Containers and reusable memory support that work without belonging to one service.
+
+Common contains the shared C types and utilities.
+Both the node and client use it.
+Public headers live under include/sz_common.
+
+    -> structs
+        Vectors, hash tables, queues, priority queues, and buffer stores.
+        These provide the containers used by the other components.
+
+    -> codec
+        Shared binary formats and serialization helpers.
+        Includes keys, hashes, cards, permissions, and vouchers.
+
+    -> crypto
+        Key generation, signatures, and key encoding helpers.
+        Uses libsodium.
+
+    -> hash
+        Hashing helpers backed by BLAKE3.
+
+paths.h defines operation codes used by the node services.
+It gives messages a shared vocabulary for requesting work.
+
+Common does not run a service loop of its own.
+It supplies the building blocks used by the rest of the system.
+
+WHY THESE TYPES ARE SHARED
+
+    A hash identifies data across storage, network, and client code.
+    A key identifies the person or peer associated with that data.
+    Permissions and vouchers combine those identities with signed records.
+    Codec helpers provide the byte representations passed between components.
+
+    Hashing supports content identity and signature inputs.
+    Signature helpers let callers sign or check those hashes.
+    The buffer store lets services borrow and return reusable byte vectors.
+    The single producer single consumer queue supports communication boundaries.
+
+REFERENCES
+
+    common/include/sz_common/codec.h:24 begins the hash and key types.
+    common/include/sz_common/codec.h:55 defines permission records.
+    common/include/sz_common/codec.h:68 defines voucher records.
+    common/src/codec/fs.c:19 hashes the signed permission fields.
+    common/src/crypto/crypto.c:18 signs a hash.
+    common/src/hash/hash.c:17 updates a streaming hash.
+    common/include/sz_common/buffers.h:50 returns a reusable buffer.
+    common/include/sz_common/queue.h:17 defines the shared queue state.

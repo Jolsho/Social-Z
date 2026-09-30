@@ -1,0 +1,70 @@
+The general idea is to give a faction the software for its own economy.
+Communication gives people a way to organize around that economy.
+Shared records and storage give that communication somewhere to live.
+The ledger is intended to supply the shared economic state.
+
+Social-Z is about freedom of economic affiliation.
+People should be able to form and leave their own economic networks.
+These groups are called factions in the project overview.
+The software is meant to support communication and exchange within them.
+
+PROJECT STRUCTURE
+
+    -> common
+        Shared types and utilities used by the C and C++ code.
+        Includes buffers, containers, hashing, and cryptography.
+
+    -> client
+        The user side of the system.
+        Holds social data, network state, input, and the visual world.
+
+    -> node
+        The backend which stores data and communicates with peers.
+        Its components exchange messages through actors.
+
+    -> proxy
+        A Go HTTP server and bridge into the node.
+        Meant to serve a web interface and forward requests.
+
+    -> Development
+        Tools and experiments around running the system.
+        Includes a daemon and a separate C++ proxy implementation.
+
+The root CMake project builds common, node, and client.
+The Go programs have their own modules.
+
+READING THE NOTES
+
+Each directory here corresponds to the source directory with the same name.
+MAIN.txt gives the general picture of that directory.
+The other files describe its main components.
+
+HOW THE PIECES FIT
+
+    The client turns stored social data into something a person can use.
+    The node provides the services behind that data.
+    P2P lets nodes exchange messages without a central HTTP server.
+    The proxy is intended to expose node services to a web interface.
+    Development tools deal with the environment around these programs.
+
+    The split lets the visual interface and backend develop separately.
+    Common provides the types they need to agree on.
+    Actor messages provide the internal boundary between node services.
+
+REFERENCES
+
+    Paths in these notes start from the project root.
+    A reference has the form directory/file.ext:111.
+    The number points to the relevant line in the current source.
+
+    NOTREADME.md:10 introduces the purpose of economic affiliation.
+    CMakeLists.txt:13 starts the main C and C++ build structure.
+    client/src/client.h:30 brings the client components together.
+    node/main.cpp:14 shows the standalone node startup.
+    proxy/main.go:14 connects the Go server and node bridge.
+
+TODO
+
+    Connect the client, proxy, and node into a complete request flow.
+    Finish the service wiring and the platform integrations.
+    The component notes describe the unfinished pieces in more detail.
