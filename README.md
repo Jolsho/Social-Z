@@ -26,6 +26,9 @@ The longer term goal is to let communities choose the rules of their own exchang
 The main libraries are written in C and C++ and use CMake.
 The Go proxy and development daemon have separate modules.
 
+Optional tests use CMake and CTest.
+See [testing instructions](Docs/testing.md) for running all registered tests or selecting a component.
+
 ## Development status
 
 Social-Z is an early work in progress.

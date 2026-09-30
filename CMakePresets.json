@@ -1,0 +1,56 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "tests",
+      "displayName": "Project tests",
+      "binaryDir": "${sourceDir}/build/tests",
+      "cacheVariables": {
+        "BUILD_TESTING": "ON",
+        "SZ_TESTS_ONLY": "ON",
+        "SZ_TEST_SANITIZERS": "OFF",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "tests-sanitized",
+      "displayName": "Project tests with memory checks",
+      "inherits": "tests",
+      "binaryDir": "${sourceDir}/build/tests-sanitized",
+      "cacheVariables": {
+        "SZ_TEST_SANITIZERS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "tests",
+      "configurePreset": "tests",
+      "configuration": "Debug"
+    },
+    {
+      "name": "tests-sanitized",
+      "configurePreset": "tests-sanitized",
+      "configuration": "Debug"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "tests",
+      "configurePreset": "tests",
+      "configuration": "Debug",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error" }
+    },
+    {
+      "name": "tests-sanitized",
+      "inherits": "tests",
+      "configurePreset": "tests-sanitized"
+    }
+  ]
+}
