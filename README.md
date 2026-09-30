@@ -52,5 +52,3 @@ See LICENSE for the full license text.
         are absolutely and utterly terrifying.
     That is really the fuel behind this project, we have to build this thing before states develop their own.
     This really is a race, and I think the fate of freedom rests on this technology alone whether its this project or another.
-    Infact I invite others to copy this because this technology is to great to be in the hands of one group.
-    Copy this, change it, and do with it what you will, the more copies the better.
