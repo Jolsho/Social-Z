@@ -33,6 +33,7 @@ The existing ledger tests are not included in this setup.
 
 The store eviction test prepares its own table storage to isolate eviction behavior.
 Store setup and cleanup are covered separately by the client store lifecycle test.
+That test also covers buffer ownership, replacement, and failed queue growth.
 The common hash table storage test exercises the real allocator, alignment, and cleanup.
 The hash test checks published BLAKE3 vectors, incremental updates, and independent state copies.
 

@@ -62,7 +62,7 @@ static void fixture_add(Fixture* fixture, uint64_t id)
     size_t size = 256;
     StoreItem item = {
         .b = buffer_pool_pop(&fixture->buffers, &size),
-        .size = 256, .pool = &fixture->buffers, .priority = id
+        .size = 256, .capacity = 256, .pool = &fixture->buffers, .priority = id
     };
     assert(item.b);
     assert(ht_insert(&store->table, &key, &item) == HT_INSERTED);
@@ -140,7 +140,6 @@ static void test_refresh_and_missing_entries(void)
     /* Removed items leave stale queue entries which must be skipped. */
     HashT third = item_key(3);
     assert(ht_erase(&fixture.store.table, &third) == HT_SUCCESS);
-    fixture.store.mem -= 256;
     fixture.store.mem_max = 0;
     store_evict(&fixture.store);
     assert(fixture.store.mem == 0);

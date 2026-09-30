@@ -19,9 +19,12 @@ int compare_pqnode(void* n1, void* n2) {
 }
 
 void _destroy_store_item_callback(void* ctx, void* itemp) {
+    Store* s = ctx;
     StoreItem* si = itemp;
-    if (si->b && buffer_pool_push(si->pool, si->b, si->size) < 0) {
-        free(si->b);
+    if (si->b) {
+        s->mem -= si->capacity;
+        if (si->pool) buffer_pool_push(si->pool, si->b, si->capacity);
+        else free(si->b);
     }
     memset(si, 0, sizeof(StoreItem));
 }
@@ -57,34 +60,47 @@ void store_destroy(Store* s) {
     memset(s, 0, sizeof(*s));
 }
 
+static uint64_t pool_capacity(BufferPool* pool, uint8_t* b) {
+    for (size_t i = 0; i < BUFFER_BUCKETS; i++) {
+        BufferBucket* bucket = &pool->buckets[i];
+        uintptr_t base = (uintptr_t)bucket->memory;
+        uintptr_t address = (uintptr_t)b;
+        if (!base || address < base || !bucket->buffer_size) continue;
+        uintptr_t offset = address - base;
+        if (offset / bucket->buffer_size < bucket->capacity &&
+            offset % bucket->buffer_size == 0) return bucket->buffer_size;
+    }
+    return 0;
+}
+
 StoreItem* store_assign_item(
     Store* s, HashT* h, 
     uint8_t* b, uint64_t size,
     BufferPool* pool
 ) {
-    if (size > s->mem_max) return NULL;
+    if (!s || !h || !b || !size || !ht_is_initialized(&s->table)) return NULL;
+    uint64_t capacity = pool ? pool_capacity(pool, b) : size;
+    if (capacity < size || capacity > s->mem_max) return NULL;
+    StoreItem* old = ht_lookup(&s->table, h);
+    if (old && old->b == b) return NULL;
+    uint64_t retained = s->mem - (old ? old->capacity : 0);
+    if (capacity > UINT64_MAX - retained) return NULL;
 
-    if (s->counter == 0) s->counter = UINT64_MAX / 2;
-
-
-    uint64_t new_prio = s->counter++;
-
-    PQNode n;
-    memcpy(&n.h, h, HASH_SIZE);
-    n.priority = new_prio;
-    
-    if (pq_push(&s->pq, &n) == 0) return NULL;
-
-    StoreItem* si = ht_reserve(&s->table, h);
+    StoreItem* si = old ? old : ht_reserve(&s->table, h);
     if (!si) return NULL;
+    if (!old) memset(si, 0, sizeof(*si));
 
-    si->priority = new_prio;
-    si->pool = pool;
-
-    si->b = b;
-    si->size = size;
-
-    s->mem += size;
+    uint64_t priority = s->counter ? s->counter : UINT64_MAX / 2;
+    PQNode n = {.priority = priority, .h = *h};
+    if (!pq_push(&s->pq, &n)) {
+        if (!old) ht_erase(&s->table, h);
+        return NULL;
+    }
+    if (old) _destroy_store_item_callback(s, old);
+    *si = (StoreItem){.b = b, .size = size, .capacity = capacity,
+                      .pool = pool, .priority = priority};
+    s->counter = priority + 1;
+    s->mem += capacity;
     store_evict(s);
 
     return si;
@@ -163,7 +179,6 @@ void store_evict(Store* s) {
         StoreItem* item = HT_LOOKUP_AS(StoreItem, &s->table, &node.h);
         if (!item || item->priority != node.priority) continue;
 
-        s->mem -= item->size;
         store_erase_item(s, &node.h);
     }
 }
