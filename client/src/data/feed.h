@@ -33,27 +33,16 @@ typedef struct {
 } Feed;
 
 
-int feed_init(Feed* f, size_t min_item_len) {
+int feed_init(Feed* f, size_t min_item_len);
 
-    f->size = 0;
-    f->cap = 100;
-    f->index = calloc(f->cap, sizeof(ItemIndex));
-
-    f->data_size = 0;
-    f->data_cap = min_item_len * f->cap;
-    f->data = calloc(1, f->data_cap);
-
-    if (!f->index || !f->data) return FEED_ERR;
-
-    return FEED_OK;
-}
-
-inline int feed_get_item(Feed* f, uint32_t idx, uint8_t** item_view) {
+static inline int feed_get_item(Feed* f, uint32_t idx, uint8_t** item_view) {
+    if (!f || !item_view || !f->index || !f->data || idx >= f->size)
+        return FEED_ERR;
     *item_view = f->data + f->index[idx].offset;
     return FEED_OK;
 }
 
-inline size_t feed_get_size(const Feed* f) { return f->size; }
+static inline size_t feed_get_size(const Feed* f) { return f->size; }
 
 typedef bool (*ValidItem)(uint8_t* b);
 typedef size_t (*GetItemLength)(uint8_t* b);
@@ -68,4 +57,3 @@ int feed_append(
 static inline int feed_append_posts(Feed* f, uint8_t* b, uint64_t len) {
     return feed_append(f, b, len, MINIMUM_POST_SIZE, post_is_valid, post_get_size);
 }
-
