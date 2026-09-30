@@ -54,7 +54,7 @@ It includes the existing licensing, modeling, and ledger notes.
 
 ## License
 
-Copyright (c) 2026 Tagma-256.
+Copyright (c) 2026 Joshua Olson
 
 This project is licensed under the GNU Lesser General Public License, version 3.0 or later.
 See [LICENSE](LICENSE) for the full license text.

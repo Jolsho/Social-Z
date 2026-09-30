@@ -4,10 +4,8 @@
 find . \
   \( -path './build' -o \
      -path './install' -o \
-     -path './-Development' -o \
-     -path './-Documentation' -o \
-     -path './web_ui/node_modules' -o \
-     -path './web_ui/dist' -o \
+     -path './Development' -o \
+     -path './Docs' -o \
      -path './wasm_install' -o \
      -path './wasm_build' \
   \) -prune -o \
@@ -19,10 +17,7 @@ find . \
      -name 'CMakeLists.txt' -o \
      -name '*.cmake' -o \
      -name '*.sh' -o \
-     -name '*.go' -o \
-     -name '*.ts' -o \
-     -name '*.tsx' -o \
-     -name '*.css' \
+     -name '*.go' \
   \) -print0 | xargs -0 wc -l
 
 

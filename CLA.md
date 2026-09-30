@@ -12,7 +12,7 @@ By submitting a contribution to this project, you agree to the following terms:
 or additions to the project, that you intentionally submit for inclusion in
 the project.
 
-"Project Maintainer" means Tagma-256.
+"Project Maintainer" means Joshua Olson
 
 ## 2. Copyright Ownership
 
