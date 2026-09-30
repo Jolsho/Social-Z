@@ -1,11 +1,57 @@
 # Social-Z
 
-Copyright (c) 2026 Tagma-256
+Social-Z is an open source project for community networks.
+It aims to give communities shared tools for communication, publishing, and economic exchange.
 
-This project is licensed under the GNU Lesser General Public License
-version 3.0 or later.
+The idea is that people should be able to build and participate in networks around their shared interests and needs.
+Each community should be able to operate its own infrastructure and develop its own approach to cooperation.
 
-See LICENSE for the full license text.
+## Community networks
 
+A community network brings together people and the computers that support their shared activity.
+Members could use it to share information, organize discussions, publish offers, and exchange goods or services.
 
-## WORK IN PROGRESS
+Social-Z is intended to bring those activities into one system.
+Its design combines a social interface, distributed content storage, peer to peer communication, and a ledger for shared economic state.
+The longer term goal is to let communities choose the rules of their own exchanges while individuals can participate in multiple networks.
+
+## Project structure
+
+- **client** provides the user interface foundations, social data handling, input, and rendering interfaces.
+- **node** provides backend services for peer communication, storage, structured records, and ledger work.
+- **common** provides shared types, containers, buffers, hashing, and cryptographic helpers.
+- **proxy** is intended to connect a web interface to the node through HTTP.
+- **Development** contains environment management tools and alternate implementations.
+
+The main libraries are written in C and C++ and use CMake.
+The Go proxy and development daemon have separate modules.
+
+## Development status
+
+Social-Z is an early work in progress.
+The repository contains a mixture of implemented components, partial integrations, and design sketches.
+It does not yet provide a complete community network application.
+
+Current work includes connecting the client and backend, completing rendering and request handling, and revising the ledger design.
+The node's event handling currently depends on Linux facilities.
+
+## Documentation
+
+Start with the [project overview](Notes/MAIN.txt).
+The notes use short explanations and references to the relevant source files.
+
+- [Client](Notes/client/MAIN.txt)
+- [Node](Notes/node/MAIN.txt)
+- [Shared utilities](Notes/common/MAIN.txt)
+- [Proxy](Notes/proxy/MAIN.txt)
+- [Development tools](Notes/Development/MAIN.txt)
+
+Each notes directory follows the corresponding source directory.
+Component notes explain the intended design and list unfinished work in TODO sections.
+
+## License
+
+Copyright (c) 2026 Tagma-256.
+
+This project is licensed under the GNU Lesser General Public License, version 3.0 or later.
+See [LICENSE](LICENSE) for the full license text.
