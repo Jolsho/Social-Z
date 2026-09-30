@@ -52,6 +52,19 @@ Component pages explain the intended design and list unfinished work in TODO sec
 The [Notes](Notes) directory is kept for personal thoughts, sketches, and exploratory designs.
 It includes the existing licensing, modeling, and ledger notes.
 
+## Contributing
+
+Before contributing, read the [Contributor License Agreement](CLA.md).
+Then add your own JSON file to [.contributors](.contributors), named after your GitHub username.
+Use [jolsho.json](.contributors/jolsho.json) as an example.
+
+Include your GitHub username, the CLA version you accept, and the date of acceptance in `YYYY-MM-DD` format.
+Adding this record confirms that you have read and agree to the CLA.
+Commit your contributor record before making regular contribution commits.
+You only need to add yourself once for the current CLA version.
+
+The [documentation](Docs/README.md) explains the project structure and includes TODO sections to help identify work.
+
 ## License
 
 Copyright (c) 2026 Joshua Olson
