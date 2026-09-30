@@ -170,7 +170,7 @@ void* ht_reserve(HashTable* table, HashT* key) {
     table->nodes[index] = node;
     ++table->size;
 
-    return node;
+    return node->value;
 }
 
 int ht_erase(HashTable* table, HashT* key) {
