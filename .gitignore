@@ -6,4 +6,5 @@ lib
 .cache
 install
 wasm_install
+.DS_Store
 
