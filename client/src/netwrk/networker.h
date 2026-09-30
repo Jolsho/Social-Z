@@ -7,12 +7,15 @@
 #pragma once
 #include "sz_client/client.h"
 #include "utils/buffers.h"
+#include "sz_common/codec.h"
 
 typedef int (*Parser) (struct Client* cli, ContextID id, uint8_t* b, uint64_t l);
 
 typedef struct __attribute__((packed)) {
     uint8_t     state;
     uint8_t     parser_id;
+    bool        blob_active;
+    HashT       blob_hash;
 
 #ifndef PLATFORM_WASM
     int         fd;

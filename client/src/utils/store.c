@@ -97,7 +97,7 @@ StoreItem* store_assign_item(
         return NULL;
     }
     if (old) _destroy_store_item_callback(s, old);
-    *si = (StoreItem){.b = b, .size = size, .capacity = capacity,
+    *si = (StoreItem){.b = b, .size = size, .capacity = capacity, .received = size,
                       .pool = pool, .priority = priority};
     s->counter = priority + 1;
     s->mem += capacity;
@@ -153,6 +153,7 @@ int store_copy_from_item(
 
     StoreItem* item = ht_lookup(&s->table, h);
     if (!item) return STORE_NOT_EXIST;
+    if (item->received != item->size) return STORE_ERR;
 
     if (offset >= item->size) {
         store_erase_item(s, h);

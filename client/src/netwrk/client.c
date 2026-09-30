@@ -31,6 +31,12 @@ void client_free_context(struct Client* cli, ContextID id) {
     Networker* net = &cli->net;
     if (!valid_id(id)) return;
 
+    if (net->states[id].blob_active) {
+        HashT hash = net->states[id].blob_hash;
+        StoreItem* item = ht_lookup(&cli->blob_store.table, &hash);
+        if (item && item->context == id && item->received < item->size)
+            store_erase_item(&cli->blob_store, &hash);
+    }
     context_release_recv_buffer(cli, id);
 
     context_release_send_buffer(cli, id);

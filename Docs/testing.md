@@ -36,6 +36,7 @@ Store setup and cleanup are covered separately by the client store lifecycle tes
 That test also covers buffer ownership, replacement, and failed queue growth.
 The common hash table storage test exercises the real allocator, alignment, and cleanup.
 The hash test checks published BLAKE3 vectors, incremental updates, and independent state copies.
+The blob test assembles chunks, verifies the final hash, and covers partial-read and cleanup failures.
 
 ## Memory checks
 

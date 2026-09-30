@@ -33,6 +33,8 @@ typedef struct StoreItem {
     uint8_t*    b;
     uint64_t    size;
     uint64_t    capacity;
+    uint64_t    received; // Partial blobs are readable only when this reaches size.
+    int16_t     context; // Receiving context while the blob is incomplete.
     BufferPool* pool;
     uint64_t    priority;
 } StoreItem;
