@@ -23,8 +23,9 @@ ctest --preset tests -L '^client$'
 ctest --preset tests -L '^node$'
 ```
 
-Currently only `common.pqueue` is registered.
-Client and node have no registered tests yet.
+Tests are currently registered for common and client.
+Node has no registered tests yet.
+Use `ctest --preset tests -N` to list the registered tests after configuring.
 An empty selection reports an error rather than a successful test run.
 The existing ledger tests are not included in this setup.
 

@@ -9,19 +9,14 @@
 #include <string.h>
 #include <math.h>
 #include "utils/store.h"
+#include "utils/store_internal.h"
 #include "sz_common/hashtable.h"
 #include "sz_common/pqueue.h"
 
-typedef struct {
-    uint64_t priority;
-    HashT   h;
-} PQNode;
-
 int compare_pqnode(void* n1, void* n2) {
-    int dif = ((PQNode*)n1)->priority - ((PQNode*)n2)->priority;
-    if (dif > 0) return 1;
-    else if (dif < 0) return -1;
-    return 0;
+    uint64_t left = ((PQNode*)n1)->priority;
+    uint64_t right = ((PQNode*)n2)->priority;
+    return (left > right) - (left < right);
 }
 
 void _destroy_store_item_callback(void* ctx, void* itemp) {
