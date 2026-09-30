@@ -53,8 +53,10 @@ Each component registers its executables in its own `tests/CMakeLists.txt`.
 The shared setup discovers those component CMake files when they exist.
 
 Use [the queue test registration](../common/tests/CMakeLists.txt) as an example.
-Link the target to `sz_test_options` and register it with `add_test()`.
-Give it the matching component label with `set_tests_properties()`.
+Register a test with `sz_add_test(component name sources...)`.
+For example, `sz_add_test(common pqueue pqueue.c ../src/structs/pqueue.c)`.
+The shared helper supplies include paths, C11 settings, test options, and the component label.
+Add any test-specific libraries or settings after that call.
 A failed test must return a nonzero exit status.
 The shared options keep assertions enabled in release configurations as well.
 

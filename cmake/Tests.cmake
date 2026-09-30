@@ -17,6 +17,20 @@ if(SZ_TEST_SANITIZERS)
     target_link_options(sz_test_options INTERFACE -fsanitize=address,undefined)
 endif()
 
+function(sz_add_test component name)
+    set(target sz_${name}_test)
+    add_executable(${target} ${ARGN})
+    target_include_directories(${target} PRIVATE
+        ${PROJECT_SOURCE_DIR}/${component}/src
+        ${PROJECT_SOURCE_DIR}/${component}/include
+        ${PROJECT_SOURCE_DIR}/common/include)
+    set_target_properties(${target} PROPERTIES
+        C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
+    target_link_libraries(${target} PRIVATE sz_test_options)
+    add_test(NAME ${component}.${name} COMMAND ${target})
+    set_tests_properties(${component}.${name} PROPERTIES LABELS ${component})
+endfunction()
+
 # Components register their tests explicitly in their own CMakeLists.txt.
 foreach(component IN ITEMS common client node)
     if(EXISTS "${PROJECT_SOURCE_DIR}/${component}/tests/CMakeLists.txt")

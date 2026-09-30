@@ -1,43 +1,17 @@
-add_executable(sz_store_priority_test
-    store_priority.c
-    ../src/utils/store.c
-    ../src/utils/buffers.c
-    ../../common/src/structs/hashtable.c
-    ../../common/src/structs/pqueue.c)
-target_include_directories(sz_store_priority_test PRIVATE
-    ../src ../../common/include)
-set_target_properties(sz_store_priority_test PROPERTIES
-    C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
-target_link_libraries(sz_store_priority_test PRIVATE sz_test_options)
+set(store_sources
+    ../src/utils/store.c ../src/utils/buffers.c
+    ../../common/src/structs/hashtable.c ../../common/src/structs/pqueue.c)
+
+sz_add_test(client store_priority store_priority.c ${store_sources})
+sz_add_test(client store_eviction store_eviction.c ${store_sources})
+sz_add_test(client context context.c
+    ../src/netwrk/context.c ../src/netwrk/client.c ../src/utils/buffers.c)
+
 if(UNIX)
     target_link_libraries(sz_store_priority_test PRIVATE m)
-endif()
-
-add_test(NAME client.store_priority COMMAND sz_store_priority_test)
-set_tests_properties(client.store_priority PROPERTIES LABELS client)
-
-add_executable(sz_context_test context.c
-    ../src/netwrk/context.c ../src/netwrk/client.c ../src/utils/buffers.c)
-target_include_directories(sz_context_test PRIVATE
-    ../src ../include ../../common/include)
-# client.h includes feed.h, which currently defines feed_init in the header.
-# A single translation unit avoids changing that unrelated linkage here.
-set_target_properties(sz_context_test PROPERTIES
-    UNITY_BUILD ON C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
-target_link_libraries(sz_context_test PRIVATE sz_test_options)
-add_test(NAME client.context COMMAND sz_context_test)
-set_tests_properties(client.context PROPERTIES LABELS client)
-
-add_executable(sz_store_eviction_test
-    store_eviction.c ../src/utils/store.c ../src/utils/buffers.c
-    ../../common/src/structs/hashtable.c ../../common/src/structs/pqueue.c)
-target_include_directories(sz_store_eviction_test PRIVATE
-    ../src ../../common/include)
-set_target_properties(sz_store_eviction_test PROPERTIES
-    C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
-target_link_libraries(sz_store_eviction_test PRIVATE sz_test_options)
-if(UNIX)
     target_link_libraries(sz_store_eviction_test PRIVATE m)
 endif()
-add_test(NAME client.store_eviction COMMAND sz_store_eviction_test)
-set_tests_properties(client.store_eviction PROPERTIES LABELS client TIMEOUT 10)
+
+# feed_init is defined in a header, so compile the context test as one unit.
+set_target_properties(sz_context_test PROPERTIES UNITY_BUILD ON)
+set_tests_properties(client.store_eviction PROPERTIES TIMEOUT 10)
