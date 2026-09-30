@@ -37,9 +37,9 @@
 #include "sz_common/hashtable.h"
 
 int ht_setup(HashTable* table, FreeValueCallback* vc, size_t value_size, size_t capacity) {
-	assert(table != NULL);
-
-    if (capacity == 0 || table == NULL) return HT_ERROR;
+    if (!table) return HT_ERROR;
+    memset(table, 0, sizeof(*table));
+    if (!capacity || !value_size) return HT_ERROR;
 
     table->base_cap = capacity < 512 ? capacity : 512;
     table->cap = capacity;
@@ -55,22 +55,21 @@ int ht_setup(HashTable* table, FreeValueCallback* vc, size_t value_size, size_t 
 }
 
 int ht_destroy(HashTable* table) {
-	size_t chain;
-    HTNode* next;
-    HTNode* curr;
-
-	assert(ht_is_initialized(table));
 	if (!ht_is_initialized(table)) return HT_ERROR;
 
-    for (size_t i = 0; i < table->cap; ++i) {
-        if (table->val_c)
-            table->val_c->destroy(table->val_c->ctx, table->pool[i].value);
+    if (table->val_c && table->val_c->destroy) {
+        for (size_t i = 0; i < table->base_cap; ++i) {
+            for (HTNode* node = table->nodes[i]; node; node = node->next)
+                table->val_c->destroy(table->val_c->ctx, node->value);
+        }
     }
 
 	free(table->_b);
 
     table->nodes = NULL;
+    table->_b = NULL;
     table->pool = NULL;
+    table->value_pool = NULL;
     table->free_list = NULL;
     table->size = 0;
 
@@ -272,35 +271,52 @@ void _ht_free_node(HashTable* table, HTNode* node) {
     table->free_list = node;
 }
 
+static size_t value_stride(size_t value_size) {
+    size_t alignment = _Alignof(max_align_t);
+    if (!value_size || value_size > SIZE_MAX - (alignment - 1)) return 0;
+    return (value_size + alignment - 1) / alignment * alignment;
+}
+
+size_t ht_memory_overhead(size_t value_size, size_t capacity) {
+    size_t stride = value_stride(value_size);
+    if (!capacity || !stride || capacity > SIZE_MAX / sizeof(HTNode))
+        return SIZE_MAX;
+
+    size_t buckets = (capacity < 512 ? capacity : 512) * sizeof(HTNode*);
+    size_t nodes = capacity * sizeof(HTNode);
+    if (nodes > SIZE_MAX - buckets) return SIZE_MAX;
+    size_t values_offset = buckets + nodes;
+    size_t alignment = _Alignof(max_align_t);
+    size_t padding = (alignment - values_offset % alignment) % alignment;
+    if (padding > SIZE_MAX - values_offset) return SIZE_MAX;
+    values_offset += padding;
+    if (capacity > (SIZE_MAX - values_offset) / stride) return SIZE_MAX;
+    return values_offset + capacity * stride;
+}
+
 int _ht_allocate(HashTable* table) {
-    size_t total;
-    total += table->base_cap * sizeof(HTNode*);
-    total += table->cap * sizeof(HTNode);
-    total += table->cap * table->value_size;
+    size_t total = ht_memory_overhead(table->value_size, table->cap);
+    if (total == SIZE_MAX) return HT_ERROR;
+    size_t stride = value_stride(table->value_size);
 
-    uint8_t* b = malloc(total);
+    uint8_t* b = calloc(1, total);
     if (!b) return HT_ERROR;
-	memset(b, 0, total);
-
-    table->nodes = (HTNode**)b;
-    b += table->base_cap * sizeof(HTNode*);
-
-    table->pool = (HTNode*)b;
-    b += table->cap * sizeof(HTNode);
 
     table->_b = b;
-    b += table->cap * table->value_size;
+    table->nodes = (HTNode**)b;
+    table->pool = (HTNode*)(b + table->base_cap * sizeof(HTNode*));
+    table->value_pool = b + total - table->cap * stride;
 
     table->free_list = NULL;
 
-    uint8_t *value = b;
+    uint8_t *value = table->value_pool;
     HTNode* pool = table->pool;
     for (size_t i = 0; i < table->cap; ++i) {
         pool[i].value = value;
         pool[i].next = table->free_list;
         table->free_list = &pool[i];
 
-        value += table->value_size;
+        value += stride;
     }
 
 	return HT_SUCCESS;

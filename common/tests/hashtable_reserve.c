@@ -15,7 +15,7 @@ int main(void)
         {.value = &values[0], .next = &nodes[1]},
         {.value = &values[1]}
     };
-    /* Isolate reservation from the unfinished ht_setup allocator. */
+    /* Isolate reservation behavior from allocation. */
     HashTable table = {
         .nodes = buckets, .pool = nodes, .free_list = nodes,
         .value_size = sizeof(values[0]), .cap = 2, .base_cap = 2

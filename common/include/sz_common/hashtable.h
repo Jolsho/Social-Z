@@ -91,9 +91,8 @@ typedef struct HashTable {
 int ht_setup(HashTable* table, FreeValueCallback* vc, size_t value_size, size_t capacity);
 
 
-static inline size_t ht_memory_overhead(size_t value_size, size_t capacity) { 
-    return (sizeof(HTNode) + 8 + value_size) *  capacity;                
-}
+// Includes aligned value storage. Returns SIZE_MAX for invalid or overflowing sizes.
+size_t ht_memory_overhead(size_t value_size, size_t capacity);
 
 
 /* Destructor */
