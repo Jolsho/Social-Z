@@ -7,15 +7,16 @@
 #pragma once
 #include "sz_client/client.h"
 #include "utils/buffers.h"
+#include "netwrk/networker.h"
 
-#define ID_CAP 32767
+#define ID_CAP MAX_CONNS
 
 #define CON_DEAD       ((uint8_t) 0 )
 #define CON_IDLE       ((uint8_t) 1 )
 #define CON_SENDING    ((uint8_t) 2 )
 #define CON_RECEIVING  ((uint8_t) 3 )
 
-inline bool valid_id(ContextID id) {
+static inline bool valid_id(ContextID id) {
     return (id < ID_CAP && id > 0);
 }
 int context_release_send_buffer(struct Client* cli, ContextID id);

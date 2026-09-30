@@ -8,7 +8,7 @@
 #include "client.h"
 
 int context_release_recv_buffer(struct Client* cli, ContextID id) {
-    if (!valid_id(id)) CLIENT_INVALID_ID;
+    if (!valid_id(id)) return CLIENT_INVALID_ID;
 
     Buffer* b = &cli->net.recv_buffers[id];
     if (!b->b) return CLIENT_OK;
@@ -21,7 +21,7 @@ int context_release_recv_buffer(struct Client* cli, ContextID id) {
 }
 
 int context_release_send_buffer(struct Client* cli, ContextID id) {
-    if (!valid_id(id)) CLIENT_INVALID_ID;
+    if (!valid_id(id)) return CLIENT_INVALID_ID;
 
     Buffer* b = &cli->net.send_buffers[id];
     if (!b->b) return CLIENT_OK;

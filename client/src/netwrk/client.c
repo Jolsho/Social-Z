@@ -9,7 +9,7 @@
 #include "netwrk/networker.h"
 
 ContextID client_new_context(Networker* net) {
-    if (!net->free_head) return -1;
+    if (!valid_id(net->free_head)) return -1;
 
 
     ConState* c = &net->states[net->free_head];
@@ -57,4 +57,3 @@ int client_parse_response(struct Client* cli, ContextID id, uint8_t* b, uint64_t
 
     return cli->net.parsers[state.parser_id](cli, id, b, l);
 }
-
