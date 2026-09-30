@@ -28,6 +28,8 @@ int pq_init(PriorityQueue *pq, size_t size_of_node, size_t initial_capacity, Com
 
     pq->len = 0;
     pq->capacity = initial_capacity;
+    pq->size_of_node = size_of_node;
+    pq->cmp = cmp;
 
     return 1;
 }
@@ -108,7 +110,7 @@ int pq_pop(PriorityQueue *pq, void* node)
 
     if (pq->len == 0) return 1;
 
-    pq->nodes[0] = pq->nodes[pq->len];
+    memcpy(pq->nodes, pq->nodes + (pq->len * pq->size_of_node), pq->size_of_node);
 
     /* Bubble downward. */
     size_t i = 0;
