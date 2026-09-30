@@ -37,17 +37,20 @@ The node's event handling currently depends on Linux facilities.
 
 ## Documentation
 
-Start with the [project overview](Notes/MAIN.txt).
-The notes use short explanations and references to the relevant source files.
+Start with the [project overview](docs/README.md).
+The documentation uses short explanations and links to the relevant source files.
 
-- [Client](Notes/client/MAIN.txt)
-- [Node](Notes/node/MAIN.txt)
-- [Shared utilities](Notes/common/MAIN.txt)
-- [Proxy](Notes/proxy/MAIN.txt)
-- [Development tools](Notes/Development/MAIN.txt)
+- [Client](docs/client/README.md)
+- [Node](docs/node/README.md)
+- [Shared utilities](docs/common/README.md)
+- [Proxy](docs/proxy/README.md)
+- [Development tools](docs/Development/README.md)
 
-Each notes directory follows the corresponding source directory.
-Component notes explain the intended design and list unfinished work in TODO sections.
+Each documentation directory follows the corresponding source directory.
+Component pages explain the intended design and list unfinished work in TODO sections.
+
+The [Notes](Notes) directory is kept for personal thoughts, sketches, and exploratory designs.
+It includes the existing licensing, modeling, and ledger notes.
 
 ## License
 

@@ -1,0 +1,69 @@
+# Client world and interaction
+
+The world is supposed to turn raw content into an interactive space.
+It gives visible items identity, position, and behavior.
+The intended design includes media, thread, market, and three dimensional views.
+
+The world is the client state used for interaction and display.
+It holds input, camera state, the current view, and focused entity.
+It also keeps scrolling state for the feed views.
+
+## Entities
+
+An entity has an ID and spatial bounds.
+Handlers describe how it responds to clicks, keys, and updates.
+They also provide hover and destruction callbacks.
+
+A bounding volume hierarchy groups entities by their bounds.
+This is the BVH under wrld/bvh.
+It supports insertion, removal, movement, and spatial queries.
+Ray queries help find entities under the pointer.
+
+## Input
+
+The host supplies mouse and keyboard changes.
+The world update uses those changes to handle interaction.
+Input helpers record presses, releases, position, and scrolling.
+
+The feed design is meant to create entities near the visible part of the feed.
+Raw posts remain in the data store until display needs them.
+
+The math directory provides vectors, rays, boxes, and frustum types.
+These are the geometry used by the world and its queries.
+
+## From input to interaction
+
+The world derives a ray from the pointer and current view.
+A BVH query finds entities along that ray.
+The entity ID identifies which registered handler applies.
+The focused entity receives an early pass through the interaction logic.
+
+The BVH groups bounds so queries can skip unrelated parts of the world.
+Its box, sphere, and frustum queries support different spatial selections.
+Moving an entity updates its bounds in that structure.
+
+The feed design keeps a distinction between raw posts and display layout.
+Near a visible post, text can become positioned glyphs and content entities.
+Scrolling is then supposed to update which portion is sent for rendering.
+
+## References
+
+- [client/src/wrld/wrld.h:23](../../client/src/wrld/wrld.h#L23) lists the intended view states.
+- [client/src/wrld/wrld.h:42](../../client/src/wrld/wrld.h#L42) defines the World state.
+- [client/src/wrld/wrld.h:14](../../client/src/wrld/wrld.h#L14) defines entity callbacks.
+- [client/src/wrld/wrld.h:84](../../client/src/wrld/wrld.h#L84) begins the notes on post and text layout.
+- [client/src/wrld/wrld.c:36](../../client/src/wrld/wrld.c#L36) derives the interaction ray.
+- [client/src/wrld/wrld.c:63](../../client/src/wrld/wrld.c#L63) updates interaction from input.
+- [client/src/wrld/bvh/bvh.h:44](../../client/src/wrld/bvh/bvh.h#L44) declares entity insertion and movement.
+- [client/src/wrld/bvh/bvh.h:63](../../client/src/wrld/bvh/bvh.h#L63) declares the spatial query interfaces.
+
+## TODO
+
+- Obtain screen dimensions from the host.
+  [client/src/wrld/wrld.c:23](../../client/src/wrld/wrld.c#L23)
+
+- Calculate post heights and turn scrolling into visible item selection.
+  [client/src/wrld/wrld.c:164](../../client/src/wrld/wrld.c#L164)
+
+- Consider batching BVH results for later entity processing.
+  [client/src/wrld/bvh/bvh.h:51](../../client/src/wrld/bvh/bvh.h#L51)
