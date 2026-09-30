@@ -37,14 +37,14 @@ The node's event handling currently depends on Linux facilities.
 
 ## Documentation
 
-Start with the [project overview](docs/README.md).
+Start with the [project overview](Docs/README.md).
 The documentation uses short explanations and links to the relevant source files.
 
-- [Client](docs/client/README.md)
-- [Node](docs/node/README.md)
-- [Shared utilities](docs/common/README.md)
-- [Proxy](docs/proxy/README.md)
-- [Development tools](docs/Development/README.md)
+- [Client](Docs/client/README.md)
+- [Node](Docs/node/README.md)
+- [Shared utilities](Docs/common/README.md)
+- [Proxy](Docs/proxy/README.md)
+- [Development tools](Docs/Development/README.md)
 
 Each documentation directory follows the corresponding source directory.
 Component pages explain the intended design and list unfinished work in TODO sections.
