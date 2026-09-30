@@ -37,8 +37,7 @@ static void fixture_init(Fixture* fixture, uint64_t limit)
     store->counter = 100;
     assert(pq_init(&store->pq, sizeof(PQNode), 2, compare_pqnode));
 
-    /* Prepare table storage directly to isolate eviction from the remaining
-     * callback-lifetime defect in store_setup.
+    /* Prepare table storage directly to isolate eviction policy from setup.
      * Lookup, insertion, erasure, the destructor, and the queue are real code.
      */
     fixture->callback = (FreeValueCallback){

@@ -7,7 +7,6 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 #include "utils/store.h"
 #include "utils/store_internal.h"
 #include "sz_common/hashtable.h"
@@ -28,32 +27,35 @@ void _destroy_store_item_callback(void* ctx, void* itemp) {
 }
 
 int store_setup(Store* s, uint64_t max_memory) {
-    assert(s != NULL);
+    if (!s) return STORE_ERR;
+    memset(s, 0, sizeof(*s));
+    size_t node_count = max_memory / 10000 > 1024 ? 1024 : (size_t)(max_memory / 10000);
+    size_t overhead = ht_memory_overhead(sizeof(StoreItem), node_count);
+    if (overhead == SIZE_MAX || max_memory <= overhead || max_memory - overhead <= 100000)
+        return STORE_ERR;
 
-    uint64_t NODE_COUNT = floor(max_memory * 0.0001);
-    if (NODE_COUNT > 1024) NODE_COUNT = 1024;
-
-    // subtract estimated hash table overhead
-    max_memory -= ht_memory_overhead(sizeof(StoreItem), NODE_COUNT);
-
-    assert(max_memory > 100000);   // must be over a 100kb
-    // if you are lower than that you can't hold modern store anyway.
-
-    s->mem_max = max_memory;
-
-    FreeValueCallback val_callback = { 
+    s->callback = (FreeValueCallback){
         .ctx = s, 
         .destroy = _destroy_store_item_callback 
     };
-
-    ht_setup(&s->table, &val_callback, sizeof(StoreItem), NODE_COUNT);
-
-    pq_init(&s->pq, sizeof(PQNode), 2048, compare_pqnode);
-
+    if (ht_setup(&s->table, &s->callback, sizeof(StoreItem), node_count) != HT_SUCCESS)
+        goto fail;
+    if (!pq_init(&s->pq, sizeof(PQNode), 2048, compare_pqnode))
+        goto fail;
+    s->mem_max = max_memory - overhead;
     return STORE_OK;
+
+fail:
+    store_destroy(s);
+    return STORE_ERR;
 }
 
-
+void store_destroy(Store* s) {
+    if (!s) return;
+    if (ht_is_initialized(&s->table)) ht_destroy(&s->table);
+    pq_destroy(&s->pq);
+    memset(s, 0, sizeof(*s));
+}
 
 StoreItem* store_assign_item(
     Store* s, HashT* h, 

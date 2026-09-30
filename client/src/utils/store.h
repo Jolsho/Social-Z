@@ -26,6 +26,7 @@ typedef struct Store {
     uint64_t        counter;
     uint64_t        mem;
     uint64_t        mem_max;
+    FreeValueCallback callback;
 } Store;
 
 typedef struct StoreItem {
@@ -35,6 +36,7 @@ typedef struct StoreItem {
     uint64_t    priority;
 } StoreItem;
 
+// Initializes a fresh store; destroy it before setting it up again.
 int store_setup(Store* s, uint64_t max_memory);
 
 // Takes ownership of uint8_t *b on success; the caller keeps ownership on failure.
