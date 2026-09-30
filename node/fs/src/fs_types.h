@@ -42,7 +42,7 @@ struct Session {
     SessionID   id = {0};
     bool        is_inbound = false;
     FileHandle* file = nullptr;
-    Hasher      hasher;
+    Hasher      hasher = new_hasher();
     uint64_t    byte_count = 0;
     Voucher     voucher;
     uint8_t     actor = ACTOR_NONE;

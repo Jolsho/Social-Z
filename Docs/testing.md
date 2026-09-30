@@ -11,7 +11,9 @@ ctest --preset tests
 ```
 
 The tests preset configures a separate build under `build/tests`.
-It skips application dependencies and builds the registered test executables.
+It skips application setup and builds the registered test executables.
+The hash test downloads the project's pinned BLAKE3 dependency on first configuration.
+Other application dependencies are not required.
 Rebuild before running tests after changing code.
 CTest runs the executables that have already been built.
 
@@ -32,6 +34,7 @@ The existing ledger tests are not included in this setup.
 The store eviction test prepares its own table storage to isolate eviction behavior.
 Store setup and cleanup are covered separately by the client store lifecycle test.
 The common hash table storage test exercises the real allocator, alignment, and cleanup.
+The hash test checks published BLAKE3 vectors, incremental updates, and independent state copies.
 
 ## Memory checks
 

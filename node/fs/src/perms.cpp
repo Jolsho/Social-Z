@@ -143,7 +143,7 @@ void FS::settle_remote(const Msg* msg, Error& e) {
     uint8_t flags;
     vec_read(msg->data, &flags, sizeof(uint8_t));
 
-    Hasher h;
+    Hasher h = new_hasher();
     hash_update(&h, p_hash.b, HASH_SIZE);
     hash_update(&h, &flags, sizeof(uint8_t));
     HashT accept_hash = hash_finalize(&h);
@@ -307,7 +307,7 @@ void FS::revoke_local(const Msg* msg, Error& e) {
     }
 
 
-    Hasher h;
+    Hasher h = new_hasher();
     hash_update(&h, p_hash.b, HASH_SIZE);
     hash_update(&h, &REVOKE, 1);
     HashT revoke_hash = hash_finalize(&h);
@@ -380,7 +380,7 @@ void FS::revoke_remote(const Msg* msg, Error& e) {
     }
 
 
-    Hasher h;
+    Hasher h = new_hasher();
     hash_update(&h, p_hash.b, HASH_SIZE);
     hash_update(&h, &REVOKE, 1);
     HashT revoke_hash = hash_finalize(&h);

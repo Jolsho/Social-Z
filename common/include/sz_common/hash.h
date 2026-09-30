@@ -7,6 +7,7 @@
 #pragma once
 #include "sz_common/codec.h"
 #include <stdbool.h>
+#include <blake3.h>
 
 #ifdef __cplusplus
 #include <cstring>
@@ -14,10 +15,11 @@ extern "C" {
 #endif
 
 typedef struct Hasher {
-    void*   inner;
+    blake3_hasher inner;
 } Hasher;
 
-Hasher new_hasher();
+// State is owned by value; initialize with new_hasher before use.
+Hasher new_hasher(void);
 void hash_update(Hasher* hr, const uint8_t* data, size_t size);
 HashT hash_finalize(Hasher* hr);
 

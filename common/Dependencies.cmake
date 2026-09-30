@@ -43,29 +43,13 @@ set_target_properties(sodium PROPERTIES
 ## BLAKE3
 ##################################
 
-set(BLAKE_DIR ${DEPS_SRC_DIR}/blake3)
-set(FETCHCONTENT_BASE_DIR "${BLAKE_DIR}")
-
-FetchContent_Declare(blake3
-    GIT_REPOSITORY https://github.com/BLAKE3-team/BLAKE3.git
-    GIT_TAG 1.8.5
-
-    SOURCE_DIR "${BLAKE_DIR}/src"
-    BINARY_DIR "${BLAKE_DIR}/build"
-)
-
-FetchContent_GetProperties(blake3)
-
-if(NOT blake3_POPULATED)
-    FetchContent_Populate(blake3)
-    add_subdirectory(${blake3_SOURCE_DIR}/c ${blake3_BINARY_DIR} EXCLUDE_FROM_ALL)
-endif()
+include(${CMAKE_CURRENT_LIST_DIR}/Blake3.cmake)
 
 install(
     TARGETS blake3
     ARCHIVE DESTINATION lib
 )
 install(FILES 
-    ${BLAKE_DIR}/src/c/blake3.h 
+    ${blake3_SOURCE_DIR}/c/blake3.h
     DESTINATION include/
 )
