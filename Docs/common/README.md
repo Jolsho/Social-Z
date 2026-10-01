@@ -18,6 +18,7 @@ These provide the containers used by the other components.
 Shared binary formats and serialization helpers.
 Includes keys, hashes, cards, permissions, and vouchers.
 [Owner updates](owner.md) add bounded records, signature inputs, and deterministic locators.
+[Account headers](account.md) encode the page references decrypted by the client.
 
 ### crypto
 

@@ -76,4 +76,5 @@ Publishing that replacement still requires the planned signed owner update.
 Implement the node-side username resolver and bounded pre-login access policy.
 Connect the bootstrap bodies to the node-side resolver and operation framing.
 Add protected local credential storage and password-change publication.
-Registration, recovery, and account-header decoding are still unfinished.
+Registration, recovery, and client account-header retrieval are still unfinished.
+The shared [account-header codec](../common/account.md) defines its plaintext format.

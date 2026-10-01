@@ -56,6 +56,11 @@ It rejects truncated or trailing data, unknown identifiers, and revision overflo
 It also checks every encoded byte for tampering and rejects a signing key from another owner.
 These checks do not exercise FS admission or revision conflicts against stored records.
 
+The account-header test checks exact wire bytes, page ranges, and copied input ownership.
+It rejects malformed lengths, unsupported versions, wrong record kinds, and reversed ranges.
+It checks that failed calls preserve their outputs and that full u64 indices round-trip.
+Account-header encryption and node retrieval are not exercised yet.
+
 ## Memory checks
 
 For GCC or Clang builds, use the sanitizer preset.
