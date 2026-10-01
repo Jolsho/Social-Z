@@ -23,6 +23,7 @@ int context_release_recv_buffer(struct Client* cli, ContextID id) {
 int context_release_send_buffer(struct Client* cli, ContextID id) {
     if (!valid_id(id)) return CLIENT_INVALID_ID;
 
+    if (cli->net.states[id].send_owned) return CLIENT_CONN_BUSY;
     Buffer* b = &cli->net.send_buffers[id];
     if (!b->b) return CLIENT_OK;
 

@@ -10,7 +10,7 @@
 
 #define BUFFER_BUCKETS 3
 
-typedef struct __attribute__((packed)) {
+typedef struct __attribute__((packed)) Buffer {
     uint8_t*    b;
     uint32_t    cap;
     uint32_t    size;

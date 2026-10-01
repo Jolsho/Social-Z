@@ -15,7 +15,9 @@ It also holds network state and the visual world.
 init_client() initializes the pool, cache, feed, and networking.
 destroy_client() releases those resources.
 Rendering startup initializes the world separately.
-Only the blob response parser is enabled while the other formats are being repaired.
+Username/password login uses the existing request marshaler, send_request hook, and response parser.
+See [login](login.md) for the flow and buffer ownership rules.
+Login and blob response parsers are enabled while the feed format is being repaired.
 
 ## Components
 

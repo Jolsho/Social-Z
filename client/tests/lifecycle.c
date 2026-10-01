@@ -13,6 +13,11 @@
 #include <assert.h>
 #include <stdlib.h>
 
+void send_request(struct Client* cli, ContextID id, struct Buffer* buff) {
+    (void)cli; (void)id; (void)buff;
+    assert(!"Lifecycle tests do not send requests");
+}
+
 static size_t allocation_count, fail_at;
 
 void* client_test_malloc(size_t size)

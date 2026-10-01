@@ -8,6 +8,7 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,9 +35,18 @@ void destroy_client(struct Client* cli);
 typedef int16_t ContextID;
 
 
+// Login copies the password locally. A fresh client is required to switch accounts.
+int client_login(struct Client* cli, const char* username,
+    const uint8_t* password, size_t password_size, ContextID* id);
+int client_cancel_login(struct Client* cli);
+bool client_is_logged_in(const struct Client* cli);
+int client_get_public_key(const struct Client* cli, uint8_t public_key[32]);
+
 /// Buffer is used as a reference to WASM buffers.
 /// They represent ownership of a block of memory.
 struct Buffer;
+// Return the original outgoing buffer after sending or copying its bytes.
+// Return outstanding buffers before destroying the client.
 void client_return_buffer(struct Client* cli, struct Buffer* buff);
 
 

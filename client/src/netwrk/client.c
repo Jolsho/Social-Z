@@ -57,7 +57,13 @@ ContextID client_new_context(Networker* net) {
 void client_free_context(struct Client* cli, ContextID id) {
     if (!cli || !valid_id(id)) return;
     Networker* net = &cli->net;
-    if (net->states[id].state == CON_DEAD) return;
+    if (net->states[id].state == CON_DEAD && !net->states[id].release_pending) return;
+    if (cli->login.id == id) {
+        volatile uint8_t* secret = cli->login.password.b;
+        for (size_t i = 0; i < cli->login.password.cap; i++) secret[i] = 0;
+        if (secret) buffer_pool_push(&cli->pool, cli->login.password.b, cli->login.password.cap);
+        memset(&cli->login, 0, sizeof(cli->login));
+    }
 
     if (net->states[id].blob_active) {
         HashT hash = net->states[id].blob_hash;
@@ -67,6 +73,12 @@ void client_free_context(struct Client* cli, ContextID id) {
     }
     context_release_recv_buffer(cli, id);
 
+    // The host may still be sending. Keep this context reserved until it returns the buffer.
+    if (net->states[id].send_owned) {
+        net->states[id].release_pending = true;
+        net->states[id].state = CON_DEAD;
+        return;
+    }
     context_release_send_buffer(cli, id);
 
     net->since_used_last[id] = 0;

@@ -1,0 +1,467 @@
+/*
+ * Copyright (c) 2026 Jolsho
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
+#include "client.h"
+#include "netwrk/context.h"
+#include "netwrk/marshalers.h"
+#include "sz_common/hash.h"
+#include <sodium.h>
+#include <assert.h>
+
+static const uint8_t password[] = "my test password";
+static KeyPair identity;
+static Key owner_key;
+static uint8_t blob[LOGIN_BLOB_SIZE];
+
+typedef struct Host {
+    struct Client* cli;
+    ContextID id;
+    uint8_t request[6 + LOGIN_USERNAME_MAX];
+    size_t size, calls;
+    bool fail, synchronous, retain;
+    Buffer* pending;
+    int response;
+} Host;
+
+
+static HashT blob_hash(const uint8_t* bytes) {
+    Hasher hasher = new_hasher();
+    hash_update(&hasher, bytes, LOGIN_BLOB_SIZE);
+    return hash_finalize(&hasher);
+}
+
+static void lookup(uint8_t reply[LOGIN_LOOKUP_SIZE], const uint8_t* bytes, const Key* account) {
+    memset(reply, 0, LOGIN_LOOKUP_SIZE);
+    reply[1] = reply[3] = 1;
+    memcpy(reply + 4, account->b, KEY_SIZE);
+    HashT hash = blob_hash(bytes);
+    memcpy(reply + 36, hash.b, HASH_SIZE);
+    reply[71] = LOGIN_BLOB_SIZE;
+}
+
+static int deliver_blob(Host* host, const uint8_t* bytes, size_t chunk_size) {
+    HashT hash = blob_hash(bytes);
+    int r = CLIENT_OK;
+    for (size_t offset = 0; offset < LOGIN_BLOB_SIZE && r == CLIENT_OK;) {
+        uint8_t chunk[HASH_SIZE + sizeof(uint64_t) + LOGIN_BLOB_SIZE];
+        memcpy(chunk, hash.b, HASH_SIZE);
+        size_t prefix = HASH_SIZE;
+        if (!offset) {
+            uint64_t size = LOGIN_BLOB_SIZE;
+            memcpy(chunk + prefix, &size, sizeof(size));
+            prefix += sizeof(size);
+        }
+        size_t n = LOGIN_BLOB_SIZE - offset;
+        if (n > chunk_size) n = chunk_size;
+        memcpy(chunk + prefix, bytes + offset, n);
+        r = client_parse_response(host->cli, host->id, chunk, prefix + n);
+        memset(chunk, 0, sizeof(chunk));
+        offset += n;
+        if (offset < LOGIN_BLOB_SIZE) assert(!client_is_logged_in(host->cli));
+    }
+    return r;
+}
+
+static Host* active_host;
+
+void send_request(struct Client* cli, ContextID id, struct Buffer* buff) {
+    Host* host = active_host;
+    assert(host && host->cli == cli);
+    assert(buff == &cli->net.send_buffers[id]);
+    assert(cli->net.states[id].send_owned && cli->net.states[id].state == CON_RECEIVING);
+    assert(buff->size <= sizeof(host->request));
+    host->id = id;
+    host->size = buff->size;
+    host->calls++;
+    memcpy(host->request, buff->b, buff->size);
+    uint8_t operation = buff->b[3];
+    if (host->retain) {
+        assert(!host->pending);
+        host->pending = buff;
+    } else client_return_buffer(cli, buff);
+    if (host->fail) {
+        client_cancel_login(cli);
+        return;
+    }
+    if (host->synchronous) {
+        if (operation == 1) {
+            uint8_t reply[LOGIN_LOOKUP_SIZE];
+            lookup(reply, blob, &identity.pub);
+            host->response = client_parse_response(cli, id, reply, sizeof(reply));
+            memset(reply, 0, sizeof(reply));
+        } else {
+            assert(operation == 2);
+            host->response = deliver_blob(host, blob, 11);
+        }
+    }
+}
+
+static Host new_host(void) {
+    Host host = {.cli = init_client()};
+    assert(host.cli);
+    return host;
+}
+
+static void begin(Host* host, const uint8_t* pwd, size_t size) {
+    active_host = host;
+    assert(client_login(host->cli, "alice", pwd, size, &host->id) == CLIENT_OK);
+    assert(host->size == 11 && host->request[1] == 1 && host->request[3] == 1);
+    assert(host->request[4] == 0 && host->request[5] == 5);
+    assert(memcmp(host->request + 6, "alice", 5) == 0);
+    assert(!client_is_logged_in(host->cli));
+}
+
+static void resolve(Host* host, const uint8_t* bytes, const Key* account) {
+    uint8_t reply[LOGIN_LOOKUP_SIZE];
+    lookup(reply, bytes, account);
+    assert(client_parse_response(host->cli, host->id, reply, sizeof(reply)) == CLIENT_OK);
+    memset(reply, 0, sizeof(reply));
+    HashT hash = blob_hash(bytes);
+    assert(host->size == LOGIN_FETCH_SIZE && host->request[1] == 1 && host->request[3] == 2);
+    assert(memcmp(host->request + 4, hash.b, HASH_SIZE) == 0);
+}
+
+static void assert_locked(struct Client* cli) {
+    KeyPair zero = {0};
+    assert(!client_is_logged_in(cli) && !cli->login.id && !cli->login.password.b);
+    assert(memcmp(&cli->keys, &zero, sizeof(zero)) == 0);
+    assert(sodium_is_zero(cli->data_key.b, KEY_SIZE));
+}
+
+static void password_stays_local(void) {
+    const uint8_t other_password[] = "a completely different unlock password";
+    const uint8_t* passwords[] = {password, other_password};
+    const size_t sizes[] = {sizeof(password) - 1, sizeof(other_password) - 1};
+    const uint8_t expected_lookup[] = {0, 1, 0, 1, 0, 5, 'a', 'l', 'i', 'c', 'e'};
+    uint8_t expected_fetch[LOGIN_FETCH_SIZE] = {0, 1, 0, 2};
+    HashT hash = blob_hash(blob);
+    memcpy(expected_fetch + 4, hash.b, HASH_SIZE);
+    for (size_t i = 0; i < 2; i++) {
+        Host host = new_host();
+        host.retain = true;
+        begin(&host, passwords[i], sizes[i]);
+        assert(host.pending->b != host.cli->login.password.b);
+        assert(host.size == sizeof(expected_lookup));
+        assert(memcmp(host.request, expected_lookup, sizeof(expected_lookup)) == 0);
+        client_return_buffer(host.cli, host.pending);
+        host.pending = NULL;
+        resolve(&host, blob, &identity.pub);
+        assert(host.pending->b != host.cli->login.password.b);
+        assert(host.size == sizeof(expected_fetch));
+        assert(memcmp(host.request, expected_fetch, sizeof(expected_fetch)) == 0);
+        client_return_buffer(host.cli, host.pending);
+        assert(client_cancel_login(host.cli) == CLIENT_OK);
+        destroy_client(host.cli);
+    }
+}
+
+static void success_and_retry(void) {
+    Host host = new_host();
+    uint8_t public_key[KEY_SIZE] = {0}, supplied[sizeof(password)];
+    assert(client_get_public_key(host.cli, public_key) == CLIENT_ERR);
+    memcpy(supplied, password, sizeof(password));
+    begin(&host, supplied, sizeof(password) - 1);
+    memset(supplied, 0, sizeof(supplied));
+    assert(client_login(host.cli, "bob", password, sizeof(password) - 1, &host.id) == CLIENT_CONN_BUSY);
+    resolve(&host, blob, &identity.pub);
+    uint8_t* retained_password = host.cli->login.password.b;
+    size_t retained_capacity = host.cli->login.password.cap;
+    assert(deliver_blob(&host, blob, 7) == CLIENT_PARSE_DONE);
+    assert(client_is_logged_in(host.cli));
+    assert(!host.cli->login.id && !host.cli->login.password.b);
+    /* Pool free-list pointers occupy the prefix; the rest of the released buffer is wiped. */
+    assert(sodium_is_zero(retained_password + sizeof(void*), retained_capacity - sizeof(void*)));
+    assert(client_get_public_key(host.cli, public_key) == CLIENT_OK);
+    assert(memcmp(public_key, identity.pub.b, KEY_SIZE) == 0);
+    assert(memcmp(&host.cli->keys, &identity, sizeof(identity)) == 0);
+    assert(memcmp(host.cli->data_key.b, owner_key.b, KEY_SIZE) == 0);
+    assert(client_login(host.cli, "bob", password, sizeof(password) - 1, &host.id) == CLIENT_CONN_BUSY);
+    destroy_client(host.cli);
+
+    host = new_host();
+    const uint8_t wrong[] = "wrong password";
+    begin(&host, wrong, sizeof(wrong) - 1);
+    resolve(&host, blob, &identity.pub);
+    assert(deliver_blob(&host, blob, 19) == CLIENT_ERR);
+    assert_locked(host.cli);
+    begin(&host, password, sizeof(password) - 1);
+    resolve(&host, blob, &identity.pub);
+    /* Cached ciphertext is reused, but still decrypted with this attempt's password. */
+    assert(deliver_blob(&host, blob, LOGIN_BLOB_SIZE) == CLIENT_PARSE_DONE);
+    destroy_client(host.cli);
+}
+
+static void failures_and_cleanup(void) {
+    Host host = new_host();
+    active_host = &host;
+    assert(client_login(host.cli, "", password, sizeof(password) - 1, &host.id) == CLIENT_ERR);
+    char oversized[LOGIN_USERNAME_MAX + 2];
+    memset(oversized, 'a', sizeof(oversized) - 1);
+    oversized[sizeof(oversized) - 1] = 0;
+    assert(client_login(host.cli, oversized, password, sizeof(password) - 1, &host.id) == CLIENT_ERR);
+    assert(client_login(host.cli, "alice", password, LOGIN_PASSWORD_MAX + 1, &host.id) == CLIENT_ERR);
+    assert(client_login(host.cli, "alice", NULL, 1, &host.id) == CLIENT_ERR);
+    host.fail = true;
+    assert(client_login(host.cli, "alice", password, sizeof(password) - 1, &host.id) == CLIENT_ERR);
+    assert_locked(host.cli);
+    host.fail = false;
+    begin(&host, password, sizeof(password) - 1);
+    assert(client_parse_response(host.cli, host.id, NULL, 0) == CLIENT_ERR);
+    assert_locked(host.cli);
+    begin(&host, password, sizeof(password) - 1);
+    uint8_t reply[LOGIN_LOOKUP_SIZE + 1];
+    lookup(reply, blob, &identity.pub);
+    reply[71]++;
+    assert(client_parse_response(host.cli, host.id, reply, LOGIN_LOOKUP_SIZE) == CLIENT_ERR);
+    assert_locked(host.cli);
+    begin(&host, password, sizeof(password) - 1);
+    lookup(reply, blob, &identity.pub);
+    assert(client_parse_response(host.cli, host.id, reply, sizeof(reply)) == CLIENT_ERR);
+    assert_locked(host.cli);
+
+    begin(&host, password, sizeof(password) - 1);
+    host.fail = true;
+    lookup(reply, blob, &identity.pub);
+    assert(client_parse_response(host.cli, host.id, reply, LOGIN_LOOKUP_SIZE) == CLIENT_ERR);
+    assert_locked(host.cli);
+    host.fail = false;
+    begin(&host, password, sizeof(password) - 1);
+    ContextID unrelated = client_new_context(&host.cli->net);
+    lookup(reply, blob, &identity.pub);
+    assert(client_parse_response(host.cli, unrelated, reply, LOGIN_LOOKUP_SIZE) == CLIENT_ERR);
+    assert(host.cli->login.id == host.id);
+    client_free_context(host.cli, unrelated);
+    resolve(&host, blob, &identity.pub);
+    uint8_t first[HASH_SIZE + sizeof(uint64_t) + 1];
+    HashT hash = blob_hash(blob);
+    uint64_t size = LOGIN_BLOB_SIZE;
+    memcpy(first, hash.b, HASH_SIZE);
+    memcpy(first + HASH_SIZE, &size, sizeof(size));
+    first[sizeof(first) - 1] = blob[0];
+    assert(client_parse_response(host.cli, host.id, first, sizeof(first)) == CLIENT_OK);
+    assert(client_cancel_login(host.cli) == CLIENT_OK);
+    assert_locked(host.cli);
+
+    begin(&host, password, sizeof(password) - 1);
+    resolve(&host, blob, &identity.pub);
+    uint8_t corrupted[HASH_SIZE + sizeof(uint64_t) + LOGIN_BLOB_SIZE];
+    memcpy(corrupted, hash.b, HASH_SIZE);
+    size = LOGIN_BLOB_SIZE + 1;
+    memcpy(corrupted + HASH_SIZE, &size, sizeof(size));
+    memcpy(corrupted + HASH_SIZE + sizeof(size), blob, LOGIN_BLOB_SIZE);
+    assert(client_parse_response(host.cli, host.id, corrupted, sizeof(corrupted)) == CLIENT_ERR);
+    assert_locked(host.cli);
+    begin(&host, password, sizeof(password) - 1);
+    resolve(&host, blob, &identity.pub);
+    size = LOGIN_BLOB_SIZE;
+    memcpy(corrupted + HASH_SIZE, &size, sizeof(size));
+    corrupted[sizeof(corrupted) - 1] ^= 1;
+    assert(client_parse_response(host.cli, host.id, corrupted, sizeof(corrupted)) == CLIENT_ERR);
+    assert_locked(host.cli);
+    assert(!store_get_item(&host.cli->blob_store, &hash));
+    begin(&host, password, sizeof(password) - 1);
+    resolve(&host, blob, &identity.pub);
+    uint8_t oversized_chunk[sizeof(corrupted) + 1] = {0};
+    memcpy(oversized_chunk, hash.b, HASH_SIZE);
+    memcpy(oversized_chunk + HASH_SIZE, &size, sizeof(size));
+    assert(client_parse_response(host.cli, host.id, oversized_chunk, sizeof(oversized_chunk)) == CLIENT_ERR);
+    assert_locked(host.cli);
+    assert(!store_get_item(&host.cli->blob_store, &hash));
+    begin(&host, password, sizeof(password) - 1);
+    resolve(&host, blob, &identity.pub);
+    first[0] ^= 1;
+    assert(client_parse_response(host.cli, host.id, first, sizeof(first)) == CLIENT_ERR);
+    assert_locked(host.cli);
+
+    begin(&host, password, sizeof(password) - 1);
+    Key wrong_account = {{0}};
+    resolve(&host, blob, &wrong_account);
+    assert(deliver_blob(&host, blob, 17) == CLIENT_ERR);
+    assert_locked(host.cli);
+    begin(&host, password, sizeof(password) - 1);
+    destroy_client(host.cli); /* Pending password is wiped during shutdown. */
+}
+
+static void exhausted_resources(void) {
+    Host host = new_host();
+    active_host = &host;
+    for (size_t i = 1; i < MAX_CONNS; i++) assert(valid_id(client_new_context(&host.cli->net)));
+    assert(client_login(host.cli, "alice", password, sizeof(password) - 1, &host.id) == CLIENT_CONN_BUSY);
+    assert_locked(host.cli);
+    destroy_client(host.cli);
+
+    host = new_host();
+    active_host = &host;
+    buffer_pool_destroy(&host.cli->pool);
+    assert(buffer_pool_init(&host.cli->pool, 256, 1, 4096, 1, 65536, 1) == 0);
+    size_t caps[] = {256, 4096, 65536};
+    uint8_t* held[3];
+    for (size_t i = 0; i < 3; i++) {
+        held[i] = buffer_pool_pop(&host.cli->pool, &caps[i]);
+        assert(held[i]);
+    }
+    assert(client_login(host.cli, "alice", password, sizeof(password) - 1, &host.id) == CLIENT_ERR);
+    assert_locked(host.cli);
+    assert(host.cli->net.free_head == 1);
+    for (size_t i = 0; i < 3; i++) assert(buffer_pool_push(&host.cli->pool, held[i], caps[i]) == 0);
+    for (size_t i = 1; i < 3; i++) {
+        held[i] = buffer_pool_pop(&host.cli->pool, &caps[i]);
+        assert(held[i]);
+    }
+    assert(client_login(host.cli, "alice", password, sizeof(password) - 1, &host.id) == CLIENT_ERR);
+    assert_locked(host.cli);
+    assert(host.cli->pool.buckets[0].available == 1 && !host.calls);
+    for (size_t i = 1; i < 3; i++) assert(buffer_pool_push(&host.cli->pool, held[i], caps[i]) == 0);
+    begin(&host, password, sizeof(password) - 1);
+    resolve(&host, blob, &identity.pub);
+    assert(deliver_blob(&host, blob, 9) == CLIENT_PARSE_DONE);
+    destroy_client(host.cli);
+}
+
+static void retained_requests(void) {
+    Host host = new_host();
+    host.retain = true;
+    begin(&host, password, sizeof(password) - 1);
+    ContextID first = host.id;
+    Buffer* request = host.pending;
+    assert(context_release_send_buffer(host.cli, first) == CLIENT_CONN_BUSY);
+    uint8_t reply[LOGIN_LOOKUP_SIZE];
+    lookup(reply, blob, &identity.pub);
+    assert(client_parse_response(host.cli, first, reply, sizeof(reply)) == CLIENT_OK);
+    memset(reply, 0, sizeof(reply));
+    assert(host.calls == 1 && !host.cli->login.fetching);
+    assert(memcmp(request->b + 6, "alice", 5) == 0);
+    assert(marshal_get_user_data_request(host.cli, first) == CLIENT_CONN_BUSY);
+    host.pending = NULL;
+    client_return_buffer(host.cli, request);
+    assert(host.calls == 2 && host.cli->login.fetching);
+    HashT hash = blob_hash(blob);
+    assert(memcmp(host.pending->b + 4, hash.b, HASH_SIZE) == 0);
+    assert(deliver_blob(&host, blob, 5) == CLIENT_PARSE_DONE);
+    assert(host.cli->net.states[first].release_pending);
+    assert(memcmp(host.pending->b + 4, hash.b, HASH_SIZE) == 0);
+    assert(host.cli->net.free_head != first);
+    client_return_buffer(host.cli, host.pending);
+    assert(host.cli->net.free_head == first);
+    host.pending = NULL;
+    destroy_client(host.cli);
+
+    host = new_host();
+    host.retain = true;
+    begin(&host, password, sizeof(password) - 1);
+    first = host.id;
+    request = host.pending;
+    assert(client_cancel_login(host.cli) == CLIENT_OK);
+    assert_locked(host.cli);
+    assert(memcmp(request->b + 6, "alice", 5) == 0);
+    assert(host.cli->net.free_head != first);
+    // A new login cannot reuse a context whose request is still held by the host.
+    host.pending = NULL;
+    begin(&host, password, sizeof(password) - 1);
+    assert(host.id != first);
+    client_return_buffer(host.cli, request);
+    assert(host.cli->login.id == host.id);
+    assert(client_cancel_login(host.cli) == CLIENT_OK);
+    client_return_buffer(host.cli, host.pending);
+    destroy_client(host.cli);
+}
+
+static void authenticated_bad_record(uint8_t tag, uint8_t kind) {
+    uint8_t changed[LOGIN_BLOB_SIZE], key[32], plain[68] = {0}, ad[71];
+    memcpy(changed, blob, sizeof(changed));
+    assert(crypto_pwhash(key, sizeof(key), (const char*)password, sizeof(password) - 1,
+                        changed + 20, 2, 64 * 1024 * 1024, crypto_pwhash_ALG_ARGON2ID13) == 0);
+    plain[1] = 1;
+    plain[3] = kind;
+    memcpy(plain + 4, identity.priv.b, 32);
+    memcpy(plain + 36, owner_key.b, 32);
+    crypto_secretstream_xchacha20poly1305_state stream;
+    assert(crypto_secretstream_xchacha20poly1305_init_push(&stream, changed + 36, key) == 0);
+    memcpy(ad, changed, 64);
+    ad[64] = 0;
+    ad[65] = 5;
+    memcpy(ad + 66, "alice", 5);
+    assert(crypto_secretstream_xchacha20poly1305_push(&stream, changed + 64, NULL,
+                        plain, sizeof(plain), ad, sizeof(ad), tag) == 0);
+    KeyPair recovered = {0};
+    Key data = {{0}};
+    assert(login_decrypt(&recovered, &data, &identity.pub, "alice", password,
+                        sizeof(password) - 1, changed, sizeof(changed)) == -1);
+    assert(sodium_is_zero((const uint8_t*)&recovered, sizeof(recovered)));
+    assert(sodium_is_zero(data.b, sizeof(data)));
+    sodium_memzero(plain, sizeof(plain));
+    sodium_memzero(key, sizeof(key));
+    sodium_memzero(&stream, sizeof(stream));
+}
+
+static void authenticated_record_checks(void) {
+    KeyPair recovered = {0};
+    Key data = {{0}};
+    uint8_t changed[LOGIN_BLOB_SIZE];
+    assert(login_decrypt(&recovered, &data, &identity.pub, "bob", password,
+                        sizeof(password) - 1, blob, sizeof(blob)) == -1);
+    const size_t offsets[] = {0, 2, 4, 8, 12, 20, 36, 60, 64, 148};
+    for (size_t i = 0; i < sizeof(offsets) / sizeof(offsets[0]); i++) {
+        size_t offset = offsets[i];
+        memcpy(changed, blob, sizeof(blob));
+        changed[offset] ^= 1;
+        assert(login_decrypt(&recovered, &data, &identity.pub, "alice", password,
+                            sizeof(password) - 1, changed, sizeof(changed)) == -1);
+    }
+    assert(sodium_is_zero((const uint8_t*)&recovered, sizeof(recovered)) && sodium_is_zero(data.b, sizeof(data)));
+    for (size_t size = 0; size < sizeof(blob); size++)
+        assert(login_decrypt(&recovered, &data, &identity.pub, "alice", password,
+                            sizeof(password) - 1, blob, size) == -1);
+
+    const uint8_t replacement[] = "replacement password";
+    assert(login_encrypt(changed, "alice", replacement, sizeof(replacement) - 1, &identity, &owner_key) == 0);
+    assert(memcmp(changed + 20, blob + 20, 16) != 0);
+    assert(memcmp(changed + 36, blob + 36, 24) != 0);
+    assert(login_decrypt(&recovered, &data, &identity.pub, "alice", password,
+                        sizeof(password) - 1, changed, sizeof(changed)) == -1);
+    assert(login_decrypt(&recovered, &data, &identity.pub, "alice", replacement,
+                        sizeof(replacement) - 1, changed, sizeof(changed)) == 0);
+    assert(memcmp(&recovered, &identity, sizeof(identity)) == 0);
+    assert(memcmp(&data, &owner_key, sizeof(data)) == 0);
+    sodium_memzero(&recovered, sizeof(recovered));
+    sodium_memzero(&data, sizeof(data));
+}
+
+static void synchronous_transport(void) {
+    Host host = new_host();
+    host.synchronous = true;
+    active_host = &host;
+    assert(client_login(host.cli, "alice", password, sizeof(password) - 1, &host.id) == CLIENT_PARSE_DONE);
+    assert(client_is_logged_in(host.cli) && host.calls == 2);
+    destroy_client(host.cli);
+    host = new_host();
+    host.synchronous = true;
+    active_host = &host;
+    const uint8_t wrong[] = "wrong password";
+    assert(client_login(host.cli, "alice", wrong, sizeof(wrong) - 1, &host.id) == CLIENT_ERR);
+    assert_locked(host.cli);
+    assert(host.response == CLIENT_ERR);
+    destroy_client(host.cli);
+}
+
+int main(void) {
+    assert(sodium_init() >= 0);
+    uint8_t seed[32] = {1, 2, 3};
+    assert(crypto_sign_seed_keypair(identity.pub.b, identity.priv.b, seed) == 0);
+    memset(owner_key.b, 0xa5, KEY_SIZE);
+    assert(login_encrypt(blob, "alice", password, sizeof(password) - 1, &identity, &owner_key) == 0);
+    password_stays_local();
+    success_and_retry();
+    failures_and_cleanup();
+    exhausted_resources();
+    authenticated_record_checks();
+    authenticated_bad_record(crypto_secretstream_xchacha20poly1305_TAG_MESSAGE, 13);
+    authenticated_bad_record(crypto_secretstream_xchacha20poly1305_TAG_FINAL, 99);
+    synchronous_transport();
+    retained_requests();
+    sodium_memzero(&identity, sizeof(identity));
+    sodium_memzero(&owner_key, sizeof(owner_key));
+    return 0;
+}

@@ -13,11 +13,15 @@ sz_add_test(client feed feed.c ../src/data/feed.c)
 sz_add_test(client blobs blobs.c ../src/data/blobs.c ../src/netwrk/client.c
     ../src/netwrk/context.c ../../common/src/hash/hash.c ${store_sources})
 target_link_libraries(sz_blobs_test PRIVATE blake3)
-sz_add_test(client lifecycle lifecycle.c ../src/client.c ../src/data/feed.c
+set(client_sources ../src/client.c ../src/data/feed.c ../src/data/user.c
     ../src/data/blobs.c ../src/netwrk/client.c ../src/netwrk/context.c
-    ../../common/src/hash/hash.c ${store_sources})
-target_link_libraries(sz_lifecycle_test PRIVATE blake3)
+    ../../common/src/hash/hash.c ../../common/src/crypto/login.c ${store_sources})
+sz_add_test(client lifecycle lifecycle.c ${client_sources})
+target_link_libraries(sz_lifecycle_test PRIVATE blake3 sodium)
 target_compile_definitions(sz_lifecycle_test PRIVATE
     malloc=client_test_malloc calloc=client_test_calloc)
+
+sz_add_test(client login login.c ${client_sources})
+target_link_libraries(sz_login_test PRIVATE blake3 sodium)
 
 set_tests_properties(client.store_eviction PROPERTIES TIMEOUT 10)

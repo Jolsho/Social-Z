@@ -15,6 +15,7 @@ typedef struct __attribute__((packed)) {
     uint8_t     state;
     uint8_t     parser_id;
     ContextID   next_free;
+    bool        send_owned, release_pending;
     bool        blob_active;
     HashT       blob_hash;
 

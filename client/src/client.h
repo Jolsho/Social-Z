@@ -9,6 +9,7 @@
 #include "netwrk/networker.h"
 #include "utils/store.h"
 #include "data/feed.h"
+#include "sz_common/login.h"
 
 #ifdef NATIVE
 
@@ -31,6 +32,14 @@ struct Client {
     ///////////// USER //////////////
     KeyPair         keys;
     Key             data_key;
+    bool            logged_in;
+    struct {
+        ContextID id;
+        bool lookup_ready, fetching;
+        char username[LOGIN_USERNAME_MAX + 1];
+        Buffer password;
+        LoginLookup lookup;
+    } login;
 
     ///////// DATA STORES ///////////
     Feed            post_feed;
@@ -52,11 +61,13 @@ struct Client {
 #if defined(PLATFORM_LINUX) || defined(PLATFORM_MACOS)
 #include "sys/socket.h"
 
-inline void send_request(Client* cli, ContextID id, Buffer* b) {
+inline void send_request(struct Client* cli, ContextID id, struct Buffer* b) {
 
     // TODO --> this is very naive. You need to enqueue these things.
 
-    uint64_t n = send(cli->states[id].fd, b->b, b->size, 0);
-    buffer_pool_push(&cli->pool, b->b, b->cap);
+    ssize_t n = send(cli->net.states[id].fd, b->b, b->size, 0);
+    bool failed = n < 0 || (size_t)n != b->size;
+    client_return_buffer(cli, b);
+    if (failed) client_cancel_login(cli);
 }
 #endif

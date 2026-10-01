@@ -25,8 +25,11 @@ The store and buffer pool manage the memory behind these items.
 
 ## User data
 
-There is a request and response path for user data.
-The code includes password based key derivation and decryption.
+The user-data marshaler first requests a username lookup, then the encrypted login blob.
+The user-data parser copies lookup fields and assembles incoming chunks through the blob parser.
+Authenticated decryption recovers the stable signing seed and main user_data_key.
+The password stays local.
+See [login](login.md) for the bootstrap format and ownership rules.
 
 The post request includes a user key and a feed offset.
 The response parser appends posts to the feed.
@@ -54,16 +57,16 @@ Callers need to account for that when returning network buffers to the pool.
 - [client/src/data/blobs.c:9](../../client/src/data/blobs.c#L9) parses a blob into the local store.
 - [client/src/utils/store.h:23](../../client/src/utils/store.h#L23) defines the store's memory and priority state.
 - [client/src/utils/store.h:40](../../client/src/utils/store.h#L40) documents ownership when assigning an item.
-- [client/src/data/user.c:46](../../client/src/data/user.c#L46) contains the user data decryption path.
+- [client/src/data/user.c:11](../../client/src/data/user.c#L11) marshals username lookup and blob fetch requests.
+- [client/src/data/user.c:97](../../client/src/data/user.c#L97) parses lookup replies and unlocks verified user data.
 
 ## TODO
 
 - Queue marshaled requests for sending.
   [client/src/data/post.c:44](../../client/src/data/post.c#L44)
-  [client/src/data/user.c:41](../../client/src/data/user.c#L41)
 
-- Finish parsing the decrypted user data.
-  [client/src/data/user.c:105](../../client/src/data/user.c#L105)
+- Implement node username lookup and account-header retrieval.
+  [login](login.md)
 
 - Use the response pagination flag to continue fetching feed pages.
   [client/src/data/post.c:57](../../client/src/data/post.c#L57)
