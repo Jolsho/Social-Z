@@ -8,6 +8,7 @@ sz_add_test(client store_lifecycle store_lifecycle.c ${store_sources})
 target_compile_definitions(sz_store_lifecycle_test PRIVATE realloc=store_test_realloc)
 sz_add_test(client context context.c
     ../src/netwrk/context.c ../src/netwrk/client.c ${store_sources})
+target_compile_definitions(sz_context_test PRIVATE calloc=context_test_calloc)
 sz_add_test(client feed feed.c ../src/data/feed.c)
 sz_add_test(client blobs blobs.c ../src/data/blobs.c ../src/netwrk/client.c
     ../src/netwrk/context.c ../../common/src/hash/hash.c ${store_sources})

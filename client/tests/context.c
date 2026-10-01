@@ -4,13 +4,19 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
+#undef calloc
 #include "client.h"
 #include "netwrk/context.h"
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 
-ContextID client_new_context(Networker* net);
-void client_free_context(struct Client* cli, ContextID id);
+static int calloc_calls, fail_calloc_at;
+
+void* context_test_calloc(size_t count, size_t size)
+{
+    return ++calloc_calls == fail_calloc_at ? NULL : calloc(count, size);
+}
 
 static void test_invalid_contexts(void)
 {
@@ -62,28 +68,63 @@ static void test_buffer_release(void)
 static void test_exhaustion_and_reuse(void)
 {
     struct Client cli = {0};
-    Buffer receive[MAX_CONNS] = {0};
-    Buffer send[MAX_CONNS] = {0};
-    cli.net.recv_buffers = receive;
-    cli.net.send_buffers = send;
-
-    /* Build the free list without relying on the unfinished initializer. */
-    for (ContextID id = 1; id < MAX_CONNS; id++) {
-        struct DeadConn dead = {
-            .id = id,
-            .next = id == MAX_CONNS - 1 ? INT16_MAX : id + 1
-        };
-        memcpy(&cli.net.states[id], &dead, sizeof(dead));
-    }
-    cli.net.free_head = 1;
+    memset(&cli.net, 0xa5, sizeof(cli.net));
+    assert(init_networker(&cli.net) == CLIENT_OK);
     for (ContextID id = 1; id < MAX_CONNS; id++) {
         assert(client_new_context(&cli.net) == id);
         assert(cli.net.states[id].state == CON_IDLE);
     }
     assert(client_new_context(&cli.net) == -1);
     client_free_context(&cli, MAX_CONNS - 1);
+    client_free_context(&cli, MAX_CONNS - 1);
     assert(client_new_context(&cli.net) == MAX_CONNS - 1);
     assert(client_new_context(&cli.net) == -1);
+    destroy_networker(&cli);
+    destroy_networker(&cli);
+    assert(client_new_context(&cli.net) == -1);
+    assert(!cli.net.recv_buffers && !cli.net.send_buffers);
+}
+
+static void test_setup_failures_and_dispatch(void)
+{
+    struct Client cli = {0};
+    assert(init_networker(NULL) == CLIENT_ERR);
+    assert(client_new_context(NULL) == -1);
+    for (int failed = 1; failed <= 2; failed++) {
+        calloc_calls = 0;
+        fail_calloc_at = failed;
+        assert(init_networker(&cli.net) == CLIENT_ERR);
+        assert(!cli.net.recv_buffers && !cli.net.send_buffers);
+        assert(client_new_context(&cli.net) == -1);
+        destroy_networker(&cli);
+    }
+    fail_calloc_at = 0;
+    assert(init_networker(&cli.net) == CLIENT_OK);
+    assert(client_parse_response(NULL, 1, NULL, 0) == CLIENT_ERR);
+    assert(client_new_context(&cli.net) == 1);
+    assert(client_parse_response(&cli, 1, NULL, 0) == CLIENT_ERR);
+    const Parser empty[] = {NULL};
+    cli.net.parsers = empty;
+    cli.net.parsers_count = 1;
+    assert(client_parse_response(&cli, 1, NULL, 0) == CLIENT_ERR);
+    destroy_networker(&cli);
+}
+
+static void test_shutdown_returns_buffers(void)
+{
+    struct Client cli = {0};
+    assert(init_networker(&cli.net) == CLIENT_OK);
+    assert(buffer_pool_init(&cli.pool, 256, 2, 4096, 1, 65536, 1) == 0);
+    ContextID id = client_new_context(&cli.net);
+    size_t capacity = 256;
+    cli.net.recv_buffers[id].b = buffer_pool_pop(&cli.pool, &capacity);
+    cli.net.recv_buffers[id].cap = capacity;
+    cli.net.send_buffers[id].b = buffer_pool_pop(&cli.pool, &capacity);
+    cli.net.send_buffers[id].cap = capacity;
+    assert(cli.pool.buckets[0].available == 0);
+    destroy_networker(&cli);
+    assert(cli.pool.buckets[0].available == 2);
+    buffer_pool_destroy(&cli.pool);
 }
 
 int main(void)
@@ -91,6 +132,8 @@ int main(void)
     test_invalid_contexts();
     test_buffer_release();
     test_exhaustion_and_reuse();
+    test_setup_failures_and_dispatch();
+    test_shutdown_returns_buffers();
     puts("Context tests passed.");
     return 0;
 }

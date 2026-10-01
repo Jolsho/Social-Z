@@ -14,6 +14,7 @@ typedef int (*Parser) (struct Client* cli, ContextID id, uint8_t* b, uint64_t l)
 typedef struct __attribute__((packed)) {
     uint8_t     state;
     uint8_t     parser_id;
+    ContextID   next_free;
     bool        blob_active;
     HashT       blob_hash;
 
@@ -22,12 +23,6 @@ typedef struct __attribute__((packed)) {
 #endif
 
 } ConState;
-
-
-struct __attribute__((packed)) DeadConn {
-    int16_t id;
-    int16_t next;
-};
 
 
 #define MAX_CONNS 128
@@ -46,13 +41,14 @@ typedef struct {
     Buffer*     send_buffers;
 
     /* Parsers */
-    Parser*     parsers;
+    const Parser* parsers;
     uint16_t    parsers_count;
 
 } Networker;
 
 
-inline void init_networker(Networker* net) {
-
-
-}
+// Initializes fresh state; destroy it before initializing it again.
+int init_networker(Networker* net);
+void destroy_networker(struct Client* cli);
+ContextID client_new_context(Networker* net);
+void client_free_context(struct Client* cli, ContextID id);

@@ -18,12 +18,16 @@ static void setup(struct Client* cli)
     memset(cli, 0, sizeof(*cli));
     assert(store_setup(&cli->blob_store, 200000) == STORE_OK);
     assert(buffer_pool_init(&cli->pool, 64, 4, 256, 1, 4096, 1) == 0);
+    assert(init_networker(&cli->net) == CLIENT_OK);
+    assert(client_new_context(&cli->net) == 1);
+    assert(client_new_context(&cli->net) == 2);
     cli->net.parsers = parsers;
     cli->net.parsers_count = 1;
 }
 
 static void cleanup(struct Client* cli)
 {
+    destroy_networker(cli);
     store_destroy(&cli->blob_store);
     assert(cli->pool.buckets[0].available == 4);
     assert(cli->pool.buckets[1].available == 1);
@@ -124,10 +128,7 @@ static void test_bounds_and_final_hash(void)
 static void test_interleaving_eviction_and_cancel(void)
 {
     struct Client cli;
-    Buffer receive[MAX_CONNS] = {0}, send[MAX_CONNS] = {0};
     setup(&cli);
-    cli.net.recv_buffers = receive;
-    cli.net.send_buffers = send;
     uint8_t a[] = {1, 2, 3, 4}, b[] = {5, 6, 7, 8};
     HashT ha = blob_hash(a, sizeof(a)), hb = blob_hash(b, sizeof(b));
     assert(chunk(&cli, 1, ha, 4, true, a, 2) == CLIENT_OK);
@@ -138,6 +139,7 @@ static void test_interleaving_eviction_and_cancel(void)
     assert(!ht_lookup(&cli.blob_store.table, &ha) && cli.blob_store.mem == 64);
 
     cli.blob_store.mem_max = 64;
+    assert(client_new_context(&cli.net) == 1);
     assert(chunk(&cli, 1, ha, 4, true, a, 2) == CLIENT_OK);
     /* A new blob evicts this partial assembly; its continuation must not become a first chunk. */
     store_erase_item(&cli.blob_store, &hb);
