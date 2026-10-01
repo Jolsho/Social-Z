@@ -58,7 +58,7 @@ Callers need to account for that when returning network buffers to the pool.
 - [client/src/utils/store.h:23](../../client/src/utils/store.h#L23) defines the store's memory and priority state.
 - [client/src/utils/store.h:40](../../client/src/utils/store.h#L40) documents ownership when assigning an item.
 - [client/src/data/user.c:11](../../client/src/data/user.c#L11) marshals username lookup and blob fetch requests.
-- [client/src/data/user.c:97](../../client/src/data/user.c#L97) parses lookup replies and unlocks verified user data.
+- [client/src/data/user.c:139](../../client/src/data/user.c#L139) parses lookup replies and unlocks verified user data.
 
 ## TODO
 

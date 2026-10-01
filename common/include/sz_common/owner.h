@@ -33,8 +33,17 @@ typedef struct OwnerUpdate {
  * Return 0 or -1. Failed calls leave outputs unchanged.
  * Parsing checks structure; signature and storage authority are separate checks.
  */
-int marshal_owner_update(uint8_t* out, size_t capacity, size_t* size, const OwnerUpdate* update);
-int parse_owner_update(OwnerUpdate* out, const uint8_t* bytes, size_t size);
+int marshal_owner_update(
+    uint8_t* out,
+    size_t capacity,
+    size_t* size,
+    const OwnerUpdate* update
+);
+int parse_owner_update(
+    OwnerUpdate* out,
+    const uint8_t* bytes,
+    size_t size
+);
 int owner_update_signing_hash(HashT* out, const OwnerUpdate* update);
 int owner_update_locator(HashT* out, const OwnerUpdate* update);
 int sign_owner_update(OwnerUpdate* update, const SigningKey* key);

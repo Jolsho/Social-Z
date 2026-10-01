@@ -36,8 +36,8 @@ The helper can derive a locator independently of a publication's revision or siz
 ## References
 
 - [common/include/sz_common/owner.h:18](../../common/include/sz_common/owner.h#L18) defines the shared update and public helpers.
-- [common/src/codec/owner.c:45](../../common/src/codec/owner.c#L45) marshals the record.
-- [common/src/codec/owner.c:53](../../common/src/codec/owner.c#L53) parses bounded input.
+- [common/src/codec/owner.c:58](../../common/src/codec/owner.c#L58) marshals the record.
+- [common/src/codec/owner.c:76](../../common/src/codec/owner.c#L76) parses bounded input.
 - [common/tests/owner.c:21](../../common/tests/owner.c#L21) checks the wire format and hash preimages.
 
 ## TODO
