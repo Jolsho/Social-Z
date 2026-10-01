@@ -25,7 +25,9 @@ extern "C" {
 
 /// THE ROOT OF ALL EVIL
 struct Client;
-struct Client* init_client();
+// Initializes core client state; rendering startup is separate.
+struct Client* init_client(void);
+void destroy_client(struct Client* cli);
 
 
 /// An ID for an abstraction over a connection.

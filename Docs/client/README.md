@@ -12,6 +12,11 @@ The Client structure brings the main pieces together.
 It holds user keys, a post feed, a blob store, and reusable buffers.
 It also holds network state and the visual world.
 
+init_client() initializes the pool, cache, feed, and networking.
+destroy_client() releases those resources.
+Rendering startup initializes the world separately.
+Only the blob response parser is enabled while the other formats are being repaired.
+
 ## Components
 
 ### [data](data.md)
@@ -51,17 +56,18 @@ It also leaves sending and graphics integration to the host platform.
 ## References
 
 - [client/src/client.h:30](../../client/src/client.h#L30) defines the shared Client state.
-- [client/src/client.c:12](../../client/src/client.c#L12) sets up the buffer pool, blob store, and world.
-- [client/src/client.c:39](../../client/src/client.c#L39) sketches the update and render loop.
+- [client/src/client.c:13](../../client/src/client.c#L13) initializes core client state.
+- [client/src/client.c:30](../../client/src/client.c#L30) releases owned client resources.
+- [client/src/wrld/wrld.c:11](../../client/src/wrld/wrld.c#L11) initializes the world before the frame loop.
 - [client/include/sz_client/client.h:43](../../client/include/sz_client/client.h#L43) describes the host sending interface.
 
 ## TODO
 
-- Initialize the network contexts and parser state.
-  [client/src/netwrk/networker.h:52](../../client/src/netwrk/networker.h#L52)
+- Implement the missing BVH initializer before running the rendering startup path.
+  [client/src/wrld/bvh/bvh.h:42](../../client/src/wrld/bvh/bvh.h#L42)
 
 - Complete the path from feed data to visible entities.
-  [client/src/wrld/wrld.c:164](../../client/src/wrld/wrld.c#L164)
+  [client/src/wrld/wrld.c:170](../../client/src/wrld/wrld.c#L170)
 
 - Connect the world to frame rendering.
-  [client/src/client.c:48](../../client/src/client.c#L48)
+  [client/src/wrld/wrld.c:20](../../client/src/wrld/wrld.c#L20)

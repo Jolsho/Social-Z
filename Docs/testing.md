@@ -38,6 +38,8 @@ The common hash table storage test exercises the real allocator, alignment, and 
 The hash test checks published BLAKE3 vectors, incremental updates, and independent state copies.
 The blob test assembles chunks, verifies the final hash, and covers partial-read and cleanup failures.
 Context tests use real networking setup and exercise allocation failures and shutdown.
+The client lifecycle test uses the public constructor and destructor with real blob parsing.
+It also forces each startup allocation to fail and checks cleanup.
 
 ## Memory checks
 

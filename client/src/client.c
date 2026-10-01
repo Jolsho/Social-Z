@@ -6,48 +6,37 @@
 
 #include "client.h"
 #include "sz_client/client.h"
+#include "netwrk/parsers.h"
 #include <stdlib.h>
 
 
-struct Client* init_client_state() {
-    struct Client* cs = malloc(sizeof(struct Client));
-
-    if (buffer_pool_init(&cs->pool, 
-        256,   1024,   // 1024 × 256 B  =  262,1144
-        4096,  256,    // 256 × 4 KiB   =  1,048,576
-        65536, 64      // 64 × 64 KiB   =  4,194,304
-    ) != 0) {
-        free(cs);
+struct Client* init_client(void) {
+    struct Client* cs = calloc(1, sizeof(*cs));
+    if (!cs) return NULL;
+    cs->wrld.bvh.root = cs->wrld.bvh.free_list = BVH_NULL;
+    cs->wrld.focused = ENTITY_ID_INVALID;
+    if (buffer_pool_init(&cs->pool, 256, 1024, 4096, 256, 65536, 64) != 0 ||
+        store_setup(&cs->blob_store, 25 * 1024 * 1024) != STORE_OK ||
+        feed_init(&cs->post_feed, MINIMUM_POST_SIZE) != FEED_OK ||
+        init_networker(&cs->net) != CLIENT_OK) {
+        destroy_client(cs);
         return NULL;
     }
-
-    #define BLOB_STORE_SIZE 1024 * 1024 * 25 // 25 MB
-    if (store_setup(&cs->blob_store, BLOB_STORE_SIZE) != STORE_OK) {
-        buffer_pool_destroy(&cs->pool);
-        free(cs);
-        return NULL;
-    }
-
-    if (wrld_init(&cs->wrld) != CLIENT_OK) {
-        free(cs);
-        return NULL;
-    }
-
+    cs->net.parsers = parsers;
+    cs->net.parsers_count = PARSER_ID_CAP;
     return cs;
 }
 
-void start_client() {
-    struct Client* cli = init_client_state();
-
-    for (;;) {
-        if (!client_update_wrld(cli)) break;
-        client_render_frame(cli);
-    }
-}
-
-void client_render_frame(struct Client* client) {
-    // TODO
-    //  frustrum culling.
-    //  order entities into groups.
-    //  render groups.
+void destroy_client(struct Client* cli) {
+    if (!cli) return;
+    destroy_networker(cli);
+    store_destroy(&cli->blob_store);
+    buffer_pool_destroy(&cli->pool);
+    free(cli->post_feed.index);
+    free(cli->post_feed.data);
+    free(cli->wrld.bvh.nodes);
+    free(cli->wrld.bvh.entity_to_leaf);
+    volatile uint8_t* bytes = (volatile uint8_t*)cli;
+    for (size_t i = 0; i < sizeof(*cli); i++) bytes[i] = 0;
+    free(cli);
 }

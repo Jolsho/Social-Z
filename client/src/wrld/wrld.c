@@ -8,6 +8,19 @@
 #include "client.h"
 #include "wrld/camera.h"
 
+void start_client(void) {
+    struct Client* cli = init_client();
+    if (!cli) return;
+    if (wrld_init(&cli->wrld) == CLIENT_OK) {
+        while (client_update_wrld(cli)) client_render_frame(cli);
+    }
+    destroy_client(cli);
+}
+
+void client_render_frame(struct Client* client) {
+    // TODO: cull, group entities, and render.
+}
+
 int wrld_init(World* wrld) {
     int r;
 
@@ -61,6 +74,7 @@ void wrld_derive_ray(World* wrld, Ray* ray) {
 
 
 bool client_update_wrld(struct Client* cli) {
+    if (!cli || !cli->wrld.bvh.nodes) return false;
 
     World* wrld = &cli->wrld;
 

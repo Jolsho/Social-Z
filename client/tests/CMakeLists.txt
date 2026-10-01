@@ -13,5 +13,11 @@ sz_add_test(client feed feed.c ../src/data/feed.c)
 sz_add_test(client blobs blobs.c ../src/data/blobs.c ../src/netwrk/client.c
     ../src/netwrk/context.c ../../common/src/hash/hash.c ${store_sources})
 target_link_libraries(sz_blobs_test PRIVATE blake3)
+sz_add_test(client lifecycle lifecycle.c ../src/client.c ../src/data/feed.c
+    ../src/data/blobs.c ../src/netwrk/client.c ../src/netwrk/context.c
+    ../../common/src/hash/hash.c ${store_sources})
+target_link_libraries(sz_lifecycle_test PRIVATE blake3)
+target_compile_definitions(sz_lifecycle_test PRIVATE
+    malloc=client_test_malloc calloc=client_test_calloc)
 
 set_tests_properties(client.store_eviction PROPERTIES TIMEOUT 10)

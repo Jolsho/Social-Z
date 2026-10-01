@@ -19,9 +19,5 @@ int parse_blob(struct Client* cli, ContextID id, uint8_t* b, uint64_t len);
 
 #define PARSER_ID_CAP 3
 
-static const Parser parsers[PARSER_ID_CAP] = { 
-    parse_user_data,
-    parse_post_feed_response,
-    parse_blob
-};
-
+// Enable other parsers after their formats and bounds are repaired.
+static const Parser parsers[PARSER_ID_CAP] = {[PARSER_ID_BLOB] = parse_blob};
