@@ -13,6 +13,8 @@ ctest --preset tests
 The tests preset configures a separate build under `build/tests`.
 It skips application setup and builds the registered test executables.
 The hash test downloads the project's pinned BLAKE3 dependency on first configuration.
+The crypto test builds libsodium inside the test build directory on its first build.
+Building libsodium requires Make and a shell; Windows users can use WSL.
 Other application dependencies are not required.
 Rebuild before running tests after changing code.
 CTest runs the executables that have already been built.
@@ -36,6 +38,8 @@ Store setup and cleanup are covered separately by the client store lifecycle tes
 That test also covers buffer ownership, replacement, and failed queue growth.
 The common hash table storage test exercises the real allocator, alignment, and cleanup.
 The hash test checks published BLAKE3 vectors, incremental updates, and independent state copies.
+The crypto test covers signatures, tampering, signing-key conversion, and both exchange directions.
+It does not exercise the complete P2P handshake or node key-file loading.
 The blob test assembles chunks, verifies the final hash, and covers partial-read and cleanup failures.
 Context tests use real networking setup and exercise allocation failures and shutdown.
 The client lifecycle test uses the public constructor and destructor with real blob parsing.

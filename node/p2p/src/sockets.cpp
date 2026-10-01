@@ -16,6 +16,11 @@
 
 
 ConnID P2P::add_socket(int sock_fd, const Key pubkey, bool is_inbound) {
+    Key rx{}, tx{};
+    if (!is_inbound && auth_session_keys(&rx, &tx, &keys_, &pubkey, false) != 0) {
+        close(sock_fd);
+        return 0;
+    }
 
     // Make non-blocking
     int flags = fcntl(sock_fd, F_GETFL, 0);
@@ -41,7 +46,7 @@ ConnID P2P::add_socket(int sock_fd, const Key pubkey, bool is_inbound) {
         return 0;
     }
 
-    KeyPair session{};
+    ExchangeKeyPair session{};
     crypto_kx_keypair(session.pub.b, session.priv.b);
     Connection& c = connections_[id];
 
@@ -62,17 +67,10 @@ ConnID P2P::add_socket(int sock_fd, const Key pubkey, bool is_inbound) {
         remove_socket(evicted);
     }
 
-    if (key_is_zero(&pubkey)) {
+    if (!is_inbound) {
         memcpy(c.keys_.remote_auth_.b, pubkey.b, KEY_SIZE);
-
-        // DERIVE INITIAL SHARED SECRET WITH AUTH KEYS
-        int r = crypto_kx_client_session_keys(
-            c.keys_.rx_.b, c.keys_.tx_.b, 
-            keys_.pub.b, 
-            keys_.priv.b, 
-            c.keys_.remote_auth_.b
-        );
-        if (r != 0) return 0;
+        c.keys_.rx_ = rx;
+        c.keys_.tx_ = tx;
     }
 
     connections_[id] = c;
@@ -198,4 +196,3 @@ std::optional<Error> P2P::connect(
 
     return e;
 }
-

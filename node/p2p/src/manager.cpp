@@ -8,7 +8,9 @@
 #include "sz_node/p2p.h"
 #include "manager.h"
 #include <arpa/inet.h>
-#include <sodium/crypto_box.h>
+#include "sz_common/crypto.h"
+#include <sodium.h>
+#include <sys/stat.h>
 #include <sys/epoll.h>
 #include "sz_node/utils/path.hpp"
 
@@ -33,6 +35,7 @@ ActorThread* start_p2p(Actor* actor, P2PConfig* conf) {
 }
 
 int P2P::start_server() {
+    if (sodium_init() < 0) return -1;
     const std::string key_path = cpy_apnd(PATHS.config_dir, "/keys");
     citizens_.load(cpy_apnd(PATHS.data_dir, "/p2p/citizens"));
 
@@ -42,31 +45,33 @@ int P2P::start_server() {
         return -1;
     }
 
-    lseek(key_fd, 0, SEEK_SET);
-    if (read(key_fd, keys_.priv.b, KEY_SIZE) < KEY_SIZE) {
-
-        int r = crypto_box_keypair(keys_.pub.b, keys_.priv.b);
-        if (r < 0) {
-            log_msg(logr_, "GENERATING KEYS FAILED", r, 0);
-            close(key_fd);
-            remove(key_path.c_str());
-            return -1;
+    struct stat info{};
+    int r = fstat(key_fd, &info);
+    if (r == 0 && info.st_size == 0) {
+        r = new_keypair(&keys_);
+        if (r == 0 && write(key_fd, keys_.priv.b, SIGNING_KEY_SIZE) != SIGNING_KEY_SIZE) r = -1;
+    } else if (r == 0 && info.st_size == SIGNING_KEY_SIZE) {
+        SigningKey saved{};
+        r = read(key_fd, saved.b, sizeof(saved)) == sizeof(saved) ? 0 : -1;
+        if (r == 0) {
+            r = crypto_sign_seed_keypair(keys_.pub.b, keys_.priv.b, saved.b);
+            if (r == 0 && sodium_memcmp(saved.b, keys_.priv.b, sizeof(saved)) != 0) r = -1;
         }
-
-        lseek(key_fd, 0, SEEK_SET);
-        if (write(key_fd, keys_.priv.b, KEY_SIZE) < KEY_SIZE) {
-            close(key_fd);
-            remove(key_path.c_str());
-            log_msg(logr_, "PERSISTING KEYS FAILED", key_fd, 0);
-            return -1;
-        }
+        sodium_memzero(&saved, sizeof(saved));
+    } else {
+        r = -1;
     }
-
+    close(key_fd);
+    if (r != 0) {
+        sodium_memzero(&keys_, sizeof(keys_));
+        log_msg(logr_, "INVALID OR UNWRITABLE SIGNING KEY FILE", r, 0);
+        return -1;
+    }
 
     listen_fd_ = socket(AF_INET, SOCK_STREAM, 0);
 
     int opt = 1;
-    int r = setsockopt(listen_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    r = setsockopt(listen_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     if (r < 0) {
         log_msg(logr_, "SOCKET OPT FAILED", r, 0);
         return r;

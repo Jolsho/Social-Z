@@ -30,10 +30,20 @@ typedef struct Key {
     unsigned char b[KEY_SIZE];
 } Key;
 
+#define SIGNING_KEY_SIZE 64
+typedef struct SigningKey {
+    unsigned char b[SIGNING_KEY_SIZE];
+} SigningKey;
+
 typedef struct KeyPair {
-    Key priv;
+    SigningKey priv;
     Key pub;
 } KeyPair;
+
+typedef struct ExchangeKeyPair {
+    Key priv;
+    Key pub;
+} ExchangeKeyPair;
 
 #define SIGNATURE_SIZE 64
 typedef struct Signature {
@@ -84,4 +94,3 @@ size_t unmarshal_voucher(uint8_t* pb, Voucher* v);
 #ifdef __cplusplus
 }
 #endif
-

@@ -13,9 +13,11 @@ extern "C" {
 #endif
 
 bool valid_signature(Key* signer, Signature* sig, HashT* hash);
-int sign_hash(Key* signer, Signature* sig, HashT* hash);
+int sign_hash(const SigningKey* signer, Signature* sig, const HashT* hash);
 
 int new_keypair(KeyPair* keys);
+/* Convert signing identities for initial P2P exchange; inbound uses the server role. */
+int auth_session_keys(Key* rx, Key* tx, const KeyPair* local, const Key* remote, bool inbound);
 
 size_t encoded_key_len();
 void key_to_str(char* key_str, Key* key);

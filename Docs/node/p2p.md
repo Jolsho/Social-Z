@@ -19,7 +19,14 @@ Timeouts limit negotiation and idle connection lifetimes.
 The handshake checks the remote key against the citizen records.
 It also checks whether that citizen is considered trustworthy.
 Keys are exchanged to establish receive and transmit session keys.
+Peer identities use Ed25519 signing keys.
+Initial exchange converts those keys to X25519; temporary session keys are separate X25519 pairs.
+The incoming peer uses the server role and the outgoing peer uses the client role.
 Packet bodies are encrypted and decrypted using those keys.
+
+Node startup saves the 64-byte signing secret in the configured keys file.
+Existing 32-byte exchange-key files are rejected without replacement.
+There is no automatic key migration.
 
 ## Messages
 
@@ -44,7 +51,7 @@ A live connection can carry work requested by other actors.
 
 ## References
 
-- [node/p2p/src/manager.cpp:35](../../node/p2p/src/manager.cpp#L35) sets up the TCP server.
+- [node/p2p/src/manager.cpp:37](../../node/p2p/src/manager.cpp#L37) sets up the TCP server.
 - [node/p2p/src/conn_types.h:14](../../node/p2p/src/conn_types.h#L14) defines handshake and connection states.
 - [node/p2p/src/manager.h:34](../../node/p2p/src/manager.h#L34) groups connection and peer lookup state.
 - [node/p2p/src/handshake.cpp:36](../../node/p2p/src/handshake.cpp#L36) begins the incoming authorization path.

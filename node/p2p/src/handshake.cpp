@@ -57,11 +57,8 @@ Error conn::syn_ack(Connection& conn, P2P& man) {
             .msg = "Not Trustworthy Citizen."
         };
     }
-    int r = crypto_kx_client_session_keys(
-        conn.keys_.rx_.b, conn.keys_.tx_.b, 
-        man.keys_.pub.b, 
-        man.keys_.priv.b, 
-        conn.keys_.remote_auth_.b
+    int r = auth_session_keys(
+        &conn.keys_.rx_, &conn.keys_.tx_, &man.keys_, &conn.keys_.remote_auth_, true
     );
     if (r != 0) {
         return {
@@ -113,7 +110,7 @@ Error conn::syn_ack(Connection& conn, P2P& man) {
 
 
     // DERIVE FINAL SHARED KEYS AFTER SENDING SYNACK
-    r = crypto_kx_client_session_keys(
+    r = crypto_kx_server_session_keys(
         conn.keys_.rx_.b, conn.keys_.tx_.b, 
         conn.keys_.session_.pub.b, 
         conn.keys_.session_.priv.b, 
@@ -181,4 +178,3 @@ Error conn::ack(Connection& conn, P2P& man) {
 
     return ESUCCESS;
 }
-

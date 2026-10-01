@@ -13,7 +13,7 @@ void conn::clear(Connection& conn) {
     conn.id_ = 0;
     memset(&conn.keys_.remote_auth_, 0, KEY_SIZE);
     memset(&conn.keys_.remote_session_, 0, KEY_SIZE);
-    memset(&conn.keys_.session_, 0, sizeof(KeyPair));
+    memset(&conn.keys_.session_, 0, sizeof(conn.keys_.session_));
     memset(&conn.keys_.rx_, 0, KEY_SIZE);
     memset(&conn.keys_.tx_, 0, KEY_SIZE);
     conn.events_ = 0;

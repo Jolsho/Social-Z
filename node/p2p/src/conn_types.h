@@ -26,7 +26,7 @@ struct ConnKeys {
     Key         remote_session_;
     Key         rx_;
     Key         tx_;
-    KeyPair     session_;
+    ExchangeKeyPair session_;
 };
 
 struct Connection {

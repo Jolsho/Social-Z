@@ -51,15 +51,7 @@ int parse_user_data(
     size_t remaining = len - (NONCE_SIZE + sizeof(size_t) + crypto_pwhash_saltbytes());
     if (remaining <= 0) return CLIENT_SMALL_BUFFER;
 
-    memcpy(cli->keys.priv.b, &cli->keys.priv, KEY_SIZE);
-
-    memcpy(
-        cli->keys.pub.b,
-        cli->keys.priv.b + crypto_sign_SEEDBYTES,
-        crypto_sign_PUBLICKEYBYTES
-    );
-
-    if (crypto_scalarmult_base(cli->keys.pub.b, cli->keys.priv.b) != 0) {
+    if (crypto_sign_ed25519_sk_to_pk(cli->keys.pub.b, cli->keys.priv.b) != 0) {
         return CLIENT_ERR;
     }
 
