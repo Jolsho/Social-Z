@@ -9,3 +9,6 @@ target_link_libraries(sz_hash_test PRIVATE blake3)
 include(../Sodium.cmake)
 sz_add_test(common crypto crypto.c ../src/crypto/crypto.c)
 target_link_libraries(sz_crypto_test PRIVATE sodium)
+
+sz_add_test(common owner owner.c ../src/codec/owner.c ../src/crypto/crypto.c ../src/hash/hash.c)
+target_link_libraries(sz_owner_test PRIVATE sodium blake3)

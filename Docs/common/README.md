@@ -17,6 +17,7 @@ These provide the containers used by the other components.
 
 Shared binary formats and serialization helpers.
 Includes keys, hashes, cards, permissions, and vouchers.
+[Owner updates](owner.md) add bounded records, signature inputs, and deterministic locators.
 
 ### crypto
 

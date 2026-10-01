@@ -51,6 +51,11 @@ It overwrites borrowed replies and checks deferred buffer returns and context re
 It also covers pool exhaustion, synchronous replies, and password re-encryption with stable keys.
 Node username registration and real proxy/P2P transport remain unverified.
 
+The owner-update test checks exact wire bytes and independent signature and locator preimages.
+It rejects truncated or trailing data, unknown identifiers, and revision overflow.
+It also checks every encoded byte for tampering and rejects a signing key from another owner.
+These checks do not exercise FS admission or revision conflicts against stored records.
+
 ## Memory checks
 
 For GCC or Clang builds, use the sanitizer preset.
