@@ -12,5 +12,3 @@ target_link_libraries(sz_crypto_test PRIVATE sodium)
 
 sz_add_test(common owner owner.c ../src/codec/owner.c ../src/crypto/crypto.c ../src/hash/hash.c)
 target_link_libraries(sz_owner_test PRIVATE sodium blake3)
-
-sz_add_test(common account account.c ../src/codec/account.c)

@@ -28,12 +28,13 @@ Neither function allocates or retains the caller's memory.
 Failed calls leave outputs unchanged.
 Unsupported versions, wrong record kinds, truncated input, and trailing bytes are rejected.
 
-This codec handles plaintext only.
+This codec lives in client/src/codec and handles plaintext only.
+The node stores encrypted blobs and does not interpret account-header fields.
 Authenticated encryption and client header retrieval are not connected yet.
 
 ## References
 
-- [common/include/sz_common/account.h:17](../../common/include/sz_common/account.h#L17) defines the shared header.
-- [common/src/codec/account.c:31](../../common/src/codec/account.c#L31) marshals the record.
-- [common/src/codec/account.c:62](../../common/src/codec/account.c#L62) parses and validates the record.
-- [common/tests/account.c:9](../../common/tests/account.c#L9) checks the exact wire format and borrowed-input lifetime.
+- [client/include/sz_client/account.h:17](../../client/include/sz_client/account.h#L17) defines the client plaintext header.
+- [client/src/codec/account.c:31](../../client/src/codec/account.c#L31) marshals the record.
+- [client/src/codec/account.c:62](../../client/src/codec/account.c#L62) parses and validates the record.
+- [client/tests/account.c:9](../../client/tests/account.c#L9) checks the exact wire format and borrowed-input lifetime.

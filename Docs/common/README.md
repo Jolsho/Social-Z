@@ -18,7 +18,6 @@ These provide the containers used by the other components.
 Shared binary formats and serialization helpers.
 Includes keys, hashes, cards, permissions, and vouchers.
 [Owner updates](owner.md) add bounded records, signature inputs, and deterministic locators.
-[Account headers](account.md) encode the page references decrypted by the client.
 
 ### crypto
 
@@ -35,6 +34,7 @@ Hashing helpers backed by BLAKE3.
 paths.h defines operation codes used by the node services.
 It gives messages a shared vocabulary for requesting work.
 
+Client-only plaintext codecs, including account headers and feed pages, belong in the client.
 Common does not run a service loop of its own.
 It supplies the building blocks used by the rest of the system.
 

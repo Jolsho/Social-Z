@@ -12,6 +12,14 @@ A context can be dead, idle, sending, or receiving.
 It also records which parser should handle the response.
 Released contexts are put back on a free list.
 
+## Files
+
+netwrk/marshalers/ contains outgoing request builders, one file per request family.
+netwrk/parsers/ contains incoming reply handlers, including blob assembly.
+marshalers.h declares request builders and parsers.h declares and registers reply handlers.
+The separate codec/ directory handles plaintext records after client-side decryption.
+login.c coordinates the login operation.
+
 ## Request flow
 
 Create a context.

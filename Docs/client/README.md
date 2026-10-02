@@ -23,11 +23,20 @@ Login and blob response parsers are enabled while the feed format is being repai
 
 ### [data](data.md)
 
-The formats and parsing code for posts, user data, and blobs.
+In-memory post views and packed feed storage.
+Request and reply code lives under netwrk.
+
+### codec
+
+Client-only plaintext marshaling and parsing.
+The [account header](account.md) is the first format here.
+The node receives encrypted blobs and does not interpret these fields.
 
 ### [networking](networking.md)
 
 Request contexts, connection state, and response dispatch.
+marshalers/ builds outgoing requests and parsers/ handles replies.
+login.c coordinates login without mixing that workflow into record codecs.
 
 ### [world](world.md)
 

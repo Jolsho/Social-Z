@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-#include "sz_common/account.h"
+#include "sz_client/account.h"
 #include <stdbool.h>
 
 static uint64_t read_u64(const uint8_t* bytes) {

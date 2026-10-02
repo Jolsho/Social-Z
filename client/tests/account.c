@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-#include "sz_common/account.h"
+#include "sz_client/account.h"
 #include <assert.h>
 
 static void exact_format(void) {

@@ -10,7 +10,9 @@ The main key will protect the separate account header and owner-managed pages.
 The host implements the existing send_request() hook.
 Call client_login() with the username, password bytes, their length, and an output ContextID.
 The client copies the password into its pool.
-marshal_get_user_data_request() builds the lookup or fetch body in the context's send buffer.
+marshal_get_user_data_request() in netwrk/marshalers builds the lookup or fetch body.
+The request uses the context's send buffer.
+login.c coordinates sending, credentials, and cancellation.
 The send hook receives that buffer with ownership of its pooled bytes.
 Return the original buffer through client_return_buffer() after sending or copying those bytes.
 The descriptor stays in the client's existing send-buffer array.
@@ -19,7 +21,8 @@ Return all outstanding buffers before destroying the client.
 A failed send can call client_cancel_login().
 
 Pass replies to client_parse_response() with the supplied ContextID.
-parse_user_data() validates lookup replies and delegates blob assembly to parse_blob().
+parse_user_data() in netwrk/parsers validates lookup replies.
+It delegates blob assembly to parse_blob() in that same directory.
 Incoming response memory is borrowed only during parsing.
 Retained lookup fields and chunks are copied into client-owned storage.
 Replies may arrive synchronously or asynchronously.
@@ -77,4 +80,4 @@ Implement the node-side username resolver and bounded pre-login access policy.
 Connect the bootstrap bodies to the node-side resolver and operation framing.
 Add protected local credential storage and password-change publication.
 Registration, recovery, and client account-header retrieval are still unfinished.
-The shared [account-header codec](../common/account.md) defines its plaintext format.
+The client [account-header codec](account.md) defines its plaintext format.
