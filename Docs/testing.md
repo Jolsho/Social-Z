@@ -48,7 +48,10 @@ It also forces each startup allocation to fail and checks cleanup.
 The login test uses a host implementation of send_request with real marshaling, parsing, and crypto.
 It covers chunked retrieval, wrong passwords, identity binding, malformed records, and cancellation.
 It overwrites borrowed replies and checks deferred buffer returns and context reuse.
-It also covers pool exhaustion, synchronous replies, and password re-encryption with stable keys.
+It also covers pool exhaustion, synchronous replies, and password re-encryption preserving the full account header.
+It checks that login recovers page metadata and keys together.
+Authenticated records with invalid page ranges are rejected without installing account state.
+Wrong passwords and identity mismatches preserve pre-existing output values.
 Node username registration and real proxy/P2P transport remain unverified.
 
 The owner-update test checks exact wire bytes and independent signature and locator preimages.
@@ -59,7 +62,8 @@ These checks do not exercise FS admission or revision conflicts against stored r
 The account-header test checks exact wire bytes, page ranges, and copied input ownership.
 It rejects malformed lengths, unsupported versions, wrong record kinds, and reversed ranges.
 It checks that failed calls preserve their outputs and that full u64 indices round-trip.
-Account-header encryption and node retrieval are not exercised yet.
+Encrypted account-header retrieval is covered by the login test through the host hook.
+The actual node resolver and transport remain unverified.
 
 The feed-page test checks mixed post sizes, exact bytes, and rebuilt entry indices.
 It rejects malformed records and preserves the old page on allocation failure.

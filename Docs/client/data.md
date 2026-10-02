@@ -44,7 +44,7 @@ login.c owns the login workflow.
 
 The user-data marshaler first requests a username lookup, then the encrypted login blob.
 The user-data parser copies lookup fields and assembles incoming chunks through the blob parser.
-Authenticated decryption recovers the stable signing seed and main user_data_key.
+Authenticated decryption recovers one account header with the stable signing seed, data_key, and page references.
 The password stays local.
 See [login](login.md) for the bootstrap format and ownership rules.
 

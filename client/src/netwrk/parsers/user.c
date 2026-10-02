@@ -58,7 +58,7 @@ int parse_user_data(
 
     if (!item || item->size != LOGIN_BLOB_SIZE || item->received != item->size)
         goto done;
-    if (login_decrypt(&cli->keys, &cli->data_key, &cli->login.lookup.account,
+    if (decrypt_account_header(&cli->account, &cli->keys, &cli->login.lookup.account,
         cli->login.username, cli->login.password.b, cli->login.password.size, item->b, item->size) == 0) {
         cli->logged_in = true;
         r = CLIENT_PARSE_DONE;

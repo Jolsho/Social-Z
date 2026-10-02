@@ -9,7 +9,7 @@
 #include "netwrk/networker.h"
 #include "utils/store.h"
 #include "data/feed.h"
-#include "sz_common/login.h"
+#include "codec/account.h"
 
 #ifdef NATIVE
 
@@ -31,7 +31,7 @@
 struct Client {
     ///////////// USER //////////////
     KeyPair         keys;
-    Key             data_key;
+    AccountHeader   account;
     bool            logged_in;
     struct {
         ContextID id;

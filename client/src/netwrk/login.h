@@ -12,7 +12,7 @@ extern "C" {
 
 #define LOGIN_USERNAME_MAX 64
 #define LOGIN_PASSWORD_MAX 1024
-#define LOGIN_BLOB_SIZE 149
+#define LOGIN_BLOB_SIZE 213
 #define LOGIN_LOOKUP_SIZE 72
 #define LOGIN_FETCH_SIZE 36
 
@@ -29,33 +29,7 @@ typedef struct LoginLookup {
 size_t login_username_size(const char* username);
 size_t login_lookup_request(uint8_t out[6 + LOGIN_USERNAME_MAX], const char* username);
 void login_fetch_request(uint8_t out[LOGIN_FETCH_SIZE], const HashT* hash);
-int login_read_lookup(
-    LoginLookup* out,
-    const uint8_t* bytes,
-    size_t size
-);
-
-/* Passwords stay local. Outputs are changed only on success.
- * The encrypted record contains a signing seed and the main owner-data key.
- */
-int login_encrypt(
-    uint8_t out[LOGIN_BLOB_SIZE],
-    const char* username,
-    const uint8_t* password,
-    size_t password_size,
-    const KeyPair* keys,
-    const Key* data_key
-);
-int login_decrypt(
-    KeyPair* keys,
-    Key* data_key,
-    const Key* account,
-    const char* username,
-    const uint8_t* password,
-    size_t password_size,
-    const uint8_t* blob,
-    size_t blob_size
-);
+int login_read_lookup(LoginLookup* out, const uint8_t* bytes, size_t size);
 
 #ifdef __cplusplus
 }

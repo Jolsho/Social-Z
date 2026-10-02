@@ -1,9 +1,10 @@
 # Login
 
-Login retrieves encrypted user data rather than asking the node to check a password.
+Login retrieves the encrypted account header rather than asking the node to check a password.
 The username identifies the account.
-Authenticated decryption unlocks its signing seed and main user_data_key.
-The main key will protect the separate account header and owner-managed pages.
+Authenticated decryption unlocks its signing seed, data_key, and private page references.
+The password-derived key protects this header.
+data_key protects owner-managed pages and content blobs.
 
 ## Host interface
 
@@ -45,7 +46,7 @@ The generic node operation framing is still separate work.
 
 Lookup request: version:u16=1, operation:u16=1, username_length:u16, username bytes.
 Lookup reply: version:u16=1, operation:u16=1, account_key:32, blob_hash:32, blob_size:u32.
-The reply is exactly 72 bytes and requires blob_size=149.
+The reply is exactly 72 bytes and requires blob_size=213.
 Fetch request: version:u16=1, operation:u16=2, blob_hash:32.
 Fetch replies use the existing chunk format.
 The first chunk carries the hash and native uint64_t total size before its payload.
@@ -56,21 +57,23 @@ Usernames are passed through unchanged and limited to 64 bytes.
 Passwords are between 1 and 1024 bytes.
 The resolver remains responsible for username normalization, uniqueness, registration, and home-node routing.
 
-## Encrypted login record
+## Encrypted account header
 
-The 149-byte login blob has a password envelope followed by one final secretstream record.
+The 213-byte account blob has a password envelope followed by one final secretstream record.
 Its public header is version:u16=1, suite:u16=1, Argon2id algorithm:u32, passes:u32, memory_bytes:u64.
-Then come salt:16, stream_header:24, and ciphertext_length:u32=85.
+Then come salt:16, stream_header:24, and ciphertext_length:u32=149.
 V1 accepts only Argon2id 1.3 with two passes and 64 MiB.
 Unsupported parameters are rejected before password derivation.
 The header and length-prefixed username are authenticated additional data.
 
-The 68-byte plaintext is version:u16=1, record_kind:u16=13, signing_seed:32, user_data_key:32.
+The 132-byte plaintext uses version:u16=1 and record_kind:u16=2.
+It contains page indices, the inbox locator, signing_seed, and data_key.
+See [account header](account.md) for the exact field order.
 The recovered signing identity must match the lookup's account key.
 Plaintext, derived unlock keys, and stream state are wiped after decoding.
 Only ciphertext enters the blob cache.
 
-login_encrypt() creates a fresh salt and stream header.
+encrypt_account_header() creates a fresh salt and stream header.
 Re-encrypting the same signing seed and data key under a new password preserves the account identity.
 Publishing that replacement still requires the planned signed owner update.
 
@@ -79,5 +82,10 @@ Publishing that replacement still requires the planned signed owner update.
 Implement the node-side username resolver and bounded pre-login access policy.
 Connect the bootstrap bodies to the node-side resolver and operation framing.
 Add protected local credential storage and password-change publication.
-Registration, recovery, and client account-header retrieval are still unfinished.
-The client [account-header codec](account.md) defines its plaintext format.
+Registration, recovery, and retrieval of the referenced private pages are still unfinished.
+Password encryption and plaintext interpretation live together in client/src/codec/account.c.
+client/src/login.c coordinates requests, responses, and cancellation.
+Private lookup and fetch helpers live in client/src/netwrk/login.c and login.h.
+Common contains no login API.
+The node will decode its small request bodies in the relevant handler.
+The stream encryption follows the [libsodium secretstream API](https://doc.libsodium.org/secret-key_cryptography/secretstream).

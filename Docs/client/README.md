@@ -36,7 +36,8 @@ The node receives encrypted blobs and does not interpret these fields.
 
 Request contexts, connection state, and response dispatch.
 marshalers/ builds outgoing requests and parsers/ handles replies.
-login.c coordinates login without mixing that workflow into record codecs.
+client/src/login.c coordinates login without mixing that workflow into record codecs.
+netwrk/login.c keeps the small lookup and fetch message helpers private to the client.
 
 ### [world](world.md)
 

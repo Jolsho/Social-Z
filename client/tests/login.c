@@ -13,6 +13,7 @@
 static const uint8_t password[] = "my test password";
 static KeyPair identity;
 static Key owner_key;
+static AccountHeader account_header;
 static uint8_t blob[LOGIN_BLOB_SIZE];
 
 typedef struct Host {
@@ -127,7 +128,7 @@ static void assert_locked(struct Client* cli) {
     KeyPair zero = {0};
     assert(!client_is_logged_in(cli) && !cli->login.id && !cli->login.password.b);
     assert(memcmp(&cli->keys, &zero, sizeof(zero)) == 0);
-    assert(sodium_is_zero(cli->data_key.b, KEY_SIZE));
+    assert(sodium_is_zero((const uint8_t*)&cli->account, sizeof(cli->account)));
 }
 
 static void password_stays_local(void) {
@@ -176,7 +177,7 @@ static void success_and_retry(void) {
     assert(client_get_public_key(host.cli, public_key) == CLIENT_OK);
     assert(memcmp(public_key, identity.pub.b, KEY_SIZE) == 0);
     assert(memcmp(&host.cli->keys, &identity, sizeof(identity)) == 0);
-    assert(memcmp(host.cli->data_key.b, owner_key.b, KEY_SIZE) == 0);
+    assert(memcmp(&host.cli->account, &account_header, sizeof(account_header)) == 0);
     assert(client_login(host.cli, "bob", password, sizeof(password) - 1, &host.id) == CLIENT_CONN_BUSY);
     destroy_client(host.cli);
 
@@ -368,15 +369,15 @@ static void retained_requests(void) {
     destroy_client(host.cli);
 }
 
-static void authenticated_bad_record(uint8_t tag, uint8_t kind) {
-    uint8_t changed[LOGIN_BLOB_SIZE], key[32], plain[68] = {0}, ad[71];
+static void authenticated_bad_record(uint8_t tag, uint8_t kind, bool invalid_pages) {
+    uint8_t changed[LOGIN_BLOB_SIZE], key[32], plain[ACCOUNT_HEADER_SIZE] = {0}, ad[71];
     memcpy(changed, blob, sizeof(changed));
     assert(crypto_pwhash(key, sizeof(key), (const char*)password, sizeof(password) - 1,
                         changed + 20, 2, 64 * 1024 * 1024, crypto_pwhash_ALG_ARGON2ID13) == 0);
-    plain[1] = 1;
+    size_t size;
+    assert(marshal_account_header(plain, sizeof(plain), &size, &account_header) == 0);
     plain[3] = kind;
-    memcpy(plain + 4, identity.priv.b, 32);
-    memcpy(plain + 36, owner_key.b, 32);
+    if (invalid_pages) plain[11] = 8; // First feed page exceeds current page 7.
     crypto_secretstream_xchacha20poly1305_state stream;
     assert(crypto_secretstream_xchacha20poly1305_init_push(&stream, changed + 36, key) == 0);
     memcpy(ad, changed, 64);
@@ -386,11 +387,11 @@ static void authenticated_bad_record(uint8_t tag, uint8_t kind) {
     assert(crypto_secretstream_xchacha20poly1305_push(&stream, changed + 64, NULL,
                         plain, sizeof(plain), ad, sizeof(ad), tag) == 0);
     KeyPair recovered = {0};
-    Key data = {{0}};
-    assert(login_decrypt(&recovered, &data, &identity.pub, "alice", password,
+    AccountHeader data = {0};
+    assert(decrypt_account_header(&data, &recovered, &identity.pub, "alice", password,
                         sizeof(password) - 1, changed, sizeof(changed)) == -1);
     assert(sodium_is_zero((const uint8_t*)&recovered, sizeof(recovered)));
-    assert(sodium_is_zero(data.b, sizeof(data)));
+    assert(sodium_is_zero((const uint8_t*)&data, sizeof(data)));
     sodium_memzero(plain, sizeof(plain));
     sodium_memzero(key, sizeof(key));
     sodium_memzero(&stream, sizeof(stream));
@@ -398,33 +399,33 @@ static void authenticated_bad_record(uint8_t tag, uint8_t kind) {
 
 static void authenticated_record_checks(void) {
     KeyPair recovered = {0};
-    Key data = {{0}};
+    AccountHeader data = {0};
     uint8_t changed[LOGIN_BLOB_SIZE];
-    assert(login_decrypt(&recovered, &data, &identity.pub, "bob", password,
+    assert(decrypt_account_header(&data, &recovered, &identity.pub, "bob", password,
                         sizeof(password) - 1, blob, sizeof(blob)) == -1);
-    const size_t offsets[] = {0, 2, 4, 8, 12, 20, 36, 60, 64, 148};
+    const size_t offsets[] = {0, 2, 4, 8, 12, 20, 36, 60, 64, LOGIN_BLOB_SIZE - 1};
     for (size_t i = 0; i < sizeof(offsets) / sizeof(offsets[0]); i++) {
         size_t offset = offsets[i];
         memcpy(changed, blob, sizeof(blob));
         changed[offset] ^= 1;
-        assert(login_decrypt(&recovered, &data, &identity.pub, "alice", password,
+        assert(decrypt_account_header(&data, &recovered, &identity.pub, "alice", password,
                             sizeof(password) - 1, changed, sizeof(changed)) == -1);
     }
-    assert(sodium_is_zero((const uint8_t*)&recovered, sizeof(recovered)) && sodium_is_zero(data.b, sizeof(data)));
+    assert(sodium_is_zero((const uint8_t*)&recovered, sizeof(recovered)) && sodium_is_zero((const uint8_t*)&data, sizeof(data)));
     for (size_t size = 0; size < sizeof(blob); size++)
-        assert(login_decrypt(&recovered, &data, &identity.pub, "alice", password,
+        assert(decrypt_account_header(&data, &recovered, &identity.pub, "alice", password,
                             sizeof(password) - 1, blob, size) == -1);
 
     const uint8_t replacement[] = "replacement password";
-    assert(login_encrypt(changed, "alice", replacement, sizeof(replacement) - 1, &identity, &owner_key) == 0);
+    assert(encrypt_account_header(changed, "alice", replacement, sizeof(replacement) - 1, &account_header) == 0);
     assert(memcmp(changed + 20, blob + 20, 16) != 0);
     assert(memcmp(changed + 36, blob + 36, 24) != 0);
-    assert(login_decrypt(&recovered, &data, &identity.pub, "alice", password,
+    assert(decrypt_account_header(&data, &recovered, &identity.pub, "alice", password,
                         sizeof(password) - 1, changed, sizeof(changed)) == -1);
-    assert(login_decrypt(&recovered, &data, &identity.pub, "alice", replacement,
+    assert(decrypt_account_header(&data, &recovered, &identity.pub, "alice", replacement,
                         sizeof(replacement) - 1, changed, sizeof(changed)) == 0);
     assert(memcmp(&recovered, &identity, sizeof(identity)) == 0);
-    assert(memcmp(&data, &owner_key, sizeof(data)) == 0);
+    assert(memcmp(&data, &account_header, sizeof(data)) == 0);
     sodium_memzero(&recovered, sizeof(recovered));
     sodium_memzero(&data, sizeof(data));
 }
@@ -446,22 +447,69 @@ static void synchronous_transport(void) {
     destroy_client(host.cli);
 }
 
+static void failed_header_outputs(void) {
+    AccountHeader header;
+    KeyPair keys;
+    memset(&header, 0xa5, sizeof(header));
+    memset(&keys, 0xa5, sizeof(keys));
+    AccountHeader before = header;
+    KeyPair keys_before = keys;
+
+    const uint8_t wrong[] = "wrong password";
+    assert(decrypt_account_header(&header, &keys, &identity.pub, "alice", wrong,
+        sizeof(wrong) - 1, blob, sizeof(blob)) == -1);
+    assert(memcmp(&header, &before, sizeof(header)) == 0);
+    assert(memcmp(&keys, &keys_before, sizeof(keys)) == 0);
+
+    Key another_account = identity.pub;
+    another_account.b[0] ^= 1;
+    assert(decrypt_account_header(&header, &keys, &another_account, "alice", password,
+        sizeof(password) - 1, blob, sizeof(blob)) == -1);
+    assert(memcmp(&header, &before, sizeof(header)) == 0);
+    assert(memcmp(&keys, &keys_before, sizeof(keys)) == 0);
+
+    uint8_t out[LOGIN_BLOB_SIZE];
+    memset(out, 0xa5, sizeof(out));
+    header = account_header;
+    header.first_feed_page = header.current_feed_page + 1;
+    assert(encrypt_account_header(out, "alice", password, sizeof(password) - 1, &header) == -1);
+    for (size_t i = 0; i < sizeof(out); i++) {
+        assert(out[i] == 0xa5);
+    }
+
+    assert(encrypt_account_header(out, "alice", password, sizeof(password) - 1, NULL) == -1);
+    assert(decrypt_account_header(NULL, &keys, &identity.pub, "alice", password,
+        sizeof(password) - 1, blob, sizeof(blob)) == -1);
+    assert(decrypt_account_header(&header, NULL, &identity.pub, "alice", password,
+        sizeof(password) - 1, blob, sizeof(blob)) == -1);
+}
+
 int main(void) {
     assert(sodium_init() >= 0);
     uint8_t seed[32] = {1, 2, 3};
     assert(crypto_sign_seed_keypair(identity.pub.b, identity.priv.b, seed) == 0);
     memset(owner_key.b, 0xa5, KEY_SIZE);
-    assert(login_encrypt(blob, "alice", password, sizeof(password) - 1, &identity, &owner_key) == 0);
+    account_header.first_feed_page = 2;
+    account_header.current_feed_page = 7;
+    account_header.first_recipient_page = 1;
+    account_header.current_recipient_page = 3;
+    memset(account_header.inbox_head_locator.b, 0xcc, HASH_SIZE);
+    memcpy(account_header.signing_seed.b, seed, sizeof(seed));
+    account_header.data_key = owner_key;
+    assert(encrypt_account_header(blob, "alice", password, sizeof(password) - 1, &account_header) == 0);
     password_stays_local();
     success_and_retry();
     failures_and_cleanup();
     exhausted_resources();
     authenticated_record_checks();
-    authenticated_bad_record(crypto_secretstream_xchacha20poly1305_TAG_MESSAGE, 13);
-    authenticated_bad_record(crypto_secretstream_xchacha20poly1305_TAG_FINAL, 99);
+    failed_header_outputs();
+    authenticated_bad_record(crypto_secretstream_xchacha20poly1305_TAG_MESSAGE, 2, false);
+    authenticated_bad_record(crypto_secretstream_xchacha20poly1305_TAG_FINAL, 99, false);
+    authenticated_bad_record(crypto_secretstream_xchacha20poly1305_TAG_FINAL, 2, true);
     synchronous_transport();
     retained_requests();
     sodium_memzero(&identity, sizeof(identity));
     sodium_memzero(&owner_key, sizeof(owner_key));
+    sodium_memzero(&account_header, sizeof(account_header));
     return 0;
 }

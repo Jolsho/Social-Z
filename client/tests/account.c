@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-#include "sz_client/account.h"
+#include "codec/account.h"
 #include <assert.h>
 
 static void exact_format(void) {
@@ -25,6 +25,8 @@ static void exact_format(void) {
     for (size_t i = 0; i < HASH_SIZE; i++) {
         header.inbox_head_locator.b[i] = (uint8_t)(0xa0 + i);
         expected[36 + i] = (uint8_t)(0xa0 + i);
+        header.signing_seed.b[i] = expected[68 + i] = (uint8_t)(0x20 + i);
+        header.data_key.b[i] = expected[100 + i] = (uint8_t)(0x60 + i);
     }
 
     uint8_t bytes[ACCOUNT_HEADER_SIZE];
@@ -45,6 +47,8 @@ static void exact_format(void) {
     assert(parsed.first_recipient_page == header.first_recipient_page);
     assert(parsed.current_recipient_page == header.current_recipient_page);
     assert(memcmp(parsed.inbox_head_locator.b, header.inbox_head_locator.b, HASH_SIZE) == 0);
+    assert(memcmp(parsed.signing_seed.b, header.signing_seed.b, KEY_SIZE) == 0);
+    assert(memcmp(parsed.data_key.b, header.data_key.b, KEY_SIZE) == 0);
 
     assert(marshal_account_header(bytes, sizeof(bytes), &size, &parsed) == 0);
     assert(memcmp(bytes, expected, size) == 0);

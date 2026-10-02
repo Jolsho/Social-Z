@@ -3,24 +3,66 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-#include "sz_client/account.h"
+#include "codec/account.h"
 #include <stdbool.h>
+#include <sodium.h>
 
-static uint64_t read_u64(const uint8_t* bytes) {
-    uint64_t value = 0;
+// Password envelope: public KDF profile, salt, stream header, and ciphertext length.
+enum { HEADER_SIZE = 64, PLAIN_SIZE = ACCOUNT_HEADER_SIZE, CIPHER_SIZE = PLAIN_SIZE + 17 };
+_Static_assert(CIPHER_SIZE == PLAIN_SIZE + crypto_secretstream_xchacha20poly1305_ABYTES, "Account ciphertext size");
+_Static_assert(LOGIN_BLOB_SIZE == HEADER_SIZE + CIPHER_SIZE, "Account blob size");
+_Static_assert(crypto_pwhash_SALTBYTES == 16, "Account salt size");
+_Static_assert(crypto_secretstream_xchacha20poly1305_HEADERBYTES == 24, "Account stream header size");
 
-    for (size_t i = 0; i < 8; i++) {
-        value = (value << 8) | bytes[i];
-    }
+static uint64_t read_uint(const uint8_t* p, size_t n) {
+    uint64_t v = 0;
 
-    return value;
+    for (size_t i = 0; i < n; i++)
+        v = (v << 8) | p[i];
+
+    return v;
 }
 
-static void write_u64(uint8_t* bytes, uint64_t value) {
-    for (size_t i = 8; i > 0; i--) {
-        bytes[i - 1] = (uint8_t)value;
-        value >>= 8;
+static void write_uint(
+    uint8_t* p,
+    uint64_t v,
+    size_t n
+) {
+    while (n) {
+        p[--n] = (uint8_t)v;
+        v >>= 8;
     }
+}
+
+static size_t associated_data(
+    uint8_t* out,
+    const uint8_t* header,
+    const char* username
+) {
+    size_t n = login_username_size(username);
+    memcpy(out, header, HEADER_SIZE);
+    write_uint(out + HEADER_SIZE, n, 2);
+    memcpy(out + HEADER_SIZE + 2, username, n);
+
+    return HEADER_SIZE + 2 + n;
+}
+
+static int password_key(
+    uint8_t* key,
+    const uint8_t* password,
+    size_t n,
+    const uint8_t* header
+) {
+    /* V1 accepts one bounded profile, independent of changing library defaults. */
+    if (!password || !n || n > LOGIN_PASSWORD_MAX ||
+        read_uint(header, 2) != 1 || read_uint(header + 2, 2) != 1 ||
+        read_uint(header + 4, 4) != crypto_pwhash_ALG_ARGON2ID13 ||
+        read_uint(header + 8, 4) != 2 || read_uint(header + 12, 8) != 64 * 1024 * 1024 ||
+        read_uint(header + 60, 4) != CIPHER_SIZE)
+        return -1;
+
+    return crypto_pwhash(key, KEY_SIZE, (const char*)password, n, header + 20,
+                        2, 64 * 1024 * 1024, crypto_pwhash_ALG_ARGON2ID13);
 }
 
 static bool valid_pages(const AccountHeader* header) {
@@ -48,13 +90,16 @@ int marshal_account_header(
     out[2] = 0;
     out[3] = 2;
 
-    write_u64(out + 4, header->first_feed_page);
-    write_u64(out + 12, header->current_feed_page);
+    write_uint(out + 4, header->first_feed_page, 8);
+    write_uint(out + 12, header->current_feed_page, 8);
 
-    write_u64(out + 20, header->first_recipient_page);
-    write_u64(out + 28, header->current_recipient_page);
+    write_uint(out + 20, header->first_recipient_page, 8);
+    write_uint(out + 28, header->current_recipient_page, 8);
 
     memcpy(out + 36, header->inbox_head_locator.b, HASH_SIZE);
+
+    memcpy(out + 68, header->signing_seed.b, KEY_SIZE);
+    memcpy(out + 100, header->data_key.b, KEY_SIZE);
 
     *size = ACCOUNT_HEADER_SIZE;
     return 0;
@@ -75,11 +120,11 @@ int parse_account_header(
 
     AccountHeader header = {0};
 
-    header.first_feed_page = read_u64(bytes + 4);
-    header.current_feed_page = read_u64(bytes + 12);
+    header.first_feed_page = read_uint(bytes + 4, 8);
+    header.current_feed_page = read_uint(bytes + 12, 8);
 
-    header.first_recipient_page = read_u64(bytes + 20);
-    header.current_recipient_page = read_u64(bytes + 28);
+    header.first_recipient_page = read_uint(bytes + 20, 8);
+    header.current_recipient_page = read_uint(bytes + 28, 8);
 
     memcpy(header.inbox_head_locator.b, bytes + 36, HASH_SIZE);
 
@@ -87,6 +132,106 @@ int parse_account_header(
         return -1;
     }
 
+    memcpy(header.signing_seed.b, bytes + 68, KEY_SIZE);
+    memcpy(header.data_key.b, bytes + 100, KEY_SIZE);
+
     *out = header;
     return 0;
+}
+
+int encrypt_account_header(
+    uint8_t out[LOGIN_BLOB_SIZE],
+    const char* username,
+    const uint8_t* password,
+    size_t password_size,
+    const AccountHeader* header
+) {
+    if (!out || !header || !login_username_size(username) ||
+        !password || !password_size || password_size > LOGIN_PASSWORD_MAX || sodium_init() < 0)
+        return -1;
+
+    uint8_t blob[LOGIN_BLOB_SIZE] = {0},
+            plain[PLAIN_SIZE] = {0},
+            key[KEY_SIZE] = {0};
+    uint8_t ad[HEADER_SIZE + 2 + LOGIN_USERNAME_MAX];
+    crypto_secretstream_xchacha20poly1305_state stream = {0};
+    int r = -1;
+
+    write_uint(blob, 1, 2);
+    write_uint(blob + 2, 1, 2);
+    write_uint(blob + 4, crypto_pwhash_ALG_ARGON2ID13, 4);
+    write_uint(blob + 8, 2, 4);
+    write_uint(blob + 12, 64 * 1024 * 1024, 8);
+    randombytes_buf(blob + 20, 16);
+    write_uint(blob + 60, CIPHER_SIZE, 4);
+
+    size_t plain_size;
+    if (marshal_account_header(plain, sizeof(plain), &plain_size, header) != 0)
+        goto done;
+
+    if (password_key(key, password, password_size, blob) == 0 &&
+        crypto_secretstream_xchacha20poly1305_init_push(&stream, blob + 36, key) == 0) {
+        size_t ad_size = associated_data(ad, blob, username);
+        if (crypto_secretstream_xchacha20poly1305_push(&stream, blob + HEADER_SIZE, NULL,
+            plain, sizeof(plain), ad, ad_size, crypto_secretstream_xchacha20poly1305_TAG_FINAL) == 0) {
+            memcpy(out, blob, sizeof(blob));
+            r = 0;
+        }
+    }
+
+done:
+    sodium_memzero(key, sizeof(key));
+    sodium_memzero(plain, sizeof(plain));
+    sodium_memzero(&stream, sizeof(stream));
+
+    return r;
+}
+
+int decrypt_account_header(
+    AccountHeader* header,
+    KeyPair* keys,
+    const Key* account,
+    const char* username,
+    const uint8_t* password,
+    size_t password_size,
+    const uint8_t* blob,
+    size_t blob_size
+) {
+    if (!header || !keys || !account || !blob || blob_size != LOGIN_BLOB_SIZE ||
+        !login_username_size(username) || sodium_init() < 0)
+        return -1;
+
+    uint8_t key[KEY_SIZE] = {0},
+            plain[PLAIN_SIZE] = {0},
+            tag = 0;
+    uint8_t ad[HEADER_SIZE + 2 + LOGIN_USERNAME_MAX];
+    KeyPair recovered = {0};
+    AccountHeader parsed = {0};
+    Key converted;
+    unsigned long long size = 0;
+    crypto_secretstream_xchacha20poly1305_state stream = {0};
+    size_t ad_size = associated_data(ad, blob, username);
+    int r = -1;
+
+    if (password_key(key, password, password_size, blob) == 0 &&
+        crypto_secretstream_xchacha20poly1305_init_pull(&stream, blob + 36, key) == 0 &&
+        crypto_secretstream_xchacha20poly1305_pull(&stream, plain, &size, &tag,
+            blob + HEADER_SIZE, CIPHER_SIZE, ad, ad_size) == 0 &&
+        size == PLAIN_SIZE && tag == crypto_secretstream_xchacha20poly1305_TAG_FINAL &&
+        parse_account_header(&parsed, plain, sizeof(plain)) == 0 &&
+        crypto_sign_seed_keypair(recovered.pub.b, recovered.priv.b, parsed.signing_seed.b) == 0 &&
+        sodium_memcmp(recovered.pub.b, account->b, KEY_SIZE) == 0 &&
+        crypto_sign_ed25519_pk_to_curve25519(converted.b, recovered.pub.b) == 0) {
+        *keys = recovered;
+        *header = parsed;
+        r = 0;
+    }
+
+    sodium_memzero(key, sizeof(key));
+    sodium_memzero(plain, sizeof(plain));
+    sodium_memzero(&recovered, sizeof(recovered));
+    sodium_memzero(&parsed, sizeof(parsed));
+    sodium_memzero(&stream, sizeof(stream));
+
+    return r;
 }
