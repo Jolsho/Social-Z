@@ -40,7 +40,7 @@ static size_t associated_data(
     const uint8_t* header,
     const char* username
 ) {
-    size_t n = login_username_size(username);
+    size_t n = account_username_size(username);
     memcpy(out, header, HEADER_SIZE);
     write_uint(out + HEADER_SIZE, n, 2);
     memcpy(out + HEADER_SIZE + 2, username, n);
@@ -147,13 +147,13 @@ int encrypt_account_header(
     size_t password_size,
     const AccountHeader* header
 ) {
-    if (!out || !header || !login_username_size(username) ||
+    if (!out || !header || !account_username_size(username) ||
         !password || !password_size || password_size > LOGIN_PASSWORD_MAX || sodium_init() < 0)
         return -1;
 
     uint8_t blob[LOGIN_BLOB_SIZE] = {0};
     Key key = {0};
-    uint8_t ad[HEADER_SIZE + 2 + LOGIN_USERNAME_MAX];
+    uint8_t ad[HEADER_SIZE + 2 + ACCOUNT_USERNAME_MAX];
     CryptCtx crypto = {0};
     int r = -1;
 
@@ -198,12 +198,12 @@ int decrypt_account_header(
     size_t blob_size
 ) {
     if (!header || !keys || !account || !blob || blob_size != LOGIN_BLOB_SIZE ||
-        !login_username_size(username) || sodium_init() < 0)
+        !account_username_size(username) || sodium_init() < 0)
         return -1;
 
     Key key = {0};
     uint8_t plain[CIPHER_SIZE] = {0};
-    uint8_t ad[HEADER_SIZE + 2 + LOGIN_USERNAME_MAX];
+    uint8_t ad[HEADER_SIZE + 2 + ACCOUNT_USERNAME_MAX];
     KeyPair recovered = {0};
     AccountHeader parsed = {0};
     Key converted;

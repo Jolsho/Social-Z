@@ -86,7 +86,11 @@ Add protected local credential storage and password-change publication.
 Registration, recovery, and retrieval of the referenced private pages are still unfinished.
 Password encryption and plaintext interpretation live together in client/src/codec/account.c.
 client/src/operations/login.c coordinates requests, responses, and cancellation.
-Private username request and response metadata helpers live in client/src/codec/login.c and login.h.
-Common contains no login API.
-The node will decode its small request bodies in the relevant handler.
+Shared username request and response metadata helpers live in common/src/requests/requests.c.
+Their public declarations live in common/include/sz_common/requests/requests.h.
+parse_request() validates the request identifier and copies fields into the node caller's Request.
+marshal_account_response_metadata() writes the node's account key, blob hash, and blob size.
+Common does not decrypt the account header or manage login state.
+The client checks its expected encrypted header size after decoding metadata.
+The node handler still needs to connect these helpers to account lookup and blob retrieval.
 The stream encryption follows the [libsodium secretstream API](https://doc.libsodium.org/secret-key_cryptography/secretstream).

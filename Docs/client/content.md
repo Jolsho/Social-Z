@@ -46,14 +46,15 @@ networking/ owns transfer assembly, context buffers, and dispatch.
 
 ## User data
 
-The user-data marshaler first requests a username lookup, then the encrypted login blob.
-The user-data parser copies lookup fields and assembles incoming chunks through the blob parser.
+Login sends one username request for the encrypted account header.
+The response handler copies metadata and assembles incoming chunks through the blob parser.
 Authenticated decryption recovers one account header with the stable signing seed, data_key, and page references.
 The password stays local.
 See [login](login.md) for the bootstrap format and ownership rules.
 
-The post request includes a user key and a feed offset.
-The legacy response parser is disabled and rejects calls until feed-page retrieval is connected.
+Content uses generic blob retrieval, insertion, and deletion rather than post requests.
+Feeds, packages, voucher lists, and permission lists are opaque blobs to the node.
+The client interprets their contents after decryption.
 Encrypted feed-page retrieval is not wired yet.
 
 ## How content is represented

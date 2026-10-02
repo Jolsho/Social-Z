@@ -36,7 +36,7 @@ struct Client {
     struct {
         ContextID id;
         bool metadata_ready;
-        char username[LOGIN_USERNAME_MAX + 1];
+        char username[ACCOUNT_USERNAME_MAX + 1];
         Buffer password;
         AccountResponseMetadata metadata;
     } login;

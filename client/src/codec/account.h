@@ -5,13 +5,15 @@
 
 #pragma once
 
-#include "codec/login.h"
+#include "sz_common/requests/requests.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #define ACCOUNT_HEADER_SIZE 132
+#define LOGIN_PASSWORD_MAX 1024
+#define LOGIN_BLOB_SIZE 213
 
 typedef struct AccountHeader {
     uint64_t first_feed_page;

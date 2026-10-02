@@ -75,7 +75,7 @@ static void test_public_client_blob_flow(void)
     assert(id == 1);
     cli->net.states[id].parser_id = PARSER_ID_USER_DATA;
     assert(client_parse_response(cli, id, NULL, 0) == CLIENT_ERR);
-    cli->net.states[id].parser_id = PARSER_ID_POST_FEED;
+    cli->net.states[id].parser_id = PARSER_ID_CAP;
     assert(client_parse_response(cli, id, NULL, 0) == CLIENT_ERR);
     cli->net.states[id].parser_id = PARSER_ID_BLOB;
 

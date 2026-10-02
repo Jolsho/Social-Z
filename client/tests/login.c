@@ -18,7 +18,7 @@ static uint8_t blob[LOGIN_BLOB_SIZE];
 typedef struct Host {
     struct Client* cli;
     ContextID id;
-    uint8_t request[6 + LOGIN_USERNAME_MAX];
+    uint8_t request[6 + ACCOUNT_USERNAME_MAX];
     size_t size, calls;
     bool fail, synchronous, retain;
     Buffer* pending;
@@ -33,12 +33,12 @@ static HashT blob_hash(const uint8_t* bytes) {
 }
 
 static void reply_metadata(uint8_t reply[ACCOUNT_RESPONSE_METADATA_SIZE], const uint8_t* bytes, const Key* account) {
-    memset(reply, 0, ACCOUNT_RESPONSE_METADATA_SIZE);
-    reply[1] = reply[3] = 1;
-    memcpy(reply + 4, account->b, KEY_SIZE);
-    HashT hash = blob_hash(bytes);
-    memcpy(reply + 36, hash.b, HASH_SIZE);
-    reply[71] = LOGIN_BLOB_SIZE;
+    AccountResponseMetadata metadata = {
+        .account = *account,
+        .hash = blob_hash(bytes),
+        .size = LOGIN_BLOB_SIZE,
+    };
+    marshal_account_response_metadata(reply, &metadata);
 }
 
 static int deliver_blob(Host* host, const uint8_t* bytes, size_t chunk_size) {
@@ -76,6 +76,10 @@ void send_request(struct Client* cli, ContextID id, struct Buffer* buff) {
     host->size = buff->size;
     host->calls++;
     memcpy(host->request, buff->b, buff->size);
+    Request request;
+    assert(parse_request(&request, buff->b, buff->size) == 0);
+    assert(request.kind == REQUEST_ACCOUNT);
+    assert(strcmp(request.username, "alice") == 0);
     uint8_t operation = buff->b[3];
     if (host->retain) {
         assert(!host->pending);
@@ -190,7 +194,7 @@ static void failures_and_cleanup(void) {
     Host host = new_host();
     active_host = &host;
     assert(client_login(host.cli, "", password, sizeof(password) - 1, &host.id) == CLIENT_ERR);
-    char oversized[LOGIN_USERNAME_MAX + 2];
+    char oversized[ACCOUNT_USERNAME_MAX + 2];
     memset(oversized, 'a', sizeof(oversized) - 1);
     oversized[sizeof(oversized) - 1] = 0;
     assert(client_login(host.cli, oversized, password, sizeof(password) - 1, &host.id) == CLIENT_ERR);

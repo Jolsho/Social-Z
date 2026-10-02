@@ -16,12 +16,16 @@ Released contexts are put back on a free list.
 
 networking/ holds contexts, networking buffers, and response dispatch.
 operations/login.c groups username request preparation, sending, and reply handling.
-codec/login.* holds the username request and response metadata byte formats.
+common/src/requests/requests.c holds the username request and response metadata byte formats.
 codec/blob.* currently assembles encrypted transfer chunks in client-owned storage.
 codec/ also handles account, feed-page, and package plaintext after decryption.
 networking/dispatch.c contains the response handler table; dispatch.h declares it.
 networking/client.c handles returned send buffers without triggering login requests.
-requests/post.c belongs to the unfinished legacy post path.
+Requests share a version and RequestKind prefix and use parse_request().
+Account retrieval is the special case that resolves a username.
+Generic blob operations will retrieve, insert, and delete all other content.
+Feeds, packages, voucher lists, and permission lists share those operations.
+Their contents are decoded locally by the client.
 
 ## Request flow
 

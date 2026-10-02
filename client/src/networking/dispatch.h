@@ -8,8 +8,7 @@
 #include "networking/networker.h"
 
 #define PARSER_ID_USER_DATA 0
-#define PARSER_ID_POST_FEED 1
-#define PARSER_ID_BLOB 2
-#define PARSER_ID_CAP 3
+#define PARSER_ID_BLOB 1
+#define PARSER_ID_CAP 2
 
 extern const Parser parsers[PARSER_ID_CAP];

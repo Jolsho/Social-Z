@@ -1,0 +1,2099 @@
+CURRENT IMPLEMENTATION STATUS — 2026-10-02
+    Single-request username/password login and networking reorganization are committed as e2231c5.
+    Login uses marshal_account_request, the existing send_request hook, and login_handle_response.
+    Account request codecs are shared in common; legacy post requests are removed.
+    common/src/requests/requests.c provides one identifier-based parse_request entry point.
+    Only account retrieval is implemented there; generic blob operations remain next.
+    No transport callback setter or heap-allocated request descriptor is added.
+    Outgoing payloads use the client pool and the existing context send-buffer array.
+    Host-held send buffers remain valid until client_return_buffer.
+    Incoming memory is borrowed; retained fields and chunks are copied by the client.
+    Node username resolution, registration, and pre-login access remain unfinished.
+    Earlier work-log entries describe the withdrawn implementations as history.
+
+CURRENT BLOB OPERATION CONTRACT — AGREED 2026-10-02
+    Account retrieval by username is the special case before unlocking local keys.
+    All other content uses generic blob retrieval, insertion, and deletion.
+    Feeds, packages, voucher lists, and permission lists do not have separate node request types.
+    Every request has a RequestKind identifier; dispatch uses one parser, not paths.
+    Storage locator = H(request_hash || namespace_public_key).
+    Retrieval supplies that public key without requiring a signature.
+    Insertion and deletion sign H(request_hash || operation).
+    Operation is encoded as the request kind's big-endian u16.
+    The node verifies that signature under the namespace public key before mutation.
+    Whole-ciphertext integrity hashing remains separate from storage locator derivation.
+    Password derivation, account-header decryption, and content interpretation remain in the client.
+    This contract supersedes the older identifier/index locator and signed-blob-retrieval drafts below.
+    OPEN: request-hash selection for mutable data, upload framing/finalization, and mutation replay handling.
+    OPEN: how unsigned retrieval interacts with existing permission/voucher access and resource limits.
+
+CLIENT AND FS INTEGRATION DESIGN
+
+This is our shared plan for the upgrade.
+Update this file when a decision or implementation changes.
+AGREED records behavior we have settled together.
+PROPOSED records an implementation approach still open to adjustment.
+OPEN records a decision that must be settled before its dependent stage.
+Stage 0 has a concrete contract draft for review.
+Stage 1 is in progress with ten committed foundation repairs.
+Work resumed at the user's request.
+Core client initialization and cleanup are committed.
+Signing-key and P2P exchange changes are committed.
+Login requests encrypted user data and succeeds after authenticated decryption.
+The single-request client username/password login flow is committed as e2231c5.
+Blob assembly preserves state across chunks and verifies the whole-blob hash at completion.
+The code references below describe the current code.
+
+
+CURRENT CHECKPOINT
+
+    ON TRACK:
+        The architecture and publish/redeem flow remain unchanged.
+        Client-owned encrypted data and opaque FS storage are still the target.
+        Permissions admit vouchers and vouchers authorize complete-post retrieval.
+        DB removal still follows replacement of its responsibilities.
+        Ledger internals remain outside the upgrade.
+
+    COMPLETED:
+        2a44816: client feed-buffer growth, indexing, and malformed-batch handling.
+        2c20269: hash-table reservation returns value storage.
+        453bcd6: real hash-table allocation and live-value cleanup.
+        55aeb18: store initialization, retained callback, and destruction.
+        2cd494e: owned BLAKE3 state and initialized FS hashers.
+        2b055ac: cache buffer ownership and allocation accounting.
+        1f91ae2: chunked blob assembly with pooled and heap-owned storage.
+        7ae2b21: networking initialization and context cleanup.
+        99bc088: public core client initialization and owned-resource cleanup.
+        d625cd3: Ed25519 signing keys and supported P2P exchange conversion.
+        e34e1af: username/password login through the existing marshaler, send hook, and parser.
+        f41eab0: shared signed owner-update codec with enum identifiers and deterministic locators.
+        09ec642: shared account-header plaintext marshaling and parsing.
+        1bc6e3b: readability cleanup for login and owner-update code.
+        6fbb465: client-only account codec and separated request/reply handlers.
+        02a564a: variable-size client feed-page codec.
+        340faee: combined password-encrypted account header and client-private login.
+        a6d016d: general in-place stream encryption and account-header reuse.
+        d8313a8: fixed post package metadata and retained package keys.
+        8819957: content organization, direct fixed-size page storage, and Feed placeholder.
+        39de8cf: streaming plaintext package parser and shared-buffer package ownership.
+        ce9583d: chunk assembly with a leading size table and simpler parser interface.
+        Seventeen focused tests pass normally and with sanitizers.
+        These checks do not establish a working client/node integration.
+        The complete application build baseline is still outstanding.
+
+    NEXT SMALL CHANGES, IN DEPENDENCY ORDER:
+        1. COMMITTED AS ce9583d: parse_package_contents assembles Package from successive chunks.
+           It reads the size table first, allocates one payload buffer, and copies parser slices into it.
+           Keep staging separate from live contents until parsing and authentication finish.
+        2. IMPLEMENTED, UNCOMMITTED: matching streaming package marshaler for blob descriptors.
+           Keep the first blob opaque until its text and attachment-reference format is settled.
+        3. Define the first blob's post-data format and attachment references with the user.
+           Decide how the voucher supplies metadata before package retrieval.
+        Stored-blob framing and page retrieval remain subsequent work.
+        General record crypto and account-header reuse are committed as a6d016d.
+        Keep password-encrypted account headers separate from data-key-encrypted feeds.
+        Preserve host send_request and the original buffer ownership rules.
+        Node username resolution and actual proxy/P2P routing remain unfinished.
+        Keep changes separate when they can be reviewed independently.
+        Record the application build baseline alongside these repairs.
+
+    BEFORE NEW FS OR TRANSPORT BEHAVIOR:
+        Finish the operation-specific body schemas and bounded decoders.
+        Operation numbers and a frame header alone are not a complete protocol.
+        Specify first-account creation using absent locators and atomic initial owner updates.
+        Specify how node configuration admits the supplied local user identity.
+        Specify the contact-provider mapping from user identity to node identity and endpoint.
+        Supply fixed mappings in tests without replacing ledger's implementation.
+        Review the proposed credentials, limits, and timing rules before dependent code.
+        These are implementation gates rather than new product features.
+
+
+GOAL AND SCOPE
+
+    AGREED:
+        Alice can publish a post and notify many Bobs with small vouchers.
+        Each Bob can later retrieve the post header and all its blobs in one operation.
+        That operation streams chunks rather than loading the whole post into node memory.
+        Alice and Bob may share a home node or use different home nodes.
+        Each user currently has one home node.
+        A node may host many users.
+        Guests and home-node migration are outside this first upgrade.
+        The network is not live.
+        This upgrade does not need legacy protocol compatibility or data migration.
+        Existing development data is not silently deleted as part of implementation.
+        New recipients do not receive historical posts in this first version.
+        A future historical-post request would require Alice's approval.
+
+        The client owns the meaning and encryption of social data.
+        FS owns blob storage and the records needed to authorize and manage transfers.
+        The DB actor will be removed after its remaining responsibilities are replaced.
+        FS may keep its own LMDB index.
+        Removing the DB actor does not mean removing every local database.
+
+        A person is identified by a public key.
+        A node is identified by its own public key.
+        Its IP is a contact address.
+        Ledger supplies the identity-to-home-node contact information.
+        This upgrade consumes that information without redesigning ledger.
+
+    PROPOSED:
+        Support one active writer per account initially.
+        Conflicting device writes return an error instead of silently overwriting data.
+        Full device synchronization is a later feature.
+        Exercise the public client calls through a small simulated frontend.
+        The simulation must use real client, FS, and transport paths.
+        Rendering and interactive world features can be developed separately.
+
+
+RESPONSIBILITIES
+
+    CLIENT:
+        Request the user's encrypted data and authenticate its decryption locally.
+        Successful decryption establishes login; failed decryption does not unlock the client.
+        Unlock and retain the user's keys through that flow.
+        Do not require a separate supplied-credentials login step.
+        Read and decrypt the account header and owner data.
+        Construct posts, feed pages, recipient lists, and vouchers.
+        Sign account updates and requests that require user authority.
+        Verify ciphertext hashes and authenticated decryption.
+        Report failures and let the user initiate another attempt.
+
+    FS:
+        Address opaque ciphertext using H(request_hash || namespace_public_key).
+        Retrieval can use an unsigned namespace public key.
+        Verify owner signatures before inserting or deleting data in that namespace.
+        Verify owner updates and expected revisions.
+        Keep accepted permission hashes and issued voucher state.
+        Append authorized vouchers to a user's inbox.
+        Stage uploads and commit publication on one node.
+        Reserve disk space and bound active transfers.
+        Serve only authorized data.
+        Persist enough state to recover after a restart.
+
+    PROXY AND P2P:
+        Carry the same logical FS requests and replies.
+        Preserve request IDs, authenticated identities, and transfer IDs.
+        Apply transport limits before accepting large messages.
+        Relaying a message does not grant the relay ownership of its contents.
+
+    LEDGER:
+        Resolve the home node and contact address.
+        Keep its current responsibilities.
+        Tests can supply fixed contact information through the same boundary.
+
+
+STORED RECORDS
+
+    AGREED: LOCATORS AND BLOBS
+        A blob-operation locator is H(request_hash || namespace_public_key).
+        The request supplies the hash and namespace public key.
+        Retrieval does not require proof of possession of that public key.
+        Insertion and deletion require a signature verified under that public key.
+        Hash input order is request hash followed by client public key, both fixed-width bytes.
+        Use the same derivation for blob retrieval, insertion, and deletion.
+        Feeds, packages, voucher lists, and permission lists all use this address scheme.
+        Account retrieval by username remains the special case before the client unlocks its signing key.
+        A blob address is H(ciphertext).
+        These have different purposes even though both are hashes.
+        Content hashing still checks the complete ciphertext rather than individual transfer chunks.
+        The earlier H(identifier, index, user_public_key) locator design is superseded.
+        common/src/codec/owner.c still implements that earlier design and needs reconciliation.
+        Stable mutable-page addressing depends on how the client chooses its request hash.
+
+    EARLIER PROPOSAL: OWNER UPDATE
+        An owner signs an update to their account header or feed-page locator.
+        Each replacement has a revision number.
+        FS accepts it only when the expected prior revision matches.
+        This identifier/index record is not the generic blob-operation request contract.
+        Reconcile its revision handling with generic blob mutation before wiring storage.
+
+    EARLIER PROPOSAL: OWNER UPDATE FIELDS
+        Superseded by the V1 record layout in RECORDS below.
+        protocol_version, operation, owner_key, locator.
+        expected_revision, new_revision, ciphertext_hash, ciphertext_size.
+        The signature covers all those fields.
+        This binds the signature to a particular operation and locator.
+        A signature over only the blob hash is insufficient for that binding.
+        Creation uses an explicit absent-record condition.
+        Revision checks prevent conflicts at the serving node.
+        They do not alone prove that a malicious node returned its latest record.
+        A client can remember the highest revision it has already seen.
+
+    AGREED: ACCOUNT HEADER ENCRYPTION
+        Encrypted using the password-derived key.
+        Contains data_key, which encrypts private pages and account data.
+        Post packages keep their own keys, protected by the encrypted feed metadata.
+        The password stays local; the node serves the encrypted header.
+        AGREED: One header contains signing seed, data_key, page indices, and inbox locator.
+
+    PROPOSED: ACCOUNT HEADER CONTENTS
+        Contains the current feed-page index and its starting index.
+        Contains recipient-list locations.
+        Feed entries retain package keys and are encrypted under the owner's data_key.
+        Uses an explicit format version.
+        Contains the locator for the separate node-managed inbox head.
+        The client can fetch this header without first knowing its contents.
+
+    AGREED: FEED PAGES
+        Append package-metadata entries while the current page has room.
+        Once it is full, increment the page index.
+        Start the new page with the new post and no empty-slot padding.
+        A plaintext page, including its header, is at most 64 KiB.
+        A full-page append leaves the old page unchanged.
+        Publishing must reject page-index overflow rather than wrap it.
+        Changes to the current page use owner signatures and revision checks.
+
+    AGREED: FEED PAGE CONTENTS
+        An explicit post count followed by packed fixed-size package metadata.
+        The client addresses fixed-size posts directly without serializing an offset index.
+        Each entry contains originator, creation time, one package hash, its key, and blob count.
+        The package is one opaque encrypted blob containing the actual post data and enclosed blobs.
+        Recipients recover the package key through the voucher and retain it with their post metadata.
+        Each user's feed encryption under data_key protects those retained keys.
+        Both author and recipient can store the original encrypted package without rebuilding it.
+        Full pages remain unchanged unless the owner explicitly edits or removes data.
+        Receiving a voucher does not grant access to the author's private account header.
+
+    PROPOSED: RECIPIENT LIST
+        Encrypted owner-managed pages containing recipient public keys.
+        Alice's client decrypts them to build recipient-specific vouchers.
+        Bob grants Alice permission to deliver vouchers to his inbox.
+        Merely appearing in Alice's recipient list does not grant that permission.
+
+    AGREED: POST
+        One metadata entry refers to one encrypted package.
+        The entry contains the package key rather than a list of per-blob ciphertext hashes.
+        The package contains the remaining post data and its enclosed blobs.
+        Package creation and internal parsing will be implemented separately.
+        Build metadata as the first packaging step and fill its hash after encrypting the package.
+        The package uses its own key, shared through recipient-encrypted voucher subsections.
+        Each recipient keeps that key in their own data-key-encrypted feed metadata.
+        Keep the encrypted package as-is rather than re-encrypting its contents for each user's storage.
+        Never expose package keys outside encrypted private metadata or recipient-encrypted subsections.
+
+    PROPOSED: LARGE BLOB ENCRYPTION
+        Specify authenticated streaming or bounded encrypted chunks in STAGE 0.
+        A large video must not require one whole-file buffer to encrypt or decrypt.
+        Cryptographic framing is separate from transport chunk framing.
+        A received transport chunk is not automatically authenticated plaintext.
+
+    AGREED: DELIVERY PACKAGE
+        Group the post-data blob and all other referenced blob contents in plaintext.
+        Encrypt the complete package under one delivery key.
+        Store the encrypted package as an opaque blob while it waits for retrieval.
+        Its hash identifies the whole encrypted package, even when transport sends chunks.
+        FS does not interpret the package's internal post data or entries.
+        A voucher authorizes retrieval of that package with a bounded ciphertext byte size.
+        OPEN: Define bounded internal entry framing and reference mapping.
+        The earlier multi-ciphertext transfer manifest is superseded for this post package.
+        Review manifest fields in vouchers and transfer requests before implementing them.
+
+    AGREED: VOUCHER
+        One voucher authorizes one recipient to retrieve one complete prepared package.
+        The node-readable portion identifies issuer, recipient, package hash, size, and permission.
+        The encrypted subsection contains the package delivery key.
+        Encrypt that subsection using the shared key with the recipient and a fresh nonce.
+        The sender's signature binds both portions, including the encrypted subsection.
+        Bob verifies the voucher and decrypts the subsection to recover the delivery key.
+        The node checks retrieval authorization without learning that key.
+        Permission records recipient consent; publication and voucher issuance record sender consent.
+        File transfer requires both users to agree.
+        Prepared packages wait for later retrieval rather than immediate file delivery.
+
+    PROPOSED: VOUCHER FIELDS
+        protocol_version, unique_voucher_id, issuer_key, recipient_key.
+        permission_hash and permission_generation.
+        package_hash, total_ciphertext_bytes, expiration.
+        encrypted_key_subsection and issuer_signature.
+        PROPOSED: Bind voucher ID, package hash, issuer, and recipient inside the key subsection too.
+        Derive voucher hashes and signatures from canonical encoding.
+        Do not hash compiler padding or native size_t/time_t layouts.
+        Binding vouchers to a permission lets revocation cancel its outstanding vouchers.
+        Replace earlier manifest_hash references with the package identity when implementing delivery.
+
+    AGREED: INBOX AND ISSUED VOUCHERS
+        Bob's node holds paged inbox entries under H("inbox", index, BobKey).
+        Alice's node holds the pending_redeemable state for vouchers she issued.
+        Bob retrieves his inbox and cleans out expired entries.
+        Bob's node admits a voucher only while Bob's permission for Alice is active.
+
+    PROPOSED: INBOX OWNERSHIP
+        Inbox pages are node-managed records.
+        They are not ordinary owner-only feed-page replacements.
+        Bob authorizes reading and cleaning up his inbox.
+        FS appends an entry only after checking the sender's signature and permission.
+        Duplicate delivery of the same voucher does not append another entry.
+        A node-managed inbox head gives Bob the latest page and revision.
+
+
+PUBLISHING A POST
+
+    AGREED:
+        Store and verify all post blobs before publishing the feed update.
+        The feed update is the publication point on Alice's node.
+        Notification delivery to other nodes is a separate operation.
+        Failed notification delivery can be retried.
+        There is no atomic transaction spanning Alice's and Bob's nodes.
+
+    PROPOSED STEPS:
+        1. Alice's client reads its header, current page, and recipients.
+        2. It creates and encrypts one package; its hash and key are retained in the post metadata.
+        3. It creates the replacement feed page and recipient-specific vouchers.
+        4. FS opens a bounded upload transaction and reserves Alice's disk quota.
+        5. The client uploads ciphertext in chunks to temporary files.
+        6. FS checks exact lengths and hashes before accepting staged files.
+        7. FS commits the feed update, issued vouchers, and pending deliveries together.
+        8. If a page boundary is crossed, the account-header update commits with it.
+        9. Alice's node delivers vouchers with Bob's permission.
+        10. Bob's node persists each accepted inbox entry before acknowledging delivery.
+
+    PROPOSED FAILURE RULES:
+        Each publish attempt has a stable transaction ID.
+        Repeating a committed transaction returns its recorded result.
+        Reusing the same ID with different contents is rejected.
+        A revision conflict leaves the existing feed unchanged.
+        Staged uploads may expire or be explicitly aborted.
+        Failed voucher deliveries remain listed for an explicit retry.
+        No background retry loop is required for the first version.
+
+    PROPOSED DISK COMMIT:
+        Files and LMDB are not one atomic transaction.
+        Finalize and make the verified files durable before publishing references.
+        Commit references, quota accounting, and voucher state in an LMDB transaction.
+        Record transaction state so restart recovery can identify leftovers.
+        A crash may leave unreferenced files to clean up.
+        It must not publish a reference to a missing or incomplete file.
+
+
+REDEEMING A POST
+
+    AGREED:
+        Only one attempt may be active for a particular voucher.
+        A failed attempt returns an error and allows an explicit retry.
+        One-time use means a completed retrieval, not merely starting a transfer.
+        Both same-node and different-node retrieval obey these rules.
+
+    PROPOSED STEPS:
+        1. Bob's client reads its inbox and selects a voucher.
+        2. Bob authorizes his home node to redeem it.
+        3. Alice's node verifies signature, recipient authority, expiry, and issued state.
+           It also rejects vouchers canceled by revocation or owner deletion.
+        4. It checks that the bounded manifest still names available blobs.
+        5. Bob's node reserves space for the complete post.
+        6. Alice's node streams the manifest's ciphertext blobs in one transfer.
+        7. Bob's node verifies each hash and length and commits the received files.
+        8. Bob's node confirms durable receipt to Alice's node.
+        9. Alice's node records the voucher as redeemed.
+        10. Bob's client decrypts the key envelope, post header, and media.
+        11. The client parses authenticated plaintext and presents the post.
+
+    PROPOSED STATE MACHINE:
+        Issued -> Transferring -> AwaitingConfirmation -> Redeemed.
+        Failure before confirmed receipt returns to Issued after releasing the session.
+        Expired vouchers cannot start new attempts.
+        Redeemed and expired outcomes survive restart.
+        Canceled outcomes also survive restart and cannot be reopened by retries.
+        Repeated confirmations return the same result.
+        A lost confirmation reply must not force another complete download.
+        Use a transfer ID and authenticated completion receipt to resolve that case.
+        Unfinished sessions have deadlines and release their quota reservations.
+        Retries may restart from the first blob initially.
+        Resuming arbitrary byte offsets can be a later feature.
+        One-time redemption does not promise exactly one transmission of every byte.
+        Failed attempts may have sent partial data.
+        Revocation or owner deletion transitions affected vouchers to Canceled.
+        Cancellation releases sessions and quota reservations when processed.
+        It does not erase bytes already delivered to Bob.
+
+    PROPOSED CONFIRMATION MEANING:
+        Completion means Bob's node has stored the complete verified ciphertext.
+        Alice's node does not wait for Bob to render the post.
+        Client decryption errors remain visible even after ciphertext storage succeeds.
+        Expiry and receipt races need explicit tests.
+
+
+PERMISSIONS, LIMITS, AND CLEANUP
+
+    AGREED:
+        Permissions authorize incoming voucher delivery.
+        Vouchers authorize retrieval.
+        Knowing a ciphertext hash alone does not authorize strangers to fetch it.
+        Removing Bob's accepted permission hash stops future delivery from Alice.
+        Revocation also cancels outstanding vouchers under that permission.
+        Alice may delete her own stored data even when vouchers still refer to it.
+        Deletion cancels outstanding vouchers that require the removed data.
+        It does not delete copies already owned and retained by Bob.
+        A full user quota rejects new writes in the first version.
+        Users explicitly remove data to make room.
+        Automatic eviction and protected data are deferred.
+
+    PROPOSED:
+        FS stores permission and voucher state durably in its own index.
+        Owner writes and reads require user authority.
+        Peer reads require voucher authority.
+        P2P node authentication does not replace user authorization.
+        Proxy requests carry user authority instead of being trusted by actor identity.
+        Bound packet sizes before allocation.
+        Bound inbox entries, active sessions, outstanding vouchers, and staged uploads.
+        Reserve disk quota for concurrent uploads and incoming transfers.
+        Keep transfer memory proportional to bounded chunks and active sessions.
+        Use 64 KiB payload chunks, interpreting the requested 64kb size.
+        Allocate additional room for framing rather than overflowing a 64 KiB buffer.
+        Enforce total post size independently of chunk size.
+        Logical per-user quota accounting is separate from physical file deduplication.
+        One user's deletion must not remove another user's retained copy.
+        Temporary-file cleanup must never delete a committed shared blob.
+        Cleanup must preserve replay rejection for unexpired spent vouchers.
+        All owner deletion requests are authenticated.
+
+    PROPOSED REVOCATION DELIVERY:
+        Bob's node records revocation and stops accepting affected vouchers immediately.
+        It sends an authenticated revocation to Alice's node.
+        Alice's node records it and cancels the associated outstanding vouchers.
+        Keep pending revocation delivery durable if Alice's node is unreachable.
+        A remote node cannot learn about a local revocation instantaneously.
+        The Stage 0 contract specifies delayed propagation and pending status.
+        A canceled permission generation cannot be reactivated by replaying an old grant.
+        A later grant uses a new generation.
+
+    PROPOSED OWNER DELETION:
+        Invalidate affected vouchers and remove Alice's ownership references together.
+        Cancel active transfers before serving more chunks under those vouchers.
+        Delete physical bytes only when no other user owns them and no reader needs them.
+        Owner deletion never silently grants access to a missing replacement blob.
+        Clients must handle references to deleted data as unavailable.
+
+
+REQUESTS AND REPLIES
+
+    PROPOSED:
+        Owner operations: resolve locator, fetch owned blob, stage upload, commit, abort.
+        Permission operations: accept, list, and revoke an accepted permission.
+        Inbox operations: deliver voucher, list pages, acknowledge removal.
+        Transfer operations: redeem, stream chunk, confirm receipt, query outcome, cancel.
+        Cleanup operations: list owned storage and remove selected owned data.
+        These are logical operations rather than final API names.
+
+        Requests identify the user, request ID, operation, and operation-specific fields.
+        Transfer chunks identify transfer ID, blob hash, offset, and payload length.
+        Replies distinguish progress, final success, and final failure.
+        Errors include conflict, unauthorized, expired, spent, busy, quota, and missing data.
+        Cancellation is a distinct terminal outcome.
+        Partial reads and writes must not be mistaken for complete packets.
+        Same-node delivery uses the same validators without opening a P2P connection.
+        A disconnected proxy client releases its request and session resources.
+        A transport cannot choose a different permission policy.
+
+
+CURRENT CODE WORK TO ADDRESS
+
+    COMMON:
+        DONE: the hash wrapper owns initialized BLAKE3 state by value.
+        Copying a hasher creates independent state and no heap cleanup is required.
+        Existing FS permission and session callers now initialize their hashers.
+        See common/src/hash/hash.c:11 and common/include/sz_common/hash.h:16.
+        DONE: ht_reserve returns value storage for new entries, not its internal node.
+        See common/src/structs/hashtable.c:149.
+        DONE: hash-table allocation uses checked sizes, aligned values, and the real allocation base.
+        Cleanup destroys only live values and clears released storage pointers.
+        See common/src/structs/hashtable.c:57 and common/src/structs/hashtable.c:297.
+        DONE: KeyPair uses a 64-byte signing secret and 32-byte public identity.
+        Key generation uses crypto_sign_keypair and signing uses crypto_sign_detached.
+        P2P converts signing identities and keeps temporary X25519 pairs separate.
+        See common/src/crypto/crypto.c:26 and common/include/sz_common/codec.h:33.
+        Password/passkey acquisition details require the login input decision below.
+        Recover identity keys through authenticated user-data decryption.
+        Keep ledger changes outside this upgrade.
+        Replace raw struct copies with bounded, versioned wire encoding.
+        Current voucher hashing omits file_size.
+        See common/src/codec/fs.c:28 and common/src/codec/fs.c:36.
+        Record signatures cover their agreed fields.
+        Generic blob mutation signatures cover H(request_hash || operation), as agreed above.
+
+    CLIENT:
+        DONE: store setup retains its callback, initializes state, and handles failed setup.
+        The previously declared store_destroy now releases values and queue storage.
+        See client/src/utils/store.c:32.
+        DONE: networking initializes buffer arrays and an explicit context free list.
+        Setup failure releases allocated arrays and shutdown releases active context buffers.
+        Repeated context release no longer corrupts the free list.
+        Missing or null parser entries return an error rather than being called.
+        See client/src/networking/client.c:12 and client/src/networking/networker.h:51.
+        DONE: init_client now initializes the pool, cache, feed, and networking.
+        The public constructor matches its declaration and has a paired destroy_client.
+        Login and blob parsers are registered; the feed parser still awaits repair.
+        DONE: username/password login unlocks keys after authenticated user-data decryption.
+        Key fields start empty and a logged-in client cannot switch accounts in place.
+        The host implements the existing send_request hook and returns outgoing buffers through client_return_buffer.
+        Login contexts retain a pooled password and wipe it on every terminal path.
+        See client/src/operations/login.c and client/include/sz_client/client.h:37.
+        See client/src/client.c:13 and client/include/sz_client/client.h:29.
+        wrld_init calls bvh_init, but no implementation of bvh_init exists in the project.
+        See client/src/wrld/wrld.c:27 and client/src/wrld/bvh/bvh.h:42.
+        World initialization is now separate from core startup.
+        start_client still invokes it before updating or rendering.
+        Rendering execution remains unfinished until bvh_init is implemented.
+        DONE: login marshaling fills the context send buffer and preserves host ownership until return.
+        Post request queuing remains unfinished.
+        See client/src/operations/login.c:10 and client/src/networking/marshalers/post.c:44.
+        Fix length checks before subtraction, copying, or parsing.
+        DONE: replaced the old user parser that read password input from the response.
+        The login parser requires an active login and validates lookup fields before fetching bytes.
+        It checks the requested hash, fixed blob size, and authenticated recovered identity.
+        The user-data marshaler now encodes bounded username/hash requests.
+        The marshaler uses pooled bytes in the existing context send buffer.
+        See client/src/operations/login.c:10 and common/src/crypto/login.c.
+        DONE: blob parsing assembles chunks into owned storage.
+        The header hash identifies the entire blob, not an individual chunk.
+        The store lookup finds an existing assembly instead of proving it is complete.
+        Tracks received bytes and validates bounds before appending each chunk.
+        Verifies the whole-blob hash only at completion.
+        Cache copy-out rejects incomplete assemblies.
+        See client/src/networking/blob.c:11 and client/src/utils/store.c:76.
+        DONE: cache allocations retain capacity separately from logical blob size.
+        Pool buffers return with their bucket capacity and heap buffers are freed directly.
+        Cleanup subtracts capacity for replacement, erasure, eviction, and destruction.
+        Failed table insertion leaves the priority queue unchanged.
+        Failed queue growth rolls back a new entry and preserves an existing entry.
+        See client/src/utils/store.c:21 and client/src/utils/store.c:76.
+        Pool inputs must identify an actual allocation start rather than an interior view.
+        AGREED chunk layout: first chunk is whole-blob hash, total size, and payload.
+        Every continuation is whole-blob hash followed directly by payload.
+        Infer continuation payload size from frame length minus HASH_SIZE.
+        The existing size field remains native uint64_t until the new codec replaces it.
+        Current assembly assumes ordered chunks with one active blob per request context.
+        Another context cannot append to that context's partial blob.
+        Completed cache hits reuse the already verified blob.
+        Replace that layout with the new canonical codec when its protocol is implemented.
+        Matching a response's own hash does not bind it to a requested hash or prove authority.
+        Request correlation and signed manifest checks remain part of the new protocol work.
+        Chunk size must not be mistaken for total blob size.
+        In-memory assembly is bounded by the cache budget, not a single pool buffer.
+        AGREED: use the client pool when the total blob size fits its largest bucket.
+        Larger blobs use heap-owned storage within the same cache budget.
+        A blob exactly equal to the largest bucket size also uses the pool.
+        Pool exhaustion returns failure instead of falling back to heap allocation.
+        Larger blobs requiring disk streaming remain part of the later transfer stage.
+        Cache eviction during assembly returns failure on the next continuation.
+        An explicit retry must restart with a first chunk.
+        Closing the owning context removes its unfinished assembly.
+        DONE: client setup checks allocations and unwinds failed startup.
+        Cleanup releases contexts and cached buffers before destroying their pool.
+        Releases feed and owned BVH storage and wipes Client state before freeing it.
+        See client/src/client.c:13 and client/src/client.c:30.
+        DONE: feed append now validates whole batches and grows owned storage safely.
+        First-item indexing and invalid item access are fixed.
+        See client/src/content/feed_page.c and client/src/content/feed_page.h.
+        Feed page encryption and the new wire format are still pending.
+        Replace server-produced feed parsing with client-owned page decoding.
+        See client/src/networking/parsers/post.c:11.
+        Bound memory used by large posts independently of the existing cache limit.
+
+    FS:
+        Replace DB actor calls with explicit local storage responsibilities.
+        See node/fs/src/perms.cpp:106 and node/fs/src/vouch.cpp:355.
+        Persist voucher admission, redemption, inbox, and publication state.
+        Remote redemption currently checks signature and expiry but not issued/spent state.
+        See node/fs/src/vouch.cpp:195.
+        Repair file-handle lifetimes before expanding transfer code.
+        Sessions currently retain pointers to stack-local file handles.
+        See node/fs/src/vouch.cpp:183 and node/fs/src/vouch.cpp:253.
+        Repair outbound reads and empty-queue handling.
+        The read loop currently starts with n equal to zero and requires n greater than zero.
+        See node/fs/src/handlers.cpp:78 and node/fs/src/handlers.cpp:115.
+        Make sender and receiver agree on chunk framing.
+        Review timeout and shutdown cleanup against file ownership.
+        See node/fs/src/vouch.cpp:275 and node/fs/src/manager.cpp:89.
+        Give FS configuration and local-user admission valid startup values.
+        See node/main.cpp:22 and node/fs/src/manager.cpp:32.
+
+    TRANSPORT AND BUILD:
+        Audit P2P packet assembly and routing of authenticated identities.
+        See node/p2p/src/connection.cpp:39 and node/p2p/src/handlers.cpp:63.
+        Packet prefix storage is currently an array of pointers rather than bytes.
+        Several getters copy into the address of their pointer argument.
+        Packet::wipe clears the buffer-pointer field instead of the pointed-to bytes.
+        See node/p2p/src/pkt.h:53, node/p2p/src/pkt.h:63, and node/p2p/src/pkt.h:84.
+        Repair and test packet storage before carrying new signed frames over P2P.
+        Implement the proxy social handler and fix reply correlation.
+        Current RPC bridge copies the message code into the reply ID.
+        See proxy/server/social.go:23 and proxy/sz/rpc.go:97.
+        Correct RPC sender metadata and startup wiring.
+        See proxy/sz/rpc.go:116.
+        Remove DB startup from both node and proxy when replacements are ready.
+        See node/main.cpp:17 and proxy/sz/rpc.go:30.
+        Remove DB sources, SQLite dependency, and stale installed headers where appropriate.
+        Check package metadata and actor IDs for compatibility.
+        See node/CMakeLists.txt:40 and node/sz.pc.in:9.
+        Record the existing build baseline before attributing failures to this upgrade.
+        Node actor code currently uses Linux epoll.
+        Keep portable common/client checks separate from Linux actor execution.
+
+
+IMPLEMENTATION STAGES
+
+    STAGE 0: SETTLE THE CONTRACT
+        Review the Stage 0 contract choices below.
+        Define user-data login inputs and simulated-frontend entry points.
+        Freeze record meanings and allowed state transitions.
+        Specify canonical encoding, signed fields, limits, and error meanings.
+        Specify each operation body, initial account creation, and local-user admission.
+        Exit when one full publish and redeem can be traced without invented behavior.
+
+    STAGE 1: REPAIR SHARED AND CLIENT FOUNDATIONS
+        Establish the existing build and test baseline.
+        Repair key types, bounded decoding, feed handling, and buffer ownership.
+        Follow the checkpoint's hash, cache, parser, and client-lifecycle dependencies.
+        Define shared record and operation codecs before their FS handlers depend on them.
+        Keep each independent fix in a small reviewable change.
+        Commit changes when requested after review.
+        Exit when malformed data is rejected and request memory has a clear owner.
+
+    STAGE 2: BUILD FS STORAGE AND OWNER UPDATES
+        Add hash-addressed ciphertext storage and deterministic locator records.
+        Add signed revision checks, staged uploads, quota reservations, and recovery.
+        Exit when publish survives restart and a conflicting update changes nothing.
+
+    STAGE 3: BUILD PERMISSION AND VOUCHER STATE
+        Add accepted permission records, issued vouchers, inbox pages, and delivery results.
+        Add duplicate rejection, expiry, and durable revocation propagation.
+        Link issued vouchers to permissions and cancel them on revocation or deletion.
+        Exit when an authorized voucher arrives once and rejected delivery allocates no transfer.
+
+    STAGE 4: BUILD COMPLETE-POST TRANSFERS
+        Add bounded manifest validation, streaming, durable receipt, and spent outcomes.
+        Cover manual retries, dropped replies, concurrent redemption, and cleanup.
+        Exit when Bob receives every authorized blob and cannot start another completed redemption.
+
+    STAGE 5: CONNECT THE CLIENT AND BOTH TRANSPORTS
+        Connect header loading, feed writes, voucher creation, inbox reading, and decryption.
+        Route the logical operations through proxy and P2P.
+        Use ledger contact resolution through the agreed boundary.
+        Drive actual public client calls with a simulated frontend instead of rendering.
+        Exit when the full Alice-to-many-Bobs scenario works on one node and two nodes.
+
+    STAGE 6: REMOVE THE DB ACTOR AND FINISH THE UPGRADE
+        Remove remaining DB calls, startup, build dependencies, and obsolete protocol paths.
+        Preserve ledger storage and FS's internal index.
+        Use explicit new-format errors instead of adding a legacy compatibility layer.
+        Do not erase development data without a separate request.
+        Update Docs and the README to describe the resulting flow.
+        Exit when runtime storage and retrieval have no dependency on the DB actor.
+
+    VALIDATION:
+        Reuse the existing project test entry point and component labels.
+        Add focused tests for malformed records, authorization, conflicts, and quota release.
+        Use temporary FS storage for restart and interrupted-publication checks.
+        Test lost confirmation replies and duplicate delivery.
+        Test unauthorized peers, wrong recipients, and altered manifest sizes.
+        Test permission revocation before delivery, before redemption, and during transfer.
+        Test owner deletion with outstanding vouchers and with shared retained files.
+        Include an end-to-end publish and redeem for shared and separate home nodes.
+        Include a post larger than memory buffers to verify bounded streaming.
+        Include several recipients with different permissions and delivery outcomes.
+        Extend test configuration only as needed for these meaningful checks.
+        Keep documentation and decisions aligned with each completed stage.
+
+
+STAGE 0 CONTRACT DRAFT
+
+    STATUS:
+        The behavioral contract below is ready for review.
+        These are implementation choices, not additional claims of user approval.
+        Values marked DEFAULT are tunable starting points.
+        Stage 1 has begun with an independent client foundation repair.
+        Protocol-specific choices remain reviewable before their dependent changes.
+        Ledger internals have not changed.
+        New discoveries go in the WORK LOG at the end of this file.
+
+    ENCODING:
+        Version 1 uses explicit unsigned integers in big-endian byte order.
+        IDs are 16 random bytes.
+        Public signing identities and BLAKE3 hashes are 32 bytes.
+        Signatures are 64 bytes.
+        Timestamps are u64 UTC seconds.
+        Byte counts, revisions, offsets, and page indices are u64.
+        Counts and payload lengths are u32 unless a record says otherwise.
+        Strings use a u16 byte length followed by UTF-8 bytes.
+        Lists use a u32 count followed by their entries.
+        Never serialize pointers, native structs, padding, size_t, or time_t.
+        Reject unsupported versions, unknown operations, invalid lengths, and trailing bytes.
+        Check lengths and arithmetic before allocating or advancing a cursor.
+
+    HASHES AND SIGNATURES:
+        A ciphertext blob hash is BLAKE3 over its complete stored byte sequence.
+        A record starts with version:u16 and record_kind:u16.
+        Kinds are 1 owner update, 2 account header, 3 feed page, 4 recipient page.
+        Kinds 5-9 are manifest, post header, permission, revocation, and voucher.
+        Kinds 10-12 are inbox head, inbox page, and receipt.
+        Its signature is over BLAKE3("sz.record.v1" || encoded_unsigned_record).
+        Its record hash includes the signature, when present.
+        A frame signature uses "sz.frame.v1" as its distinct hash prefix.
+        Earlier locator encoding, superseded on 2026-10-02: BLAKE3("sz.locator.v1" || identifier:u16 || index:u64 || owner_key).
+        The fixed prefix and fixed-width fields make the concatenation unambiguous.
+        OwnerIdentifier values are 1 account, 2 feed page, and 3 recipient page.
+        Zero and unknown values are rejected.
+        Node-managed inbox namespaces remain separate from these owner-update identifiers.
+        The namespace version does not imply retaining old page contents.
+        Keep a locator revision even after deletion.
+        A later recreation must advance that revision instead of accepting old signed writes.
+
+    CREDENTIAL INTERFACE:
+        AGREED: login means requesting encrypted user data and decrypting it successfully.
+        The node retains opaque ciphertext and does not perform password verification.
+        Use authenticated decryption and validate the decrypted format before unlocking client state.
+        Do not expose a standalone unlocked-credential setter as the login flow.
+        Signing seeds and owner-data keys are each 32 bytes.
+        Derive a valid Ed25519 key pair once the signing seed is unlocked.
+        Its signing secret representation is 64 bytes.
+        DONE: bind the decrypted account to the public identity returned by username lookup.
+        Use libsodium's supported Ed25519-to-X25519 conversion for pairwise encryption.
+        This is one user identity with derived encryption material.
+        It does not introduce a separately registered encryption identity.
+        Invalid conversion fails explicitly.
+        Do not pass Ed25519 bytes directly to crypto_box or crypto_kx.
+        Wipe secret state when the client closes or credential setup fails.
+        AGREED: the password derives only the symmetric key that unlocks the user-data blob.
+        The signing identity is generated independently and remains stable across password changes.
+        DONE: the encrypted user-data blob contains the signing seed.
+        Recover that seed after authenticated decryption and derive its Ed25519 pair.
+        AGREED: encrypted user data contains the main user_data_key.
+        That main key protects the owner-managed pages and content keys.
+        PROPOSED: generate the main user_data_key randomly when creating the account.
+        Password entry and locally retained secrets should reach the same authenticated-decryption flow.
+        DONE: V1 uses Argon2id 1.3, two passes, and 64 MiB with a random per-envelope salt.
+        This explicit profile avoids changes in library defaults changing derived keys.
+        Do not use the password-derived unlock key as the signing seed or main user_data_key.
+        The locally retained credential must be secret, not just the public identity.
+        Local storage protection and recovery are not implemented yet.
+        DONE: salt and recorded derivation parameters are in the public login envelope.
+        Validate and bound those parameters before running password derivation.
+        AGREED: users enter a username to locate their account before unlocking its signing identity.
+        They do not need to remember or enter a public account key.
+        DONE IN CLIENT: request a username lookup returning the account key and current login-blob hash and size.
+        Node-side resolution and registration remain unimplemented.
+        Resolve the home node through the existing contact-provider boundary.
+        Read public salt and derivation parameters from the login envelope.
+        Derive the unlock key locally, then authenticate and decode the encrypted user-data blob.
+        Bind the recovered signing identity to the public account key returned by lookup.
+        Username lookup is discovery, not proof that the caller controls that account.
+        Neither the password nor recovered secret keys are sent to the node.
+        DONE LOCALLY IN CLIENT: login retrieves one password-encrypted account header.
+        It contains the signing seed, data_key, page indices, and inbox locator.
+        Pre-login lookup and login-blob reads need bounded public access without unlocking other owner data.
+        Username resolution stays a small lookup boundary; FS still stores opaque ciphertext.
+        The lookup request goes through the existing host send_request boundary.
+        No actual username resolver exists in the proxy or node yet.
+        OPEN: username scope, normalization, uniqueness, and registration/update rules.
+        Test mappings may exercise this boundary without redesigning ledger internals.
+        Do not hide the required salt only inside data that needs the derived key to decrypt.
+        AGREED: changing the password re-encrypts and saves the user-data blob.
+        Preserve the signing seed and main user_data_key during that operation.
+        Existing feed and content blobs do not need re-encryption for a password change.
+        DONE IN CRYPTO: encryption produces a fresh random salt and stream header.
+        Publish the replacement through the existing signed, revision-checked owner update.
+        Treat password change as complete only after that update succeeds.
+        On failure, the current published blob remains the login record.
+        The existing login record contains the signing seed and data_key.
+        The user confirmed consolidation with the page metadata into one account header.
+        Page references belong in the account header; its encryption uses the password-derived key.
+        The actual pre-login node access policy still needs to be implemented.
+        Tests must fetch and decrypt encrypted user data instead of directly installing credentials.
+        Node signing identity and P2P key-exchange material also need explicit types.
+        Resolve transport keys and endpoints through a contact-provider boundary.
+        Do not reinterpret ledger BLS keys as Ed25519 or X25519 keys.
+        Keep ledger's implementation unchanged.
+
+    IMPLEMENTED LOGIN BOOTSTRAP:
+        Public client calls are client_login, client_cancel_login,
+        client_is_logged_in, and client_get_public_key.
+        One account and one pending login are allowed per Client.
+        The marshaler fills the existing context send buffer from the client pool.
+        send_request gives outgoing byte ownership to the host until client_return_buffer.
+        The descriptor stays in the client send-buffer array and must not be freed by the host.
+        Return outstanding buffers before destroying the client.
+        A context cannot be reused while its outgoing buffer is held by the host.
+        An early lookup reply is copied, with fetch deferred until the lookup buffer returns.
+        Responses use client_parse_response with the supplied ContextID.
+        Synchronous responses inside send_request also work.
+        Incoming response views are borrowed; retained fields and chunks are copied into client storage.
+        Lookup and fetch bodies use version:u16=1 and operation:u16, in big-endian order.
+        Lookup operation 1 carries username_length:u16 and the unchanged username bytes.
+        Its exact 72-byte reply carries version, operation, account_key:32, blob_hash:32, size:u32.
+        Fetch operation 2 carries the blob_hash.
+        Usernames are 1-64 bytes with normalization and uniqueness left to the resolver.
+        Passwords are 1-1024 bytes and are never included in either request.
+        The existing ordered blob chunks carry each response's whole-blob hash.
+        First-chunk total size remains native uint64_t until the general frame codec replaces it.
+        The client requires the declared total to equal the 213-byte account-header format before assembly.
+        Validate the complete cached ciphertext before decrypting it.
+        The password envelope is distinct from the general content encryption envelope below.
+        Public fields are version:u16=1, suite:u16=1, algorithm:u32, passes:u32, memory_bytes:u64.
+        Follow with salt:16, stream_header:24, and ciphertext_length:u32=149.
+        Reject all password derivation profiles except the explicit V1 profile before running Argon2id.
+        Authenticate that 64-byte header plus username_length:u16 and username bytes.
+        Require exactly one secretstream record with TAG_FINAL.
+        Plaintext is the 132-byte V1, kind 2 account header with page metadata, signing_seed, and data_key.
+        Temporary plaintext, unlock keys, and stream state are wiped after decoding.
+        Failed authentication installs no account keys; another login can be attempted.
+        Password-change encryption is available, but publishing the replacement is not implemented.
+        Saved local credential protection, registration, and recovery remain separate work.
+        Generic transport framing and request IDs are not implemented by these body codecs.
+
+    CLIENT ENTRY POINTS:
+        Implement send_request and request/decrypt user data to log in.
+        Load owner header and a selected feed page.
+        Publish a post from bounded metadata and streaming input callbacks.
+        List inbox pages and choose a voucher to redeem.
+        Read verified ciphertext from the home node and decrypt through output callbacks.
+        Accept or revoke a permission.
+        Request deletion of owned data.
+        Poll an operation's progress and final result.
+        Cancel a local operation and release its resources.
+        The caller owns input memory until the library reports it has consumed it.
+        Response views are borrowed during callbacks.
+        The client copies or transfers ownership before retaining response data.
+        The simulated frontend calls these same public operations.
+
+    CIPHERTEXT FORMAT:
+        Use libsodium secretstream_xchacha20poly1305 for stored encrypted blobs.
+        Each blob starts a fresh stream.
+        Private feed pages use data_key; a retained post package uses its package key.
+        Envelope fields are version:u16, suite:u16, and the 24-byte stream header.
+        Suite 1 means secretstream_xchacha20poly1305.
+        Each encrypted record has ciphertext_length:u32 followed by that ciphertext.
+        DEFAULT plaintext records are at most 64 KiB.
+        Authentication adds 17 bytes to each encrypted record.
+        Bind the envelope and record ordinal as authenticated additional data.
+        All records except the last use TAG_MESSAGE.
+        The last record uses TAG_FINAL.
+        An empty blob has one authenticated empty final record.
+        Reject missing final tags, unexpected tags, altered lengths, and extra trailing data.
+        Hash and store the envelope, lengths, ciphertext, and authentication bytes together.
+        Never cache unverified plaintext as a complete post.
+        Transport may split one encrypted record across multiple packets.
+
+    RECORDS:
+        OWNER UPDATE:
+            DONE IN COMMON: version:u16=1, record_kind:u16=1, owner_key:32.
+            identifier:u16, index:u64, expected_revision:u64, new_revision:u64.
+            blob_hash:32, blob_size:u64, and owner_signature:64.
+            Identifier is OwnerIdentifier: account=1, feed page=2, recipient page=3.
+            Encode the enum explicitly as u16, never using its native C representation.
+            Zero and unknown values are rejected.
+            Blob size must be nonzero; deletion is a separate operation.
+            Record size is fixed at 166 bytes.
+            Parsing validates structure; valid_owner_update checks the signature separately.
+            Signing hash and locator use the agreed domain prefixes and big-endian fields.
+            Failed codec calls leave outputs unchanged.
+            No client publication or FS handler uses these helpers yet.
+            Revision 0 means never created.
+            First creation writes revision 1.
+            Every later update increments by exactly one without overflow.
+            FS computes the locator and verifies owner authority.
+            Published bytes must already exist and belong to that owner.
+            Conflicts change neither the record nor quota accounting.
+
+        ACCOUNT HEADER PLAINTEXT:
+            DONE IN CLIENT: version:u16=1 and record_kind:u16=2.
+            first_feed_page:u64, current_feed_page:u64.
+            first_recipient_page:u64, current_recipient_page:u64.
+            inbox_head_locator:32.
+            Follow with signing_seed:32 and data_key:32.
+            Fixed 132-byte plaintext with big-endian integers.
+            Each first page must be at most its current page; zero and equal indices are valid.
+            The codec accepts the full u64 index range and treats the locator as opaque bytes.
+            Parsed fields are copied; malformed input leaves outputs unchanged.
+            Password encryption and client retrieval through the existing host hook are implemented locally.
+            Actual node resolution and routing remain unfinished.
+            The password-derived key encrypts the account header.
+            The header contains data_key; that key encrypts private pages and account data.
+            Post packages retain their original keys in encrypted feed entries.
+            The codec includes the signing seed and data_key.
+            Encryption wraps the complete header in a 213-byte password-protected blob.
+            Feed entries retain package keys, protected by feed encryption under data_key.
+
+        FEED PAGE PLAINTEXT:
+            IMPLEMENTED LOCALLY IN CLIENT: version:u16=1, record_kind:u16=3.
+            page_index:u64, post_count:u32, then fixed-size metadata entries.
+            The 16-byte header counts toward the 64 KiB plaintext limit.
+            Each entry contains originator:32, created_at:i64, package_hash:32, package_key:32, blob_count:u32.
+            Entries are 108 bytes; blob counts must be nonzero and may use the full u32 range.
+            A page fits 606 entries; unused trailing room is not serialized as padding.
+            Integers use big-endian encoding; native PostView access uses memcpy for alignment safety.
+            Parsing copies borrowed input and replaces the old page only on success.
+            Replaced and destroyed metadata allocations are wiped because they contain package keys.
+            No version bump or migration is required for the undeployed development layout.
+            Package construction and internal parsing remain separate work.
+            Encryption framing and retrieval remain unwired; the node never interprets feed plaintext.
+            A page-boundary publish updates both the new page and account header atomically.
+
+        RECIPIENT PAGE PLAINTEXT:
+            page_index and entries.
+            Each entry has recipient_key and the accepted permission hash and generation.
+            DEFAULT at most 256 entries per page.
+            Store the permission bytes separately when needed for delivery.
+            Alice's client retains the permission proof as well as the recipient identity.
+
+        DELIVERY PACKAGE:
+            One encrypted blob containing the grouped plaintext post contents.
+            Its whole ciphertext hash and exact byte size identify the retrievable package.
+            DEFAULT at most 1 GiB total ciphertext per post, subject to review.
+            OPEN: Define version, bounded entry count, entry lengths, and reference mapping.
+            The first referenced blob supplies the remaining post data, currently mostly text.
+            Other entries supply the additional referenced blob contents.
+            Only the client interprets these contents after authenticated decryption.
+            The earlier public multi-blob manifest and separate encrypted post header are superseded.
+            Use package_hash in new delivery schemas; migrate earlier manifest_hash proposals before implementation.
+            The voucher and Alice's signature establish origin.
+            Successful decryption alone is not the sole proof of authorship.
+
+        PERMISSION:
+            owner_key:Bob, sender_key:Alice, generation, grant_id, and owner_signature.
+            Scope is voucher delivery to Bob's inbox.
+            Bob installs it with an authenticated owner operation.
+            A grant alone cannot remotely reinstall a revoked permission.
+            Generations advance per owner/sender relationship.
+            Revocation names owner, sender, generation, permission_hash, and owner_signature.
+            A higher generation must be explicitly installed by Bob.
+            FS tracks current generation and revoked state durably.
+
+        VOUCHER:
+            Node-readable: voucher_id, issuer_key:Alice, recipient_key:Bob.
+            permission_hash, permission_generation, package_hash, total_bytes, expires_at.
+            Encrypted key subsection contains the delivery key.
+            Encrypt the subsection with the sender/recipient shared key and a fresh nonce.
+            The issuer signature binds the node-readable fields and encrypted subsection.
+            PROPOSED: Bind voucher ID, package hash, issuer, and recipient inside the subsection.
+            The same prepared package key is supplied through each recipient's own voucher.
+            Bob checks the signed bindings and decrypts the subsection before decrypting the package.
+            Never include Alice's user_data_key.
+            Nodes inspect authorization fields but cannot decrypt the key subsection.
+            Issuer and recipient home nodes come from contact resolution.
+            Never trust an unsigned address embedded by an arbitrary relay.
+            Store the signed voucher on Alice's node before allowing redemption.
+
+        INBOX:
+            A node-managed head records first_page, current_page, and revision.
+            Page records have page_index, revision, and bounded voucher entries.
+            DEFAULT at most 64 vouchers per page.
+            Append and duplicate detection are one durable operation.
+            Owner-authorized removal identifies voucher IDs.
+            Removing a notification is distinct from revoking a permission.
+            Node-managed inbox replies are authenticated by Bob's home node.
+
+        RECEIPT:
+            voucher_hash, transfer_id, manifest_hash, total_bytes, receiver_node_key.
+            The receiving home node signs this after committing all verified ciphertext.
+            Alice's node verifies its association with Bob through contact resolution.
+            The same durable receipt can be resent without downloading again.
+
+    FRAME FORMAT:
+        Earlier publish/redeem frame draft; it does not override the current blob-operation contract above.
+        magic:4 = "SZFS", version:u16 = 1, operation:u16.
+        kind:u8, authority:u8, status:u16, request_id:16.
+        principal_key:32, target_node_key:32, valid_until:u64, body_length:u32.
+        body:body_length, signature:64.
+        This fixed header is 104 bytes.
+        kind identifies request, progress, final success, or final error.
+        authority identifies user or node signing authority.
+        kind values are 0 request, 1 progress, 2 final success, and 3 final error.
+        authority values are 1 user and 2 node.
+        Requests set status to zero.
+        Replies preserve request ID and identify their actual signing node.
+        Sign the complete fixed header and body under the frame prefix.
+        Reject a frame addressed to another node.
+        DEFAULT frames are at most 72 KiB including the signature.
+        DEFAULT non-chunk bodies are at most 64 KiB.
+        Upload chunks carry transaction_id, blob_hash, offset, payload_length, and payload.
+        Download chunks carry transfer_id, blob_hash, offset, payload_length, and payload.
+        Payloads are at most 64 KiB.
+        Framing and encryption overhead do not count as payload.
+        Transport adapters may fragment frames while preserving their exact bytes.
+        Do not derive request IDs from connection IDs or message codes.
+
+    OPERATION GROUPS:
+        1 ResolveLocator, 2 ReadOwnedBlob.
+        10 BeginUpload, 11 UploadChunk, 12 StageVouchers.
+        13 CommitPublication, 14 AbortUpload, 15 QueryPublication.
+        20 InstallPermission, 21 RevokePermission, 22 DeliverRevocation, 23 ListPermissions.
+        30 DeliverVoucher, 31 ReadInboxHead, 32 ReadInboxPage.
+        33 RemoveInboxEntries, 34 RetryDelivery.
+        40 RedeemPost, 41 TransferChunk, 42 ConfirmReceipt.
+        43 QueryVoucher, 44 CancelAttempt.
+        50 ListOwnedData, 51 DeleteOwnedData.
+        Reserve zero and all unspecified codes.
+        Each operation's decoder enforces its own body schema.
+        Stage 1 declarations copy these assignments instead of inventing another mapping.
+
+    STATUS CODES:
+        0 OK, 1 Malformed, 2 UnsupportedVersion, 3 Unauthorized.
+        4 Conflict, 5 NotFound, 6 QuotaExceeded, 7 Busy, 8 Expired.
+        9 Redeemed, 10 Canceled, 11 Timeout, 12 IntegrityFailure.
+        13 IdReuse, 14 StorageFailure, 15 DeliveryPending.
+        Query operations return the durable object state in their successful reply body.
+        Redeemed and Canceled are errors for a new redemption attempt.
+
+    AUTHORITY AND REPLAY:
+        Blob insertion and deletion require the namespace owner's signature over H(request_hash || operation).
+        Blob retrieval does not require a client signature.
+        Admission and permission/voucher access policies remain to reconcile with this distinction.
+        Requests expire using the receiving node's wall clock.
+        DEFAULT request validity is at most five minutes.
+        Contact-provider fixtures supply trusted user-to-home-node associations in tests.
+        Bob signs redemption authorization naming voucher_hash and receiving_home_node.
+        It also binds request_id, transfer_id, and valid_until.
+        Bob's node forwards that proof with its own authenticated redemption request.
+        Alice's node checks the user proof and the receiving-node association.
+        Incoming voucher delivery carries Bob's signed permission and Alice's signed voucher.
+        Bob's node checks the permission is currently installed, not merely well signed.
+        Read access to Bob's inbox requires Bob's authority.
+        Requests do not become trusted merely because msg.from is RPC or P2P.
+        Persist mutating request IDs and the hashes of their requested actions.
+        An exact repeat returns the previous result.
+        A reused ID with a different action fails.
+        State checks still apply after transient request-result records expire.
+        A missing issued voucher is never treated as permission to transfer.
+
+    PUBLICATION TRANSACTION:
+        Begin includes a transaction ID and the bounded upload inventory.
+        Register vouchers in bounded batches while staging the transaction.
+        DEFAULT at most 1,024 recipients in one publication.
+        Final commit binds a digest of the complete staged inventory, owner updates, and vouchers.
+        Persist the same signed digest with the final result.
+        The client cannot add another voucher or file after commit.
+        Do not pack all recipients into one oversized control frame.
+        Reserve file and metadata quota before accepting bytes.
+        Only sequential chunk offsets are accepted in the first version.
+        Reject oversized, overlapping, missing, or excess chunks.
+        A complete file must match its inventory hash and size.
+        Commit validates every expected revision before modifying any reference.
+        Expose no new feed entry until the local durable commit succeeds.
+        Abandoned or conflicted transactions release reservations and staging files.
+        Committed transaction status survives reply loss and restart.
+
+    REDEMPTION AND TIMING:
+        DEFAULT session idle deadline is 60 seconds.
+        DEFAULT attempt hard deadline is 30 minutes.
+        Durations use monotonic time while the process is alive.
+        Voucher expiry uses the serving node's UTC wall clock.
+        Reject new attempts and stop scheduling data chunks when expired or canceled.
+        Cancellation cannot recall bytes already queued or delivered.
+        Receipt before cancellation commits Redeemed.
+        Cancellation processed first commits Canceled and rejects later receipt as success.
+        Serialize those decisions in the serving node's durable state.
+        After all bytes are sent, allow five minutes for a completion receipt.
+        That window may extend beyond expiry, but permits no additional file bytes.
+        Expiry prevents new data, rather than invalidating an already completed receipt exchange.
+        Losing the receipt reply is resolved by querying or resending the receipt.
+        A session timeout before confirmed completion releases the attempt.
+        Retries use a new transfer ID and remain subject to expiry and cancellation.
+        Persist receiver receipt records before sending them.
+        Retain issuer transfer metadata long enough to verify a late, valid receipt.
+        A late receipt must still fall within its original confirmation window.
+        If a retry has started, a valid prior receipt completes the voucher and stops that retry.
+        Restart releases unfinished attempts and reconciles verified receiver files.
+        Terminal outcomes are never reopened by retries.
+
+    REVOCATION AND DELETION:
+        Bob's node immediately blocks delivery and local redemption after revocation.
+        Alice's node cancels outstanding vouchers when it processes Bob's signed revocation.
+        This first version uses durable propagation rather than a distributed atomic revoke.
+        Offline remote nodes may temporarily retain old permission knowledge.
+        Return pending delivery status instead of reporting global revocation complete.
+        Retry propagation explicitly after reconnect.
+        Alice's deletion cancels affected outstanding vouchers at her node immediately.
+        Reject further chunks and release sessions when cancellation is processed.
+        Keep Bob's already committed ownership and ciphertext intact.
+        Old reference reads report unavailable data instead of silently inventing replacements.
+        Maintain reverse indexes from permission and blob ownership to outstanding vouchers.
+        Do not scan or decrypt social data to implement those indexes.
+
+    LIMITS AND RETENTION:
+        Session, disk, metadata, inbox, and recipient limits are configured per user.
+        DEFAULT at most eight active transfers per user.
+        Reserve metadata quota as well as blob bytes.
+        A full inbox returns quota failure and leaves delivery pending at Alice.
+        DEFAULT at most 4,096 pending vouchers per user.
+        Count received partial files against reservations until removed or committed.
+        Same-node retrieval adds Bob's ownership without unnecessarily duplicating physical bytes.
+        It still consumes Bob's logical quota and the voucher.
+        Keep terminal voucher results through expiry plus the receipt window.
+        Keep request-result records through request validity plus the configured clock allowance.
+        Keep committed publication outcomes for at least seven days by default.
+        Do not reuse transaction IDs after forgetting an outcome.
+        Evicting a result record must not erase replay protections in retained object state.
+        Retain permission generations and locator deletion revisions while the account exists.
+
+    ACCEPTANCE TRACE:
+        Alice publishes post P and commits its feed page plus vouchers VA and VB.
+        Bob A accepts VA through a valid permission.
+        Bob B's inbox is full, so VB stays pending at Alice.
+        Bob A retrieves all ciphertext in bounded chunks and persists a receipt.
+        Alice commits VA as Redeemed.
+        The receipt reply is lost.
+        Bob A resends the receipt and receives the same completed outcome.
+        Alice explicitly retries VB after Bob B makes space.
+        Bob B revokes the permission before redemption.
+        His node blocks locally and propagates the signed revocation.
+        Alice cancels VB when the revocation arrives.
+        A subsequent VB redemption returns Canceled without allocating a file transfer.
+        Repeat the same trace with Alice and both Bobs on one home node.
+
+    REFERENCES:
+        https://doc.libsodium.org/public-key_cryptography/public-key_signatures
+        https://doc.libsodium.org/advanced/ed25519-curve25519
+        https://doc.libsodium.org/public-key_cryptography/authenticated_encryption
+        https://doc.libsodium.org/secret-key_cryptography/secretstream
+
+
+WORK LOG
+
+    2026-09-30: STAGE 0 CONTRACT DRAFTED
+        Recorded canonical encoding, credential boundary, records, frame format, and timing.
+        Added bounded upload batches so many recipients do not require one oversized message.
+        Added durable receipts and deterministic cancellation ordering.
+        Chose revocation propagation with explicit pending status.
+        These concrete choices remain reviewable before Stage 1.
+
+    2026-09-30: KEY REPRESENTATION CONFLICT
+        Current common keys come from crypto_box_keypair but sign_hash calls crypto_sign_detached.
+        The private-key field is 32 bytes while the signing secret representation needs 64.
+        P2P currently passes common keys directly to crypto_kx.
+        See common/src/crypto/crypto.c:18 and node/p2p/src/handshake.cpp:60.
+        The next crypto change must update callers deliberately.
+        Expanding the struct alone would not fix the mismatched algorithms.
+        Ledger has its own BLS types and is not part of that replacement.
+        See node/ledger/src/utils/key_sig.h:16.
+        Proposed resolution is explicit signing types and supported conversion at encryption boundaries.
+
+    2026-09-30: P2P FRAME SIZE CONFLICT
+        Packet::MAX_LEN currently uses BUFF_SU.
+        A full 64 KiB payload plus the new frame fields exceeds that existing limit.
+        See node/p2p/src/pkt.h:49.
+        Stage 1 must separate payload size, complete frame size, and buffer capacity.
+        The proposed complete-frame limit is 72 KiB.
+        Do not silently shorten payloads or overflow the existing pool buffers.
+
+    2026-09-30: STAGE 1 FIRST SOURCE CHANGE
+        Established the four-test common/client baseline.
+        Repaired client feed initialization, append storage, indexing, and bounds.
+        Malformed batches are rejected before changing stored items.
+        Moved feed_init into feed.c and made header accessors static inline.
+        This removes the context test's unity-build workaround.
+        Added client.feed coverage for growth, malformed data, and aliased input.
+        All five registered tests pass in normal and sanitizer configurations.
+        Full client/node builds and the new integration are not verified by these tests.
+        Committed as 2a44816.
+
+    2026-09-30: HASH-TABLE RESERVATION REPAIR
+        The intended next task was blob-response bounds and memory ownership.
+        Its StoreItem insertion calls ht_reserve.
+        That function returned an HTNode pointer for a newly inserted key.
+        StoreItem writes would overwrite the hash-table node instead of its value.
+        Fixed that return value before changing the dependent parser.
+        Added a focused test for insertion, existing entries, collisions, and reuse.
+        The test supplies backing storage to isolate the known allocator defects.
+        It does not verify ht_setup or store_setup.
+        All six registered tests pass normally and with sanitizers.
+        Committed as 2c20269.
+
+    2026-09-30: REMAINING PARSER PREREQUISITES
+        RESOLVED: _ht_allocate used an uninitialized total and misplaced value storage.
+        RESOLVED: store_setup retained a pointer to a callback declared on its stack.
+        RESOLVED: new_hasher initialized an unallocated internal pointer.
+        See common/src/structs/hashtable.c:297, client/src/utils/store.c:29,
+        and common/src/hash/hash.c:11.
+        Fix these independent foundations before claiming a working cache and hash check.
+        Blob parser bounds, ownership, and verification were still unfinished at this point.
+        The later blob-response repair addresses those checks for the existing response layout.
+
+    2026-09-30: HASH-TABLE ALLOCATION AND CLEANUP REPAIR
+        A real-allocator regression test failed against the original storage layout.
+        Allocation now checks overflow and lays out buckets, nodes, and aligned values correctly.
+        Retained the allocation base for free and initialized value_pool.
+        Updated the memory-size helper to report the actual aligned allocation size.
+        Destruction now calls callbacks only for occupied entries.
+        Cleared storage pointers after destruction while preserving configuration for ht_clear.
+        Added real setup, full-table, reuse, clear, destruction, and invalid-size coverage.
+        All seven registered tests pass normally and with sanitizers.
+        Store setup's callback lifetime was still unresolved at this point.
+        The following repair resolves that issue.
+        Committed as 453bcd6.
+
+    2026-09-30: STORE SETUP AND CLEANUP REPAIR
+        The Store now owns its destructor callback instead of borrowing a stack variable.
+        Setup resets previously uninitialized state and validates the memory budget.
+        Replaced floating-point node-count sizing with integer arithmetic.
+        Setup checks both hash-table and priority-queue initialization results.
+        A failure releases initialized resources and returns an empty store.
+        Implemented store_destroy for live, empty, and partially initialized stores.
+        Added real setup, cache insertion, buffer return, cleanup, and invalid-budget coverage.
+        Tests also cover repeated destruction and setup after destruction.
+        Forced allocation failures are not injected by this test.
+        The source cleanup path for those failures was reviewed.
+        All eight registered tests pass normally and with sanitizers.
+        Committed as 55aeb18.
+
+    2026-09-30: INTEGRATION PLAN CHECKPOINT
+        Compared the plan against current common, client, FS, and transport code.
+        The architecture remains on track and Stage 1 remains incomplete.
+        Added the committed fixes and the next dependency-ordered changes near the top.
+        Recorded remaining cache capacity, ownership, and accounting defects.
+        Recorded packet-prefix storage, getter, and wipe defects in P2P.
+        Made operation bodies, account bootstrap, and admission explicit implementation gates.
+        Aligned the account-header summary with post keys retained in feed entries.
+        No source behavior changed during this planning review.
+
+    2026-09-30: HASH-WRAPPER REPAIR
+        Replaced the unallocated pointer with BLAKE3 state stored directly in Hasher.
+        Kept the existing construction, update, and finalize API.
+        No heap allocation, failure path, or destructor is needed.
+        Hash state can be copied without sharing writable storage.
+        Initialized three FS permission hashers and each FS session's hasher.
+        Shared the existing pinned BLAKE3 dependency between application and test builds.
+        Added published vectors for empty input and inputs around the 1 KiB chunk boundary.
+        Covered incremental updates, repeated finalization, and independent state copies.
+        All nine registered tests pass normally and with sanitizers.
+        The C++ hash API check and existing common codec compile check also pass.
+        FS header compilation stops at the existing Linux-only bits/pthreadtypes.h include.
+        Node execution and a full application build remain unverified on this Mac.
+        Keep source concise and use focused tests for behavior that matters.
+        Committed as 2cd494e.
+
+    2026-09-30: CACHE OWNERSHIP AND ACCOUNTING REPAIR
+        Kept the store insertion API and added allocation capacity to StoreItem.
+        Derive pool capacity from the actual buffer start instead of its data length.
+        Reject interior views and payload sizes beyond that allocation.
+        Charge pooled allocations by capacity and heap allocations by the supplied size.
+        Supplying pools must outlive their cached buffers.
+        Centralized byte accounting in the existing cleanup callback.
+        Replacement releases the old allocation only after insertion can succeed.
+        Full-table failure leaves no stale priority entry.
+        Queue-allocation failure rolls back a new table entry without taking the buffer.
+        Added pool reuse, partial-size, erasure, eviction, and heap-ownership checks.
+        Forced queue growth failure covers both new insertion and replacement.
+        All nine registered tests pass normally and with sanitizers.
+        Existing blob parsing remains unfinished and fails closed for its borrowed buffer view.
+        Committed as 2b055ac.
+
+    2026-09-30: BLOB-RESPONSE PARSER REPAIR
+        WITHDRAWN: this change incorrectly assumed one response contained an entire blob.
+        The user clarified that responses carry chunks and the header hash covers the whole blob.
+        store_get finds previously allocated assembly state for subsequent chunks.
+        Per-response hashing against the whole-blob hash was incorrect.
+        Reverted the uncommitted parser, its tests, and its test documentation.
+        The committed cache and hash foundation repairs remain in place.
+        No blob parser repair is currently implemented.
+        The previous ten passing tests checked the wrong single-buffer behavior.
+        Confirm chunk framing before writing replacement code and tests.
+
+    2026-09-30: CORRECTED CHUNKED BLOB ASSEMBLY
+        The user defined first chunks as hash, total blob size, and payload.
+        Subsequent chunks contain only the whole-blob hash and payload.
+        Allocate owned assembly storage within the cache budget.
+        Use pooled buffers for fitting blobs and heap buffers for larger blobs.
+        Failed cache insertion returns pooled buffers or frees heap allocations.
+        Track received bytes in the cache item and the active hash on the request context.
+        Append ordered payloads without comparing each chunk to the whole-blob hash.
+        Compute the full hash once the declared total has arrived.
+        Return CLIENT_OK while incomplete and CLIENT_PARSE_DONE after successful verification.
+        Reject excess bytes and remove assemblies that fail the final hash check.
+        Prevent other contexts from appending to an existing partial assembly.
+        Reject partial cache copy-out and clear unfinished data when its context closes.
+        Detect lost assembly after eviction instead of reading continuation bytes as a size.
+        A 70,003-byte regression blob is assembled from many small responses.
+        Tests cover malformed headers, final corruption, interleaving, cleanup, and eviction.
+        Tests also cover the pool-size boundary, exhaustion, and both allocation lifetimes.
+        All ten registered tests pass normally and with sanitizers.
+        The new frame codec, offset-based retries, and disk streaming remain unimplemented.
+        Committed as 1f91ae2.
+        The user requested a pause before starting the next change.
+
+    2026-09-30: NETWORKING INITIALIZATION AND CLEANUP
+        The user resumed work after the blob assembly commit.
+        Found that the empty networking initializer left context buffers and free-list state unset.
+        Added checked allocation of zeroed receive and send buffer arrays.
+        Added an explicit next_free field instead of overlaying DeadConn on ConState.
+        Free contexts remain CON_DEAD and repeated release does not relink them twice.
+        Initialize native socket slots to -1 without opening or closing transport sockets.
+        Added shutdown that releases active contexts before freeing their buffer arrays.
+        Parser tables remain borrowed and are registered by the caller.
+        Missing parser tables or entries now fail safely.
+        Existing context and blob tests now use real networking initialization.
+        Forced allocation failures cover both buffer-array allocations.
+        All ten registered tests pass normally and with sanitizers.
+        The client constructor has not yet been wired to this initializer.
+        Full startup also lacks the declared bvh_init implementation and the public init_client symbol.
+        Recorded those prerequisites instead of expanding this repair into world design.
+        Committed as 7ae2b21.
+
+    2026-09-30: CORE CLIENT INITIALIZATION AND CLEANUP
+        Implemented the declared init_client entry point using zeroed Client storage.
+        Initialize the existing pool sizes and cache budget, plus the feed and networking.
+        Added destroy_client and a shared unwind path for setup failures.
+        Release contexts and cache items before destroying their buffer pool.
+        Release feed and owned BVH storage, then wipe Client state before freeing it.
+        Rendering startup explicitly calls wrld_init instead of core initialization doing so.
+        This lets actual client data calls run without the missing BVH initializer.
+        The frame update returns false when no world storage has been initialized.
+        Register only the tested blob parser while legacy user/feed decoders remain unfinished.
+        No supplied credentials, owner-data decoding, or transport sending is implemented here.
+        Added a real-constructor test without replacing world or crypto functions with stubs.
+        Force each startup allocation to fail and verify the constructor returns NULL.
+        Drive a chunked blob through the initialized parser table and read verified cached bytes.
+        Exercise shutdown with a completed blob, a partial blob, and network buffers still owned.
+        All eleven registered tests pass normally and with sanitizers.
+        The changed world source also passes a compile check.
+        Rendering execution and the full application build remain unverified.
+        Committed as 99bc088.
+
+    2026-09-30: SIGNING KEYS AND P2P CONVERSION
+        KeyPair now holds a 64-byte Ed25519 SigningKey and a 32-byte public Key.
+        new_keypair initializes libsodium and generates signing keys.
+        sign_hash accepts SigningKey while verification still takes the public Key.
+        ExchangeKeyPair keeps temporary X25519 secrets and public keys at 32 bytes.
+        Initial P2P exchange converts both signing identities through libsodium.
+        Incoming connections use the server role for initial and temporary exchange.
+        Outgoing connections derive initial keys for the supplied peer instead of a zero peer.
+        Temporary converted secrets are wiped and failed exchange outputs are cleared.
+        Node startup persists the full signing secret and derives its public key when loading.
+        Existing 32-byte exchange-key files are rejected without overwriting them.
+        Malformed or partially written signing-key files are also rejected.
+        No key migration is implemented.
+        The disabled legacy user parser derives a signing public key rather than a raw X25519 key.
+        Supplied credentials and owner-data decoding remain the next separate change.
+        Shared libsodium setup now also installs inside each tests-only build directory.
+        Crypto tests cover tampered hashes, signatures, wrong signers, and rejected peer keys.
+        Initial and temporary exchange tests check matching send and receive keys.
+        Initial keys successfully encrypt and decrypt in both directions.
+        All twelve registered tests pass normally and with sanitizers.
+        Shared headers pass a C++ compile check and the legacy user parser passes a C compile check.
+        Full P2P source compilation and handshake execution still require the Linux build baseline.
+        Key-file loading is not exercised by the portable tests.
+        Existing connection allocation and handshake packet parsing remain unfinished.
+        In particular, ack still reads an extra version byte from the ephemeral-key body.
+        These transport prerequisites must be repaired before an integration test can pass.
+        Committed as d625cd3.
+
+    2026-09-30: USER-DATA LOGIN CLARIFICATION
+        The user clarified that login is requesting user data and decrypting it successfully.
+        Removed the uncommitted standalone credential setter, getter, and associated tests.
+        The committed signing-key repairs remain in place.
+        Updated the credential contract to make authenticated user-data decryption the login boundary.
+        Asked how the caller obtains the decryption input and which secrets live in the encrypted data.
+        These answers are needed before defining and enabling the login parser.
+
+    2026-09-30: PRE-LOGIN USER-DATA REQUEST OWNERSHIP
+        The request takes an explicit account public key before client secrets are unlocked.
+        Retain the original pooled allocation in the context's outgoing buffer.
+        Copy the public key without advancing the allocation pointer.
+        Reject invalid inputs and busy contexts before taking any buffer.
+        Pool exhaustion leaves the context idle and its outgoing buffer empty.
+        Context cleanup returns the request buffer to its actual bucket.
+        Lifecycle tests cover pre-login use, failure, repeated requests, exhaustion, and cleanup.
+        The exhaustion test holds all three bucket sizes because the pool may fall back to a larger one.
+        All twelve registered tests pass normally and with sanitizers.
+        The user-data response parser remains disabled and transport sending is still unfinished.
+        This is request preparation, not a completed login implementation.
+        Superseded by the public username-login transport callback below before being committed.
+
+    2026-09-30: PASSWORD AND LOCAL LOGIN DIRECTION
+        The user proposed password input and a locally retained credential as login options.
+        Derive the identity pair, then a distinct key that decrypts user data.
+        The main user_data_key lives inside that encrypted data.
+        Recorded the public-salt bootstrap and password-change identity questions.
+        No password derivation, credential persistence, or login decoder is implemented yet.
+
+    2026-09-30: STABLE IDENTITY AND PASSWORD CHANGES
+        The user revised the flow so the password derives only the initial symmetric unlock key.
+        Decrypt the user-data blob to recover the stable identity material and main user_data_key.
+        Change the password by re-encrypting and saving that blob with the new unlock key.
+        Updated the active contract; the earlier password-to-identity direction is superseded.
+        The pre-login account lookup remains open.
+
+    2026-09-30: USERNAME LOGIN LOOKUP
+        The user chose username-based login because people should not need to remember public keys.
+        Updated the active contract to resolve a username before fetching encrypted login data.
+        Lookup discovers the account; authenticated decryption establishes login.
+        Password changes preserve both the username mapping and public identity.
+        Username resolver behavior and its small pre-login access path are not implemented yet.
+
+    2026-09-30: CLIENT USERNAME AND PASSWORD LOGIN
+        Added a host transport callback for username lookup and referenced login-blob fetches.
+        Replaced the obsolete account-key request marshaler and unsafe user-data decoder.
+        Reuse the existing chunk assembler and bind it to the lookup's expected hash and size.
+        Install signing and main data keys only after authenticated decryption and identity matching.
+        Added the small shared login encoder/decoder and bounded bootstrap body codecs.
+        Keep the password in a pooled buffer, then wipe and return it on every terminal path.
+        Cancellation also removes unfinished ciphertext assembly.
+        Tests exercise actual client construction, callback requests, chunk parsing, and real crypto.
+        Cover wrong passwords and retries, identity mismatches, malformed fields, and corrupted hashes.
+        Cover authenticated records with the wrong kind or missing final stream tag.
+        Cover callback failure, synchronous responses, context/pool exhaustion, and pending shutdown.
+        Re-encryption tests preserve identity and main data keys across a password change.
+        All thirteen registered tests pass normally and with sanitizers.
+        New C sources pass warning checks with existing unused header helpers suppressed.
+        Public client and common login headers also pass a C++ compile check.
+        Full Linux node execution and the real proxy/P2P transport remain unverified.
+        No node username registry, local credential persistence, or password-change publication was added.
+        These limits are recorded in Docs/client/login.md.
+        This change is not committed yet.
+
+    2026-09-30: ROLLBACK HOST INTERFACE REWORK
+        The user requested returning to the earlier login implementation.
+        Backed out the send_request wiring, public Buffer layout, and outgoing allocation ownership changes.
+        Restored the original buffer infrastructure and native sender.
+        The earlier login callback remains temporarily; no further transport redesign is agreed.
+        Revisit how login fits the existing marshaling and parsing flow before changing that flow.
+
+    NEXT REVIEW:
+        Review credential conversion, default limits, and the timing rules above.
+        These are decisions recorded by this draft, not behavior already implemented.
+        Review the shared owner-update codec, then add remaining record and operation codecs.
+        Node username lookup, registration rules, and pre-login access still need their service implementation.
+        The full application build baseline remains to be established.
+
+    2026-09-30: FULL LOGIN ROLLBACK
+        Removed all uncommitted login source, tests, API changes, and tracked documentation changes.
+        Restored the project to d625cd3 without changing committed history.
+        Preserved this shared design file and the agreed username/password direction for later planning.
+
+    2026-09-30: LOGIN THROUGH EXISTING MARSHALER AND PARSER
+        The user required the existing host-implemented send hook and ownership rules.
+        Reimplemented marshal_get_user_data_request and parse_user_data without a transport setter.
+        Requests use pooled payloads and existing context descriptors, with no heap descriptors.
+        Lookup replies and blob chunks are copied before borrowed host memory can disappear.
+        Completion or cancellation wipes the password but defers context reuse while the host holds a request.
+        A lookup arriving before request return defers fetching until client_return_buffer.
+        Kept the native sender and corrected its type/member references and buffer-return path.
+        Its existing socket-send stub still lacks queuing and retry support; native transport is unverified.
+        Shared login crypto preserves the independently generated signing identity and main data key.
+        Actual node resolution, local credential storage, and password-change publication remain unfinished.
+        All thirteen tests pass normally and with AddressSanitizer and UndefinedBehaviorSanitizer.
+        Login C sources pass warning checks and the public headers compile as C++.
+        Real browser and native networking execution remain unverified.
+        These changes remain uncommitted.
+
+    2026-09-30: PASSWORD TRANSMISSION CHECK
+        Verified the outgoing lookup contains only version, operation, username length, and username.
+        Verified the outgoing fetch contains only version, operation, and blob hash.
+        The copied password is a separate local pooled allocation used by login_decrypt.
+        Added a test comparing exact outgoing bytes for two different passwords.
+        Both requests remain identical and separate from the live password buffer.
+        The login test passes normally and with sanitizers; no production correction was needed.
+
+    2026-09-30: LOGIN COMMITTED
+        The user approved committing the tested login implementation.
+        Commit e34e1af keeps the existing marshaler, host send hook, parser, and ownership boundary.
+        All thirteen tests passed again normally and with sanitizers before commit.
+        This shared design file remains untracked.
+        Next proposed change is the owner-update codec in common, before node or FS handlers.
+
+    2026-10-01: SHARED OWNER-UPDATE CODEC
+        Added owner.h and codec/owner.c with bounded marshaling and parsing.
+        Added record signing, signature verification, and deterministic locator derivation.
+        Follow the V1 record kind and domain-prefix rules already in this plan.
+        The new identifier limit is 64 UTF-8 bytes; no normalization or namespace restriction is added.
+        Validate nonzero blob size and an exact single-step revision increase without overflow.
+        Tests cover literal wire bytes, hash preimages, truncation, trailing bytes, and UTF-8 bounds.
+        They cover tampering with every wire byte, valid-but-altered revisions, and mismatched signing keys.
+        Locators remain stable across blob replacements and change with owner, identifier, or index.
+        Storage admission, revision conflicts, blob ownership, and quota checks remain for FS handlers.
+        All sixteen tests pass normally and with AddressSanitizer/UndefinedBehaviorSanitizer.
+        New codec and test sources pass warning checks.
+        This change remains uncommitted.
+        All fourteen registered tests pass normally and with AddressSanitizer and UndefinedBehaviorSanitizer.
+        New C source passes warning checks; the public header also compiles as C++.
+
+    2026-10-01: ENUM OWNER IDENTIFIERS
+        The user requested simplifying the identifier from a string to an enum.
+        Added OwnerIdentifier for account, feed page, and recipient page with explicit values 1-3.
+        The record and locator preimage encode that value as big-endian u16.
+        Removed string lengths, UTF-8 validation, and variable record sizes.
+        Owner updates are now always 166 bytes; zero and unknown identifiers fail validation.
+        Updated wire vectors, locator preimages, and tests for all supported enum values.
+        Node-managed inbox identifiers are outside this owner-update enum.
+        This replaces the string format before any owner-update codec has been committed or deployed.
+        All fourteen tests pass normally and with sanitizers after the enum change.
+
+    2026-10-01: OWNER-UPDATE CODEC COMMITTED
+        The user approved committing the codec and enum simplification.
+        Commit f41eab0 adds the shared owner-update format, signing helpers, locator derivation, and tests.
+        All fourteen tests passed normally and with sanitizers before commit.
+        This shared design file remains untracked.
+
+    2026-10-01: ACCOUNT-HEADER PLAINTEXT CODEC
+        Added account.h and codec/account.c with a fixed 68-byte V1, kind 2 record.
+        Fields follow the agreed feed-page, recipient-page, and inbox-head design.
+        Validate exact length, version, kind, and ordered page ranges before returning output.
+        No input ownership is transferred or retained, and no allocation is needed.
+        Tests cover exact bytes, full u64 indices, malformed input, and unchanged failure outputs.
+        Parsed fields remain valid after the caller overwrites the input buffer.
+        Used clearer spacing, multiline signatures, and separated validation and field handling.
+        The user requested a separate formatting pass on earlier generated code in the next commit.
+        Header encryption and client or FS wiring are outside this codec step.
+        All sixteen tests pass normally and with AddressSanitizer/UndefinedBehaviorSanitizer.
+        New codec and test sources pass warning checks.
+        This change remains uncommitted.
+        All fifteen registered tests pass normally and with sanitizers.
+        New C source passes warning checks and its public header compiles as C++.
+
+    2026-10-01: ACCOUNT HEADER COMMITTED AND READABILITY PASS
+        Committed the tested account-header codec and its explanatory byte-header comment as 09ec642.
+        Limited the formatting pass to five recent login and owner-update source/header files.
+        Expanded cramped guards and loops, wrapped signatures, and separated logical blocks.
+        Verified those five code files match their committed content after removing whitespace.
+        No behavior, byte format, or ownership rule changed.
+        Updated documentation line references after formatting.
+        The whitespace cleanup remains uncommitted for review.
+        Continue improving spacing as files are touched; a broader final pass can follow later.
+        All fifteen tests pass normally and with sanitizers after the whitespace cleanup.
+
+    2026-10-01: READABILITY CLEANUP COMMITTED
+        The user approved the formatting cleanup; committed as 1bc6e3b.
+        Source changes are whitespace-only, with corresponding documentation reference updates.
+        All fifteen tests passed normally and with sanitizers before commit.
+        Keep readable spacing and add short comments where purpose, format fields, or ownership are not obvious.
+        The user welcomes useful comments; avoid commenting every line.
+        This shared design file remains untracked.
+
+    2026-10-01: CLIENT CODEC AND REQUEST/REPLY ORGANIZATION
+        The user clarified that account headers and feed pages are encrypted blobs to the node.
+        Moved the account-header plaintext codec, public header, and test from common to client.
+        Its wire format and function bodies are unchanged; its test is now client.account.
+        client/src/codec holds client-only plaintext record codecs.
+        client/src/data keeps post views and packed feed storage.
+        client/src/networking/marshalers holds outgoing request builders.
+        client/src/networking/parsers holds incoming reply handlers and blob assembly.
+        client/src/operations/login.c keeps public login operations, sending, and buffer-return continuation.
+        Split user and post files into these locations without changing function bodies.
+        Exposed send_user_data_request through an internal header so the parser can continue login.
+        Existing send_request implementation and incoming/outgoing ownership rules are unchanged.
+        The legacy post/feed request parser remains disabled and unfinished, as before.
+        Shared signed owner-update records remain in common because both client and node use them.
+        Updated test source paths and moved account-header documentation to Docs/client.
+        All fifteen tests pass normally and with sanitizers after the moves.
+        Login and account codec sources pass warning checks; the client account header compiles as C++.
+        Feed-page encoding and decoding will be added under client/src/codec in a later step.
+        This reorganization remains uncommitted.
+
+    2026-10-01: CLIENT REORGANIZATION COMMITTED
+        The user approved the reorganization; committed as 6fbb465.
+        All fifteen tests passed normally and with sanitizers before commit.
+        This shared design file remains untracked.
+        The planned fixed-slot codec was superseded by the variable-size page decision below.
+
+    2026-10-01: VARIABLE-SIZE FEED PAGE CODEC
+        The user clarified that posts have variable sizes rather than fixed slots.
+        Added a client-only codec around the existing packed Feed and PostView.
+        Pages contain a version, kind, page index, post count, and packed posts.
+        Parsing rebuilds the offset/size index and copies borrowed input.
+        A page fits posts by bytes within a 64 KiB plaintext limit.
+        Full-page append returns FEED_PAGE_FULL without mutation.
+        Publishing will create the next page; the codec does not advance indices.
+        Preserved existing post fields and timestamp bits rather than inventing a new post layout.
+        Corrected the active plan's fixed-slot assumption; older work-log entries are historical.
+        Post-key storage and the meanings of individual content hashes remain open before publication.
+        Tests cover mixed sizes, exact bytes, malformed input, copied and aliased input,
+        allocation failures, empty pages, and a full page containing 336 posts.
+        Encryption, publication, and network retrieval are not wired in this step.
+        All sixteen tests pass normally and with AddressSanitizer/UndefinedBehaviorSanitizer.
+        New codec and test sources pass warning checks.
+        This change remains uncommitted.
+
+    2026-10-01: POST METADATA AND FIRST BLOB
+        The user clarified that existing post entries are metadata plus hashes.
+        Every hash refers to a data blob.
+        The first hash always refers to the blob containing the remaining post data.
+        That blob currently contains mostly text and can hold richer post data later.
+        This fits the variable-size feed-page codec without changing its fields.
+        It resolves the first-hash meaning; post-key storage remains separate and open.
+
+    2026-10-01: SHARED BLOB ENCRYPTION KEY
+        The user clarified that every data blob is encrypted using user_data_key.
+        Feed entries therefore need no separate post-key field.
+        Updated the active plan to supersede the earlier per-post-key proposal.
+        The password-encrypted login bootstrap remains the existing way to recover user_data_key.
+        Recipient decryption needs reconciliation with this shared key before voucher work.
+        Giving a recipient user_data_key would let them decrypt any other blob encrypted with it.
+        No key-sharing behavior or source changes were added here.
+
+    2026-10-01: PRIVATE STORAGE AND PREPARED DELIVERY
+        The user clarified that private blob storage differs from blobs prepared for retrieval.
+        Publishing re-encrypts every post blob and packages the delivery copies together.
+        Private copies remain encrypted under user_data_key.
+        Delivery copies have their own encryption and ciphertext hashes.
+        Both users must agree before files can transfer.
+        Permissions and vouchers support consent and deferred retrieval rather than immediate fan-out.
+        A delivery-package key wrapped for recipients is proposed, not yet a confirmed key layout.
+        Package reuse across recipients versus per-recipient packages remains to be defined.
+        No source or transport changes were made for this clarification.
+
+    2026-10-01: SINGLE ENCRYPTED DELIVERY PACKAGE
+        The user clarified that delivery gathers all blob contents in plaintext first.
+        Encrypt the whole package under one key rather than encrypting its entries separately.
+        The package is one opaque retrievable blob with its own whole ciphertext hash.
+        Corrected the active plan's earlier multi-blob delivery-manifest assumption.
+        Internal package framing and mapping from post references remain to be defined.
+        Existing proposed manifest fields must be reconciled before voucher or transfer implementation.
+        No source changes were made for this clarification.
+
+    2026-10-01: RECIPIENT-ENCRYPTED VOUCHERS
+        The user confirmed that the delivery key goes into each recipient voucher.
+        Encrypt each whole voucher using the shared key with that recipient.
+        The prepared package uses one delivery key, supplied through recipient-specific vouchers.
+        This supersedes the earlier node-readable voucher with only an encrypted key subsection.
+        Nodes remain unable to read voucher plaintext or the delivery key.
+        Node-visible routing and redemption authorization need an explicit design before implementation.
+        No source changes were made for this clarification.
+
+    2026-10-01: VOUCHER SUBSECTION RESTORED
+        The user agreed to retain the encrypted-subsection model after discussing redemption.
+        Node-readable signed fields identify the recipient, package, and permission.
+        Only the delivery-key subsection is encrypted with the recipient shared key.
+        The sender signature binds both portions.
+        This supersedes the whole-voucher encryption clarification above.
+        No remaining user decision blocks the current feed-page codec commit.
+        Package framing and streaming/import behavior remain for the delivery implementation.
+
+    2026-10-01: FEED PAGE COMMITTED AND ACCOUNT KEY CORRECTION
+        Committed the variable-size feed-page codec and documentation as 02a564a.
+        The shared design file remains untracked.
+        The user corrected the proposed account encryption step.
+        The account header uses the password-derived key and contains data_key.
+        data_key encrypts private data blobs; it does not encrypt its containing account header.
+        Removed the uncommitted account encryption functions that used the wrong key.
+        Existing login code already password-encrypts signing seed and data_key.
+        Clarify consolidation with the separate page-metadata codec before further source changes.
+
+    2026-10-01: COMBINED PASSWORD-ENCRYPTED ACCOUNT HEADER
+        The user confirmed one header containing signing seed, data_key, page indices, and inbox locator.
+        Expanded the client account plaintext codec from 68 to 132 bytes.
+        Retained its kind 2 tag and existing page metadata offsets; appended seed and data_key.
+        Moved password encryption and decryption from common into client/src/codec/login.c.
+        Reused the existing bounded Argon2id and authenticated secretstream password envelope.
+        The encrypted header is 213 bytes; old split-record development formats are not accepted.
+        Common retains only username lookup and opaque ciphertext fetch helpers.
+        Client state stores the complete account header and recovered signing keys.
+        Login installs both only after authentication, page validation, and identity binding succeed.
+        Existing marshalers, parsers, host send_request, and buffer ownership remain in use.
+        Password re-encryption preserves the complete header and signing identity.
+        Node-side resolver, account creation, and password-change publication remain unfinished.
+        All sixteen tests pass normally and with AddressSanitizer/UndefinedBehaviorSanitizer.
+        Changed codec sources pass warning checks; the public header compiles as C++.
+        This step remains uncommitted.
+
+    2026-10-01: ACCOUNT CODEC CONSOLIDATION
+        The user approved keeping account-header crypto with its plaintext codec.
+        Moved encrypt_account_header and decrypt_account_header into client/src/codec/account.c.
+        Removed the uncommitted client/src/codec/login.c file.
+        Shared the big-endian integer helpers within account.c.
+        client/src/operations/login.c still coordinates the login workflow.
+        Wire format, password derivation, ownership, and function interfaces are unchanged.
+        Updated test registration and documentation references.
+        This step remains uncommitted.
+
+    2026-10-01: PRIVATE ACCOUNT CODEC HEADER
+        The user approved keeping account-header codecs out of the host API.
+        Moved client/include/sz_client/account.h to client/src/codec/account.h.
+        Updated client and test includes and documentation references.
+        AccountHeader and its codec functions are no longer in the installed client headers.
+        The host continues to use client_login through the public client interface.
+        Function bodies, wire formats, and ownership rules are unchanged.
+        This step remains uncommitted.
+
+    2026-10-01: CLIENT-PRIVATE LOGIN MESSAGE HELPERS
+        The user questioned sharing trivial login request helpers with the backend.
+        Moved common/include/sz_common/login.h to client/src/codec/login.h.
+        Moved common/src/crypto/login.c to client/src/codec/login.c.
+        Common no longer contains a login API or implementation.
+        Node handlers can decode the small lookup and fetch bodies where needed.
+        Function bodies and wire formats are unchanged by these moves.
+        Updated client includes, test source paths, and documentation.
+        This step remains uncommitted.
+
+    2026-10-01: ACCOUNT HEADER AND PRIVATE LOGIN COMMITTED
+        The user approved committing this step; committed as 340faee.
+        One password-encrypted account header contains identity material, data_key, and page references.
+        Account codecs and login message helpers are private to client.
+        All sixteen tests passed normally and with sanitizers before commit.
+        The shared design file remains untracked.
+        Next proposed step is authenticated feed-page encryption and decryption under data_key.
+        No next-step source changes have been made yet.
+
+    2026-10-01: GENERAL IN-PLACE RECORD CRYPTO
+        The user preferred generalized encryption/decryption over one implementation per record type.
+        Replaced the unused client CryptCtx detached-AEAD helpers with bounded secretstream record operations.
+        The private helper accepts caller-owned Buffer storage, authenticated data, and the final-record flag.
+        It checks capacity before expanding records and performs no allocation.
+        Multiple records share one context; successful final records wipe and close it.
+        Invalid arguments leave buffers unchanged; authentication/tag failures wipe the record and context.
+        Account-header password derivation and envelope remain in codec/account.c.
+        Its encryption and decryption now delegate to the general helper; its wire format is unchanged.
+        Borrowed account ciphertext is copied before in-place decryption.
+        Tests cover exact overlap against independent libsodium output, capacities, empty and maximum records,
+        tampering, unexpected tags, reordered/replayed records, and reuse with the feed-page codec.
+        Stored-blob envelope framing and actual feed retrieval remain subsequent work.
+        All seventeen tests pass normally and with AddressSanitizer/UndefinedBehaviorSanitizer.
+        Changed crypto, account codec, and test sources pass warning checks.
+        This change remains uncommitted.
+
+    2026-10-01: GENERAL CRYPTO COMMITTED; WAITING FOR USER
+        The user approved this step; committed as a6d016d.
+        All seventeen tests passed normally and with sanitizers before commit.
+        The shared design file remains untracked.
+        The user requested a pause before the next step.
+        Do not start the next implementation until the user is ready.
+
+    2026-10-02: RETAINED PACKAGE METADATA
+        The user approved one encrypted package per post and retention of its original package key.
+        A recipient decrypts the voucher key subsection and keeps the key with their post metadata.
+        Metadata contains originator, creation time, one package hash, package key, and blob count.
+        Package construction and internal format are explicitly deferred to a separate step.
+        Replaced the variable hash-list PostView with fixed 108-byte metadata.
+        Blob count is nonzero u32; timestamp and count use big-endian feed encoding and native memory access.
+        Kept feed-page version 1 at the user's request because the project is not yet deployed.
+        A 64 KiB plaintext page fits 606 entries; append still reports full without mutation.
+        Added feed_destroy and wiped metadata before growth, failed growth cleanup, replacement, or destruction.
+        Updated tests for exact metadata bytes, copied keys, count bounds, paging, and secure release.
+        The legacy post request/reply code remains disabled; no package or transport behavior was added.
+        All seventeen tests pass normally and with AddressSanitizer/UndefinedBehaviorSanitizer.
+        Changed post/feed codec and test sources pass warning checks.
+        This step remains uncommitted.
+
+    2026-10-02: PACKAGE METADATA COMMITTED
+        The user approved this step; committed as d8313a8.
+        All seventeen tests passed normally and with sanitizers before commit.
+        The shared design file remains untracked.
+        Next is discussion of package contents and creation, not immediate further source changes.
+
+    2026-10-02: CONTENT STORAGE AND FEED-PAGE CODEC ORGANIZATION
+        The user approved the content directory and separation from codec responsibilities.
+        Moved PostView into content/post.h.
+        Renamed packed Feed storage to Posts in content/posts.h and posts.c.
+        Renamed its functions, index type, and status constants accordingly.
+        Client currently holds Posts directly; no outer Feed manager is introduced yet.
+        FeedPage embeds Posts and owns page lifecycle and limits in content/feed_page.*.
+        Marshal and parse functions live in codec/feed_page.*.
+        Shared metadata validation moved into posts_count without duplicating it across layers.
+        Updated callers, test registrations, and documentation; client.feed test is now client.posts.
+        Wire format, ownership, key wiping, and page capacity are unchanged.
+        All seventeen tests pass normally and with sanitizers after the reorganization.
+        Moved storage and codec sources pass warning checks.
+        This step remains uncommitted.
+
+2026-10-02 FIXED-SIZE FEED PAGE STORAGE
+    Posts and FeedPage are now one FeedPage in content/feed_page.*.
+    It owns one packed post pointer, size and capacity in entries, and page_number.
+    Fixed POST_SIZE strides replace the separate offset/size index.
+    Growth and parsing each require one allocation.
+    Growth, replacement, and destruction still wipe package keys before freeing storage.
+    The client currently holds one FeedPage; an outer Feed manager remains future work.
+    Plaintext encoding stays in codec/feed_page.* with the same wire format.
+    All 17 tests pass in normal and sanitizer builds.
+    Storage and codec files pass the warning checks; diff whitespace checks pass.
+
+2026-10-02 FEED MANAGER PLACEHOLDER
+    Client now holds Feed rather than one FeedPage.
+    Feed owns a vector of loaded pages and tracks current_page_number.
+    Startup leaves the vector empty; shutdown destroys each owned page.
+    feed_get_current_page and feed_next_page are declared only, with no definitions or calls.
+    Direct requests versus queued network tasks remains undecided.
+    Pending-load results, page insertion, selection, and rollover are not implemented.
+    Page views may move when the vector grows.
+    The legacy post parser stays disabled; unfinished layout traversal awaits page navigation.
+    All 17 tests pass normally and with sanitizers, including shutdown with loaded pages.
+
+2026-10-02 FEED REORGANIZATION COMMITTED; PACKAGE FORMAT PROPOSAL
+    Committed the approved feed changes as 8819957.
+    All seventeen tests passed normally and with sanitizers before commit.
+    This shared design file remains untracked.
+    The next design step is package contents and creation.
+    PROPOSED: Plaintext package header is version:u16 followed by blob_count:u32.
+    PROPOSED: Each blob is length:u64 followed by exactly that many content bytes.
+    PROPOSED: All framing integers use big-endian byte order.
+    AGREED: The first enclosed blob contains the remaining post data; currently mostly text.
+    PROPOSED: Enclosed attachments are referenced by ordinal within the package.
+    OPEN: Confirm ordinal references versus retaining plaintext content hashes.
+    OPEN: Define the first blob's text/attachment-reference format before interpreting it.
+    Stream packaging independently of transport chunk boundaries; do not allocate a whole large package.
+    Encrypt the framed plaintext with the retained package key and hash the complete ciphertext.
+    Cryptographic envelope framing is separate and must be settled before implementing encryption output.
+    No package format code has been added yet.
+
+2026-10-02 STANDALONE PLAINTEXT PACKAGE PARSER
+    The user approved implementing parsing now and leaving integration for later.
+    Implemented client/src/codec/package.h and package.c.
+    V1 framing is version:u16, nonzero blob_count:u32, then length:u64 and bytes per blob.
+    All framing integers are big-endian; empty blobs are permitted.
+    Blob zero is post data; its inner format and attachment references remain open.
+    The parser handles arbitrary splits in headers, lengths, and payloads without allocation.
+    Each call returns one borrowed slice with index, total size, and offset plus consumed input length.
+    Callers must copy retained slices and continue parsing all remaining input.
+    finish_package rejects truncation; additional input after declared blobs is rejected.
+    Errors are terminal until reset; emitted slices are provisional until parsing and authentication succeed.
+    No encryption, network, Feed, or client-state integration was added.
+    Consumer storage limits and checking against feed metadata remain integration responsibilities.
+    All eighteen tests pass normally and with sanitizers.
+    Package sources and tests pass strict warning checks; whitespace checks pass.
+    This step is uncommitted.
+
+2026-10-02 INDEPENDENT PACKAGE BLOB STORAGE
+    The user approved Package with independently owned blob payloads.
+    Added content/package.h and package.c with Package and PackageBlob.
+    Each descriptor has a native size and a byte pointer; its array position identifies the blob.
+    package_init allocates descriptors only; payload assembly remains separate.
+    Payload pointers own heap allocations of the recorded size.
+    package_blob_release wipes and frees bytes while retaining size metadata for later retrieval.
+    package_destroy releases remaining payloads and the descriptor array.
+    Renamed the parser's borrowed output to PackageSlice to distinguish it from owned storage.
+    Hash and encryption key remain in post metadata.
+    No client-state integration, payload assembly, cache budget, or eviction policy was added.
+    Future assembly must validate u64 wire lengths against native allocation limits.
+    All nineteen tests pass normally and with sanitizers.
+    Storage tests verify independent release, plaintext wiping, cleanup, and allocation failure.
+    Strict warning and whitespace checks pass; this step is uncommitted.
+
+2026-10-02 SHARED PACKAGE PLAINTEXT STORAGE
+    The user changed the storage decision to match retrieval of one whole backend package.
+    This supersedes independent per-blob ownership and eviction above.
+    Package owns one fixed-size plaintext buffer plus its descriptor array.
+    PackageBlob retains size metadata and a borrowed pointer into the shared buffer.
+    package_init allocates descriptors and the requested plaintext buffer.
+    Blob views are populated separately; parser-to-storage integration remains deferred.
+    Removed package_blob_release; eviction and cleanup release the whole package.
+    package_destroy wipes the shared buffer before freeing it and the descriptors.
+    All blob views become invalid at package destruction.
+    Streaming parser behavior and wire framing remain unchanged.
+    All nineteen tests pass normally and with sanitizers.
+    Storage tests cover shared views, both allocation failures, and whole-buffer wiping.
+    Strict warning and whitespace checks pass; this step remains uncommitted.
+
+2026-10-02 PACKAGE PARSER AND SHARED STORAGE COMMITTED
+    Committed the approved package changes as 39de8cf.
+    All nineteen tests passed normally and with sanitizers before commit.
+    This shared design file remains untracked.
+    Next proposed step is a local bridge from validated plaintext into owned Package views.
+    This would copy the full plaintext into the shared buffer and describe its enclosed blobs.
+    Preserve existing output on malformed input or allocation failure.
+    Network requests, decryption envelopes, cache policy, and Feed integration remain deferred.
+    No next-step code has been written; the user requested discussion first.
+
+2026-10-02 OWNED PACKAGE CONTENTS PARSING
+    The user approved connecting plaintext parsing to Package storage.
+    Added parse_package_contents in codec/package.*.
+    Validate framing using the streaming parser before allocating descriptors or payload storage.
+    Copy the complete plaintext once, including framing, then populate blob views into that copy.
+    Empty blobs have zero size and a NULL byte pointer.
+    Reject truncation, trailing bytes, unsupported versions, count mismatches, and impossible lengths.
+    Failed validation or allocation leaves the previous package and its descriptors unchanged.
+    Input may point into the old package; replacement copies before wiping and releasing it.
+    Network retrieval, decryption, and cache policy remain separate.
+    All nineteen tests pass normally and with sanitizers.
+    Tests cover borrowed-buffer reuse, view positions, malformed inputs, both allocation failures,
+    replacement from the package's own buffer, and plaintext wiping.
+    Strict warnings and whitespace checks pass; this step remains uncommitted.
+
+2026-10-02 CORRECTION: ASSEMBLE PACKAGE CONTENTS INCREMENTALLY
+    The user clarified that Package must be filled through parser slices, not complete-input copying.
+    Removed the whole-input validation-and-copy implementation added earlier in this uncommitted step.
+    parse_package_contents now accepts successive chunks and retains progress in PackageParser.
+    Each borrowed slice is copied into a fresh staging Package's shared buffer.
+    Framing bytes are excluded from assembled storage.
+    The current implementation expects the caller to allocate descriptors and buffer capacity up front.
+    Partial contents are provisional; discard them on parse or authentication failure.
+    Keep previous live contents separate until staging succeeds.
+    All nineteen tests pass normally and with sanitizers; strict warnings and whitespace checks pass.
+    The user then proposed placing blob count and all blob metadata before the payload bytes.
+    PROPOSED: V1 version:u16, count:u32, all sizes:u64, then all blob payloads in order.
+    A metadata table would let the assembler calculate total storage before any payload is copied.
+    OPEN: Omit per-blob hashes or include plaintext content hashes in that metadata table.
+    No table-layout source changes have been made while this question is pending.
+
+2026-10-02 AGREED SIZE TABLE BEFORE PACKAGE PAYLOADS
+    The user chose all blob sizes before payloads and omitted individual plaintext hashes.
+    V1 plaintext is version:u16, count:u32, count sizes:u64, then payloads in order.
+    This replaces the earlier interleaved length/payload format directly; version remains 1.
+    PackageParser.max_size is the caller-supplied complete-plaintext byte limit.
+    Start with a zeroed staging Package rather than allocating its count and payload capacity in advance.
+    Validate count against framing budget before allocating descriptors.
+    Store lengths in those descriptors, check the cumulative payload size, and allocate one buffer.
+    The low-level parser returns borrowed slices; parse_package_contents copies them before return.
+    Input must not overlap staging storage; no incoming pointers are retained.
+    Empty blob descriptors point at their position in the shared buffer, or NULL if the entire buffer is empty.
+    Truncation, trailing bytes, unsupported versions, allocation failures, and limit violations are terminal.
+    Discard and wipe staging contents on failure; live contents stay separate until completion.
+    The whole-package ciphertext hash and authentication remain integration responsibilities.
+    No transport, decryption, cache, or Feed integration was added.
+
+FORMATTING PREFERENCE — KEEP FOR FUTURE CHANGES
+    Keep code concise, but do not compress it into large dense blocks.
+    Separate logical stages with blank lines and a few useful comments.
+    Do not add helper functions merely for formatting; keep related code together.
+    Use braces and wrap long declarations, calls, and conditions.
+    Comment non-obvious layouts and ownership rules without narrating every line.
+    These preferences are also recorded in root AGENTS.md for future agents.
+
+2026-10-02 FORMATTING AND CHUNK ASSEMBLY CHECKPOINT
+    The user clarified that formatting means spacing and selective comments, not additional functions.
+    Recorded the preference in AGENTS.md and kept the parser's stages together.
+    All nineteen tests pass normally and with sanitizers.
+    After the final formatting adjustment, both package tests pass again in both builds.
+    Strict warning and whitespace checks pass; these changes remain uncommitted.
+
+2026-10-02 SIMPLER PACKAGE PARSER INTERFACE AND WIRE READABILITY
+    The user questioned repeated unexplained constants and exposing the internal slice parser.
+    Removed the redundant parse_package and borrowed PackageSlice interface.
+    parse_package_contents now parses and copies chunks directly in one loop.
+    Only chunk assembly and end-of-input checking remain declared in codec/package.h.
+    Two private wire-size constants document the six-byte header and eight-byte length fields.
+    Header version and count reads are explicit; descriptor and payload bounds checks are separated.
+    Spacing and brief comments distinguish framing, size-table allocation, and payload copying.
+    No additional helpers were added for formatting.
+    Wire bytes and streaming ownership remain unchanged.
+    All nineteen tests pass normally and with sanitizers; this step remains uncommitted.
+
+2026-10-02 STREAMING PACKAGE ASSEMBLY COMMITTED; MATCHING MARSHALER
+    Committed the user-approved parser and formatting changes as ce9583d.
+    Added marshal_package and PackageMarshaler for matching plaintext output.
+    Fill caller-owned chunks with version, count, size table, and payloads in order.
+    Retain writing progress across calls, including splits inside individual framing fields.
+    The writer allocates no memory and does not assemble a second whole-package buffer.
+    Package and descriptors must remain unchanged while writing.
+    Check lengths, required framing space, and payload-size overflow before writing starts.
+    Invalid input preserves output, written length, and progress.
+    Tests cover exact wire bytes and parser round trips across output capacities, including one byte.
+    Tests also cover empty payloads, invalid descriptors, and size overflow.
+    All nineteen tests pass normally and with sanitizers.
+    Encryption, ciphertext framing, and network integration remain separate.
+    The marshaler step is uncommitted; the shared design file remains untracked.
+
+2026-10-02 PACKAGE CODE READING NOTES
+    Added short comments explaining the three wire stages and retained partial fields.
+    Clarified payload-only accounting, overflow-safe length checks, and reuse of blob_index.
+    Clarified marshaler wire offset versus chunk and blob offsets, size-table division/remainder,
+    and advancing through empty blobs without needing output space.
+    No new helpers or behavioral changes were introduced.
+
+2026-10-02 NETWORKING NAME AND LOGIN ORGANIZATION
+    The user approved the cleanup approach and renamed netwrk to networking.
+    Renamed the directory and updated source includes, test paths, and documentation.
+    operations/login.c now groups login request preparation, continuation, public entry points, and replies.
+    Request preparation is private to that operation; only dispatch and send continuation are declared internally.
+    Lookup and fetch byte-format helpers moved to codec/login.*; they remain private to the client.
+    Blob transfer assembly moved to networking/blob.*.
+    Response registration now has one definition in networking/dispatch.c with a declaration in dispatch.h.
+    Buffer-return code moved to networking/send.c without changing its login continuation behavior.
+    The host still uses send_request, client_parse_response, and client_return_buffer.
+    No wire-format, request scheduling, allocation, or ownership behavior changed.
+    The retained-buffer test now checks repeated login rejection through the public API.
+    Legacy post request/reply files remain disabled and unchanged apart from include paths.
+    Deferred: decouple buffer return from login, define partial-message framing, and move native sending out of core.
+
+2026-10-02 PACKAGE AND ASYNCHRONOUS SEND BOUNDARIES
+    Packages replace the old post-content representation.
+    PackageParser consumes plaintext package bytes after decryption.
+    networking/blob.c currently assembles encrypted transfer chunks and verifies the complete ciphertext hash.
+    Login still uses that path to fetch its password-encrypted account header, which is not a package.
+    Do not remove transfer assembly until account retrieval and encrypted package retrieval have replacements.
+    send_request hands the outgoing buffer to the host runtime and may retain it for an arbitrary duration.
+    Neither returning from send_request nor receiving a response releases that buffer.
+    Only client_return_buffer allows the allocation to be reused.
+    Cancellation reserves the context while its outgoing buffer remains with the host.
+    Existing retained-buffer tests cover replies and cancellation before the buffer is returned.
+    The native inline socket sender still needs to move to the host runtime with queued sends.
+
+2026-10-02 SINGLE USERNAME REQUEST FOR LOGIN
+    The user chose one username request instead of lookup followed by a client hash-fetch request.
+    The node resolves the username and sends the existing lookup metadata followed by encrypted account-header chunks.
+    Metadata and each transfer chunk remain separate protocol messages at the current host parser boundary.
+    Client password derivation and account-header decryption remain local.
+    Combined request preparation and host handoff into one private login_send_request function.
+    Removed the login hash-fetch builder, fetching flag, and buffer-return continuation.
+    Responses may finish while the host still holds the original username request buffer.
+    Completion and cancellation keep that context reserved until client_return_buffer.
+    Updated includes and test sources for the user's codec/blob move and merged networking buffer-return file.
+    Node account lookup/storage routing and shared request codecs remain outstanding.
+    The test host models the new node response flow; this is not a completed node implementation.
+    All nineteen tests pass normally and with address/undefined-behavior sanitizers.
+
+2026-10-02 ACCOUNT REQUEST NAMING
+    Renamed login_lookup_request to marshal_account_request.
+    Renamed login_read_lookup to parse_account_response_metadata.
+    AccountResponseMetadata and ACCOUNT_RESPONSE_METADATA_SIZE describe the reply prefix.
+    Pending login stores metadata and metadata_ready instead of lookup and lookup_ready.
+    Login operation sending and response handling remain separate from byte-format helpers.
+    Wire bytes and asynchronous ownership are unchanged.
+
+2026-10-02 SHARED REQUEST CODECS
+    Moved account request and response metadata formats into common/src/requests/account.c.
+    Public declarations live under common/include/sz_common/requests.
+    Added parse_account_request to validate a complete message and copy the username into caller-owned storage.
+    Added marshal_account_response_metadata for node responses.
+    Shared metadata accepts a nonzero opaque blob size; client login enforces the account-envelope size.
+    Password limits and encrypted account-header sizing remain in client/codec/account.h.
+    Login's test host now uses the shared request parser and response marshaler.
+    Extracted the legacy post request into common/src/requests/post.c and added its parser.
+    Removed unused client post request buffer allocation and connection-state mutation.
+    Post wire bytes remain account key plus native int offset; this legacy format is not portable yet.
+    No post response format was invented; retrieval integration remains outstanding.
+    Node resolver, routing, permissions, and network handler wiring remain outstanding.
+    Shared codecs do not allocate, send, decrypt, or own client state.
+
+2026-10-02 UNIFIED REQUEST PREFIX AND PARSER
+    The user clarified that all requests enter through one parser and are not routed by paths.
+    Consolidated shared formats in common/src/requests/requests.c and sz_common/requests/requests.h.
+    Every request begins with big-endian version:u16=1 and RequestKind:u16.
+    REQUEST_ACCOUNT=1 retains the existing account-request bytes.
+    REQUEST_POST=2 adds the shared prefix before the existing account key and native int offset.
+    parse_request dispatches by kind and copies fields into a Request union without retaining input.
+    Unknown identifiers, invalid versions, truncated fields, and trailing bytes are rejected at this boundary.
+    Individual request parsers are not exposed; response metadata remains a separate client-facing parser.
+    Account lookup and storage routing still need node handler integration.
+    All twenty tests pass normally and with address/undefined-behavior sanitizers.
+    Shared request source and tests also pass strict warning checks.
+
+2026-10-02 ACCOUNT SPECIAL CASE AND GENERIC BLOB OPERATIONS
+    The user clarified that post requests are obsolete, rather than a protocol to preserve.
+    Removed PostRequest, its kind, its marshaler/parser branch, and legacy feed-offset handling.
+    Removed the unused post-feed response dispatch slot.
+    Account retrieval by username is the only special content request.
+    All other content uses shared blob retrieval, insertion, and deletion operations.
+    This includes feed pages, packages, voucher lists, and permission lists.
+    The node handles opaque stored bytes and permission/voucher access rules.
+    The client decrypts and interprets each content type.
+    parse_request remains the common identifier-based entry point; currently only account retrieval is implemented.
+    Generic blob wire fields, insertion finalization, and authorization framing still need definition and integration.
+
+2026-10-02 OWNER-SCOPED BLOB LOCATORS
+    The user specified H(request_hash || verified_client_public_key) as the key for every blob operation.
+    Verify the client signature before using that public key to derive the locator.
+    Retrieval, insertion, and deletion use the same owner-scoped key derivation.
+    Content types do not add identifiers to the node's storage key.
+    Request signatures must bind the operation and request fields, as already required above.
+    Permission/voucher checks still govern access; knowing a locator does not replace those checks.
+    Username-based account retrieval remains the pre-login special case.
+    Existing owner-update codecs implement the superseded identifier/index locator scheme.
+    Their replacement and stable request-hash selection for mutable pages remain to reconcile.
+    No locator or signature code was changed in this clarification step.
+
+2026-10-02 BLOB RETRIEVAL AND MUTATION AUTHORITY
+    The user clarified that retrieval can be unsigned, while insertion and deletion need signatures.
+    Namespace public key identifies whose blob namespace to address, even for an unsigned retrieval.
+    The locator remains H(request_hash || namespace_public_key) for all three operations.
+    Insertion and deletion verify the signature under that namespace public key before mutation.
+    Earlier proposal: sign the complete unsigned request; superseded below by hash plus operation.
+    Signing only the request hash would not distinguish insertion from deletion.
+    Still clarify whether request_hash is the ciphertext content hash or a separate logical selector.
+    Existing access limits and permission/voucher policies require reconciliation with unsigned retrieval.
+    Exact mutation fields and replay/revision handling remain to finalize before implementation.
+
+2026-10-02 BLOB SIGNATURE INPUT
+    AGREED: Sign H(request_hash || operation).
+    Encode operation as the request kind's big-endian u16, not the native enum representation.
+    Verify the signature using the namespace public key before insertion or deletion.
+    Derive the storage locator as H(request_hash || namespace_public_key).
+    Retrieval remains unsigned.
+    Locator derivation and signature input are distinct hashes.
+    No source implementation has been added yet.

@@ -7,7 +7,6 @@
 #include "codec/blob.h"
 #include "operations/login.h"
 
-// The legacy post-feed response is disabled until feed-page retrieval replaces it.
 const Parser parsers[PARSER_ID_CAP] = {
     [PARSER_ID_USER_DATA] = login_handle_response,
     [PARSER_ID_BLOB] = parse_blob,

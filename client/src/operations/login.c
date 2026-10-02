@@ -16,7 +16,7 @@ static int login_send_request(struct Client* cli, ContextID id) {
     }
 
     Buffer* request = &cli->net.send_buffers[id];
-    uint32_t size = 6 + login_username_size(cli->login.username);
+    uint32_t size = 6 + account_username_size(cli->login.username);
 
     if (buffer_ensure_min_cap(cli, request, size) != CLIENT_OK) {
         client_free_context(cli, id);
@@ -47,7 +47,7 @@ int client_login(
     ContextID* id
 ) {
     if (!cli || !id || !password || !password_size ||
-        password_size > LOGIN_PASSWORD_MAX || !login_username_size(username)) {
+        password_size > LOGIN_PASSWORD_MAX || !account_username_size(username)) {
         return CLIENT_ERR;
     }
     if (cli->logged_in || cli->login.id) {
@@ -69,7 +69,7 @@ int client_login(
     cli->login.id = context;
     cli->login.password = (Buffer){secret, capacity, password_size};
     memcpy(secret, password, password_size);
-    memcpy(cli->login.username, username, login_username_size(username) + 1);
+    memcpy(cli->login.username, username, account_username_size(username) + 1);
 
     *id = context;
 
@@ -122,7 +122,8 @@ int login_handle_response(
 
     if (!cli->login.metadata_ready) {
         if (len != ACCOUNT_RESPONSE_METADATA_SIZE ||
-            parse_account_response_metadata(&cli->login.metadata, b, (size_t)len) != 0) {
+            parse_account_response_metadata(&cli->login.metadata, b, (size_t)len) != 0 ||
+            cli->login.metadata.size != LOGIN_BLOB_SIZE) {
             goto done;
         }
         cli->login.metadata_ready = true;

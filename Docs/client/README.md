@@ -39,9 +39,8 @@ The node receives encrypted blobs and does not interpret these fields.
 ### [networking](networking.md)
 
 Request contexts, connection state, and response dispatch.
-requests/ contains the unfinished legacy post request.
 operations/login.c coordinates login, prepares its requests, and handles its replies.
-codec/login.c keeps the username request and response metadata helpers private to the client.
+common/src/requests contains shared request formats, starting with account retrieval.
 networking/client.c handles returned send buffers independently of login replies.
 
 ### [world](world.md)

@@ -1,6 +1,7 @@
 sz_add_test(common pqueue pqueue.c ../src/structs/pqueue.c)
 sz_add_test(common hashtable_reserve hashtable_reserve.c ../src/structs/hashtable.c)
 sz_add_test(common hashtable_storage hashtable_storage.c ../src/structs/hashtable.c)
+sz_add_test(common requests requests.c ../src/requests/requests.c)
 
 include(../Blake3.cmake)
 sz_add_test(common hash hash.c ../src/hash/hash.c)
