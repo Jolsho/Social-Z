@@ -12,13 +12,23 @@ This lets the client refer to entries without a separate allocation for each one
 ## Posts
 
 A post contains an originator key and a creation time.
-It also contains hashes which refer to associated data.
+It also contains hashes which refer to data blobs.
+The first hash always refers to the blob containing the remaining post data.
+That blob currently holds mostly text.
+Richer post data can be added there later without embedding it in feed metadata.
 The current format allows between one and five hashes.
+An entry occupies 73 to 201 bytes.
+The [feed-page codec](feed.md) packs these entries within a page byte limit.
 The post itself does not contain all of that content.
 
 ## Blobs
 
 Blobs hold the content referred to by hashes.
+Private post-data blobs are encrypted using user_data_key.
+Publishing groups all referenced plaintext blob contents into one delivery package.
+It encrypts the whole package under one delivery key.
+That package waits for authorized retrieval through permissions and vouchers.
+The feed metadata does not need a separate key for each post.
 The client has a local store indexed by hash.
 The blob parser looks for an existing item before assigning storage.
 The store and buffer pool manage the memory behind these items.
@@ -39,7 +49,8 @@ The password stays local.
 See [login](login.md) for the bootstrap format and ownership rules.
 
 The post request includes a user key and a feed offset.
-The response parser appends posts to the feed.
+The legacy response parser appends posts to the feed, but is currently disabled.
+Encrypted feed-page retrieval is not wired yet.
 
 ## How content is represented
 

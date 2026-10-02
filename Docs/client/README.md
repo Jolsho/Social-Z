@@ -29,7 +29,7 @@ Request and reply code lives under netwrk.
 ### codec
 
 Client-only plaintext marshaling and parsing.
-The [account header](account.md) is the first format here.
+The [account header](account.md) and [feed pages](feed.md) are encoded here.
 The node receives encrypted blobs and does not interpret these fields.
 
 ### [networking](networking.md)

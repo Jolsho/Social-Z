@@ -61,6 +61,12 @@ It rejects malformed lengths, unsupported versions, wrong record kinds, and reve
 It checks that failed calls preserve their outputs and that full u64 indices round-trip.
 Account-header encryption and node retrieval are not exercised yet.
 
+The feed-page test checks mixed post sizes, exact bytes, and rebuilt entry indices.
+It rejects malformed records and preserves the old page on allocation failure.
+It checks borrowed and aliased input, empty pages, and a full page containing 336 posts.
+A full-page append leaves the page unchanged.
+Feed encryption, publication, and node retrieval are not exercised yet.
+
 ## Memory checks
 
 For GCC or Clang builds, use the sanitizer preset.

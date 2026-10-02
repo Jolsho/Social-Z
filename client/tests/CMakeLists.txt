@@ -27,3 +27,7 @@ sz_add_test(client login login.c ${client_sources})
 target_link_libraries(sz_login_test PRIVATE blake3 sodium)
 
 set_tests_properties(client.store_eviction PROPERTIES TIMEOUT 10)
+
+sz_add_test(client feed_page feed_page.c ../src/codec/feed.c ../src/data/feed.c)
+target_compile_definitions(sz_feed_page_test PRIVATE
+    malloc=feed_page_test_malloc calloc=feed_page_test_calloc)
