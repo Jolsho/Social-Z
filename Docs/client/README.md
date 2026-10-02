@@ -31,6 +31,7 @@ Request and reply code lives under netwrk.
 
 Client-only plaintext marshaling and parsing.
 The [account header](account.md) and [feed pages](feed.md) are encoded here.
+The [package parser](package.md) reads post contents independently of retrieval.
 Feed-page encoding lives in codec/feed_page.*; storage and paging live in content.
 The node receives encrypted blobs and does not interpret these fields.
 

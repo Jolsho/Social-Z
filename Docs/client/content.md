@@ -20,7 +20,10 @@ The feed's encryption under the user's data_key protects the retained package ke
 ## Packages and blobs
 
 The package contains the actual post data and its enclosed blobs.
-Its internal format and creation are still separate work.
+Its outer framing has a [streaming parser](package.md).
+Package owns one plaintext buffer and an array of blob descriptors with sizes and pointers into it.
+The whole package is evicted together, matching retrieval by its ciphertext hash.
+The post-data format, package creation, and retrieval integration remain separate work.
 The node serves the encrypted package by its whole-blob hash without interpreting it.
 A recipient recovers the package key from a voucher's encrypted subsection.
 They retain that key with the post metadata rather than rebuilding the package under data_key.
@@ -33,7 +36,7 @@ Packed feed data is wiped before replacement or destruction because it contains 
 
 ## Where the code lives
 
-The content directory holds PostView and FeedPage.
+The content directory holds PostView, FeedPage, Feed, and Package.
 FeedPage owns packed post storage, its size and capacity, and a page_number.
 Feed owns a vector of loaded pages and tracks the current page number.
 Its navigation functions are declared but not implemented yet.
