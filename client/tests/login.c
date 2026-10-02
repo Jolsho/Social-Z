@@ -4,8 +4,7 @@
  */
 
 #include "client.h"
-#include "netwrk/context.h"
-#include "netwrk/marshalers.h"
+#include "networking/context.h"
 #include "sz_common/hash.h"
 #include <sodium.h>
 #include <assert.h>
@@ -33,8 +32,8 @@ static HashT blob_hash(const uint8_t* bytes) {
     return hash_finalize(&hasher);
 }
 
-static void lookup(uint8_t reply[LOGIN_LOOKUP_SIZE], const uint8_t* bytes, const Key* account) {
-    memset(reply, 0, LOGIN_LOOKUP_SIZE);
+static void reply_metadata(uint8_t reply[ACCOUNT_RESPONSE_METADATA_SIZE], const uint8_t* bytes, const Key* account) {
+    memset(reply, 0, ACCOUNT_RESPONSE_METADATA_SIZE);
     reply[1] = reply[3] = 1;
     memcpy(reply + 4, account->b, KEY_SIZE);
     HashT hash = blob_hash(bytes);
@@ -88,13 +87,13 @@ void send_request(struct Client* cli, ContextID id, struct Buffer* buff) {
     }
     if (host->synchronous) {
         if (operation == 1) {
-            uint8_t reply[LOGIN_LOOKUP_SIZE];
-            lookup(reply, blob, &identity.pub);
+            uint8_t reply[ACCOUNT_RESPONSE_METADATA_SIZE];
+            reply_metadata(reply, blob, &identity.pub);
             host->response = client_parse_response(cli, id, reply, sizeof(reply));
             memset(reply, 0, sizeof(reply));
-        } else {
-            assert(operation == 2);
-            host->response = deliver_blob(host, blob, 11);
+            if (host->response == CLIENT_OK) {
+                host->response = deliver_blob(host, blob, 11);
+            }
         }
     }
 }
@@ -115,13 +114,12 @@ static void begin(Host* host, const uint8_t* pwd, size_t size) {
 }
 
 static void resolve(Host* host, const uint8_t* bytes, const Key* account) {
-    uint8_t reply[LOGIN_LOOKUP_SIZE];
-    lookup(reply, bytes, account);
+    uint8_t reply[ACCOUNT_RESPONSE_METADATA_SIZE];
+    reply_metadata(reply, bytes, account);
     assert(client_parse_response(host->cli, host->id, reply, sizeof(reply)) == CLIENT_OK);
     memset(reply, 0, sizeof(reply));
-    HashT hash = blob_hash(bytes);
-    assert(host->size == LOGIN_FETCH_SIZE && host->request[1] == 1 && host->request[3] == 2);
-    assert(memcmp(host->request + 4, hash.b, HASH_SIZE) == 0);
+    assert(host->size == 11 && host->request[3] == 1);
+    assert(memcmp(host->request + 6, "alice", 5) == 0);
 }
 
 static void assert_locked(struct Client* cli) {
@@ -135,24 +133,18 @@ static void password_stays_local(void) {
     const uint8_t other_password[] = "a completely different unlock password";
     const uint8_t* passwords[] = {password, other_password};
     const size_t sizes[] = {sizeof(password) - 1, sizeof(other_password) - 1};
-    const uint8_t expected_lookup[] = {0, 1, 0, 1, 0, 5, 'a', 'l', 'i', 'c', 'e'};
-    uint8_t expected_fetch[LOGIN_FETCH_SIZE] = {0, 1, 0, 2};
-    HashT hash = blob_hash(blob);
-    memcpy(expected_fetch + 4, hash.b, HASH_SIZE);
+    const uint8_t expected_request[] = {0, 1, 0, 1, 0, 5, 'a', 'l', 'i', 'c', 'e'};
     for (size_t i = 0; i < 2; i++) {
         Host host = new_host();
         host.retain = true;
         begin(&host, passwords[i], sizes[i]);
         assert(host.pending->b != host.cli->login.password.b);
-        assert(host.size == sizeof(expected_lookup));
-        assert(memcmp(host.request, expected_lookup, sizeof(expected_lookup)) == 0);
+        assert(host.size == sizeof(expected_request));
+        assert(memcmp(host.request, expected_request, sizeof(expected_request)) == 0);
         client_return_buffer(host.cli, host.pending);
         host.pending = NULL;
         resolve(&host, blob, &identity.pub);
-        assert(host.pending->b != host.cli->login.password.b);
-        assert(host.size == sizeof(expected_fetch));
-        assert(memcmp(host.request, expected_fetch, sizeof(expected_fetch)) == 0);
-        client_return_buffer(host.cli, host.pending);
+        assert(host.calls == 1 && !host.pending);
         assert(client_cancel_login(host.cli) == CLIENT_OK);
         destroy_client(host.cli);
     }
@@ -212,26 +204,26 @@ static void failures_and_cleanup(void) {
     assert(client_parse_response(host.cli, host.id, NULL, 0) == CLIENT_ERR);
     assert_locked(host.cli);
     begin(&host, password, sizeof(password) - 1);
-    uint8_t reply[LOGIN_LOOKUP_SIZE + 1];
-    lookup(reply, blob, &identity.pub);
+    uint8_t reply[ACCOUNT_RESPONSE_METADATA_SIZE + 1];
+    reply_metadata(reply, blob, &identity.pub);
     reply[71]++;
-    assert(client_parse_response(host.cli, host.id, reply, LOGIN_LOOKUP_SIZE) == CLIENT_ERR);
+    assert(client_parse_response(host.cli, host.id, reply, ACCOUNT_RESPONSE_METADATA_SIZE) == CLIENT_ERR);
     assert_locked(host.cli);
     begin(&host, password, sizeof(password) - 1);
-    lookup(reply, blob, &identity.pub);
+    reply_metadata(reply, blob, &identity.pub);
     assert(client_parse_response(host.cli, host.id, reply, sizeof(reply)) == CLIENT_ERR);
     assert_locked(host.cli);
 
     begin(&host, password, sizeof(password) - 1);
-    host.fail = true;
-    lookup(reply, blob, &identity.pub);
-    assert(client_parse_response(host.cli, host.id, reply, LOGIN_LOOKUP_SIZE) == CLIENT_ERR);
+    reply_metadata(reply, blob, &identity.pub);
+    assert(client_parse_response(host.cli, host.id, reply, ACCOUNT_RESPONSE_METADATA_SIZE) == CLIENT_OK);
+    // A repeated metadata reply cannot be mistaken for header payload.
+    assert(client_parse_response(host.cli, host.id, reply, ACCOUNT_RESPONSE_METADATA_SIZE) == CLIENT_ERR);
     assert_locked(host.cli);
-    host.fail = false;
     begin(&host, password, sizeof(password) - 1);
     ContextID unrelated = client_new_context(&host.cli->net);
-    lookup(reply, blob, &identity.pub);
-    assert(client_parse_response(host.cli, unrelated, reply, LOGIN_LOOKUP_SIZE) == CLIENT_ERR);
+    reply_metadata(reply, blob, &identity.pub);
+    assert(client_parse_response(host.cli, unrelated, reply, ACCOUNT_RESPONSE_METADATA_SIZE) == CLIENT_ERR);
     assert(host.cli->login.id == host.id);
     client_free_context(host.cli, unrelated);
     resolve(&host, blob, &identity.pub);
@@ -328,24 +320,24 @@ static void retained_requests(void) {
     ContextID first = host.id;
     Buffer* request = host.pending;
     assert(context_release_send_buffer(host.cli, first) == CLIENT_CONN_BUSY);
-    uint8_t reply[LOGIN_LOOKUP_SIZE];
-    lookup(reply, blob, &identity.pub);
+    uint8_t reply[ACCOUNT_RESPONSE_METADATA_SIZE];
+    reply_metadata(reply, blob, &identity.pub);
     assert(client_parse_response(host.cli, first, reply, sizeof(reply)) == CLIENT_OK);
     memset(reply, 0, sizeof(reply));
-    assert(host.calls == 1 && !host.cli->login.fetching);
+    assert(host.calls == 1 && host.cli->login.metadata_ready);
     assert(memcmp(request->b + 6, "alice", 5) == 0);
-    assert(marshal_get_user_data_request(host.cli, first) == CLIENT_CONN_BUSY);
-    host.pending = NULL;
-    client_return_buffer(host.cli, request);
-    assert(host.calls == 2 && host.cli->login.fetching);
-    HashT hash = blob_hash(blob);
-    assert(memcmp(host.pending->b + 4, hash.b, HASH_SIZE) == 0);
+    ContextID retry;
+    assert(client_login(
+        host.cli, "alice", password, sizeof(password) - 1, &retry
+    ) == CLIENT_CONN_BUSY);
+
+    // All replies can arrive while the runtime still holds the outgoing buffer.
     assert(deliver_blob(&host, blob, 5) == CLIENT_PARSE_DONE);
-    assert(host.cli->net.states[first].release_pending);
-    assert(memcmp(host.pending->b + 4, hash.b, HASH_SIZE) == 0);
+    assert(host.calls == 1 && host.cli->net.states[first].release_pending);
+    assert(memcmp(request->b + 6, "alice", 5) == 0);
     assert(host.cli->net.free_head != first);
-    client_return_buffer(host.cli, host.pending);
-    assert(host.cli->net.free_head == first);
+    client_return_buffer(host.cli, request);
+    assert(host.calls == 1 && host.cli->net.free_head == first);
     host.pending = NULL;
     destroy_client(host.cli);
 
@@ -435,7 +427,7 @@ static void synchronous_transport(void) {
     host.synchronous = true;
     active_host = &host;
     assert(client_login(host.cli, "alice", password, sizeof(password) - 1, &host.id) == CLIENT_PARSE_DONE);
-    assert(client_is_logged_in(host.cli) && host.calls == 2);
+    assert(client_is_logged_in(host.cli) && host.calls == 1);
     destroy_client(host.cli);
     host = new_host();
     host.synchronous = true;

@@ -14,11 +14,14 @@ Released contexts are put back on a free list.
 
 ## Files
 
-netwrk/marshalers/ contains outgoing request builders, one file per request family.
-netwrk/parsers/ contains incoming reply handlers, including blob assembly.
-marshalers.h declares request builders and parsers.h declares and registers reply handlers.
-The separate codec/ directory handles plaintext records after client-side decryption.
-login.c coordinates the login operation.
+networking/ holds contexts, networking buffers, and response dispatch.
+operations/login.c groups username request preparation, sending, and reply handling.
+codec/login.* holds the username request and response metadata byte formats.
+codec/blob.* currently assembles encrypted transfer chunks in client-owned storage.
+codec/ also handles account, feed-page, and package plaintext after decryption.
+networking/dispatch.c contains the response handler table; dispatch.h declares it.
+networking/client.c handles returned send buffers without triggering login requests.
+requests/post.c belongs to the unfinished legacy post path.
 
 ## Request flow
 
@@ -54,14 +57,14 @@ A context can then be reused for another exchange.
 
 ## References
 
-- [client/src/netwrk/networker.h:13](../../client/src/netwrk/networker.h#L13) defines each connection state record.
-- [client/src/netwrk/networker.h:32](../../client/src/netwrk/networker.h#L32) groups states, buffers, and parsers.
-- [client/src/netwrk/context.h:13](../../client/src/netwrk/context.h#L13) defines the connection states.
-- [client/src/netwrk/client.c:44](../../client/src/netwrk/client.c#L44) allocates a context from the free list.
-- [client/src/netwrk/client.c:56](../../client/src/netwrk/client.c#L56) releases a context and its buffers.
-- [client/src/netwrk/client.c:94](../../client/src/netwrk/client.c#L94) dispatches a response to its parser.
-- [client/src/netwrk/context.c:36](../../client/src/netwrk/context.c#L36) ensures a buffer has sufficient capacity.
-- [client/src/netwrk/parsers.h:22](../../client/src/netwrk/parsers.h#L22) lists the data response parsers.
+- [client/src/networking/networker.h:13](../../client/src/networking/networker.h#L13) defines each connection state record.
+- [client/src/networking/networker.h:32](../../client/src/networking/networker.h#L32) groups states, buffers, and parsers.
+- [client/src/networking/context.h:13](../../client/src/networking/context.h#L13) defines the connection states.
+- [client/src/networking/client.c:44](../../client/src/networking/client.c#L44) allocates a context from the free list.
+- [client/src/networking/client.c:56](../../client/src/networking/client.c#L56) releases a context and its buffers.
+- [client/src/networking/client.c:94](../../client/src/networking/client.c#L94) dispatches a response to its parser.
+- [client/src/networking/context.c:36](../../client/src/networking/context.c#L36) ensures a buffer has sufficient capacity.
+- [client/src/networking/dispatch.c](../../client/src/networking/dispatch.c) registers internal response handlers.
 
 ## TODO
 

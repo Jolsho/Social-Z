@@ -7,8 +7,8 @@
 #undef malloc
 #undef calloc
 #include "client.h"
-#include "netwrk/context.h"
-#include "netwrk/parsers.h"
+#include "networking/context.h"
+#include "networking/dispatch.h"
 #include "sz_common/hash.h"
 #include <assert.h>
 #include <stdlib.h>

@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #include "client.h"
-#include "netwrk/context.h"
+#include "codec/blob.h"
+#include "networking/context.h"
 #include "sz_common/hash.h"
 #include <stdlib.h>
 

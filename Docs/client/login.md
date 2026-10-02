@@ -12,7 +12,7 @@ Post packages have their own keys retained in encrypted feed metadata.
 The host implements the existing send_request() hook.
 Call client_login() with the username, password bytes, their length, and an output ContextID.
 The client copies the password into its pool.
-marshal_get_user_data_request() in netwrk/marshalers builds the lookup or fetch body.
+login_send_request() in operations/login.c uses marshal_account_request() and sends one username request.
 The request uses the context's send buffer.
 login.c coordinates sending, credentials, and cancellation.
 The send hook receives that buffer with ownership of its pooled bytes.
@@ -23,12 +23,13 @@ Return all outstanding buffers before destroying the client.
 A failed send can call client_cancel_login().
 
 Pass replies to client_parse_response() with the supplied ContextID.
-parse_user_data() in netwrk/parsers validates lookup replies.
-It delegates blob assembly to parse_blob() in that same directory.
+login_handle_response() in operations/login.c parses response metadata through parse_account_response_metadata().
+It delegates blob assembly to parse_blob() in codec/blob.c.
 Incoming response memory is borrowed only during parsing.
-Retained lookup fields and chunks are copied into client-owned storage.
+Retained metadata fields and chunks are copied into client-owned storage.
 Replies may arrive synchronously or asynchronously.
-If lookup arrives before its send buffer is returned, fetch waits for that return.
+The node resolves the username and sends metadata followed by encrypted header chunks.
+No second request is sent, and replies can finish before the outgoing buffer is returned.
 Cancellation and completion reserve a context until its host-held buffer is returned.
 
 CLIENT_OK means more work is pending.
@@ -45,11 +46,10 @@ Fixed integers below use big-endian encoding.
 These are login request bodies for the host to route through its transport.
 The generic node operation framing is still separate work.
 
-Lookup request: version:u16=1, operation:u16=1, username_length:u16, username bytes.
-Lookup reply: version:u16=1, operation:u16=1, account_key:32, blob_hash:32, blob_size:u32.
+Account request: version:u16=1, operation:u16=1, username_length:u16, username bytes.
+Response metadata: version:u16=1, operation:u16=1, account_key:32, blob_hash:32, blob_size:u32.
 The reply is exactly 72 bytes and requires blob_size=213.
-Fetch request: version:u16=1, operation:u16=2, blob_hash:32.
-Fetch replies use the existing chunk format.
+After the response metadata, the node sends the encrypted header using the existing chunk format.
 The first chunk carries the hash and native uint64_t total size before its payload.
 Continuations carry the whole-blob hash and payload.
 The client binds the expected hash and size before assembly and checks the completed ciphertext.
@@ -70,7 +70,7 @@ The header and length-prefixed username are authenticated additional data.
 The 132-byte plaintext uses version:u16=1 and record_kind:u16=2.
 It contains page indices, the inbox locator, signing_seed, and data_key.
 See [account header](account.md) for the exact field order.
-The recovered signing identity must match the lookup's account key.
+The recovered signing identity must match the response's account key.
 Plaintext, derived unlock keys, and stream state are wiped after decoding.
 Only ciphertext enters the blob cache.
 
@@ -85,8 +85,8 @@ Connect the bootstrap bodies to the node-side resolver and operation framing.
 Add protected local credential storage and password-change publication.
 Registration, recovery, and retrieval of the referenced private pages are still unfinished.
 Password encryption and plaintext interpretation live together in client/src/codec/account.c.
-client/src/login.c coordinates requests, responses, and cancellation.
-Private lookup and fetch helpers live in client/src/netwrk/login.c and login.h.
+client/src/operations/login.c coordinates requests, responses, and cancellation.
+Private username request and response metadata helpers live in client/src/codec/login.c and login.h.
 Common contains no login API.
 The node will decode its small request bodies in the relevant handler.
 The stream encryption follows the [libsodium secretstream API](https://doc.libsodium.org/secret-key_cryptography/secretstream).

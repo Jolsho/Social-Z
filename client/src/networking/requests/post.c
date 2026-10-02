@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-#include "sz_client/client.h"
-#include "netwrk/context.h"
-#include "netwrk/parsers.h"
+#include "client.h"
+#include "networking/context.h"
+#include "networking/dispatch.h"
 
 #define GET_POST_REQUEST_SIZE   KEY_SIZE + sizeof(int)
 

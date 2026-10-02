@@ -3,13 +3,14 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-#include "netwrk/login.h"
+#include "codec/login.h"
 
 static uint64_t read_uint(const uint8_t* p, size_t n) {
     uint64_t v = 0;
 
-    for (size_t i = 0; i < n; i++)
+    for (size_t i = 0; i < n; i++) {
         v = (v << 8) | p[i];
+    }
 
     return v;
 }
@@ -26,20 +27,26 @@ static void write_uint(
 }
 
 size_t login_username_size(const char* username) {
-    if (!username)
+    if (!username) {
         return 0;
+    }
 
     size_t n = 0;
-    while (n <= LOGIN_USERNAME_MAX && username[n])
+    while (n <= LOGIN_USERNAME_MAX && username[n]) {
         n++;
+    }
 
     return n && n <= LOGIN_USERNAME_MAX ? n : 0;
 }
 
-size_t login_lookup_request(uint8_t out[6 + LOGIN_USERNAME_MAX], const char* username) {
+size_t marshal_account_request(
+    uint8_t out[6 + LOGIN_USERNAME_MAX],
+    const char* username
+) {
     size_t n = login_username_size(username);
-    if (!out || !n)
+    if (!out || !n) {
         return 0;
+    }
 
     write_uint(out, 1, 2);
     write_uint(out + 2, 1, 2);
@@ -49,21 +56,16 @@ size_t login_lookup_request(uint8_t out[6 + LOGIN_USERNAME_MAX], const char* use
     return 6 + n;
 }
 
-void login_fetch_request(uint8_t out[LOGIN_FETCH_SIZE], const HashT* hash) {
-    write_uint(out, 1, 2);
-    write_uint(out + 2, 2, 2);
-    memcpy(out + 4, hash->b, HASH_SIZE);
-}
-
-int login_read_lookup(
-    LoginLookup* out,
+int parse_account_response_metadata(
+    AccountResponseMetadata* out,
     const uint8_t* bytes,
     size_t size
 ) {
-    if (!out || !bytes || size != LOGIN_LOOKUP_SIZE ||
+    if (!out || !bytes || size != ACCOUNT_RESPONSE_METADATA_SIZE ||
         read_uint(bytes, 2) != 1 || read_uint(bytes + 2, 2) != 1 ||
-        read_uint(bytes + 68, 4) != LOGIN_BLOB_SIZE)
+        read_uint(bytes + 68, 4) != LOGIN_BLOB_SIZE) {
         return -1;
+    }
 
     memcpy(out->account.b, bytes + 4, KEY_SIZE);
     memcpy(out->hash.b, bytes + 36, HASH_SIZE);

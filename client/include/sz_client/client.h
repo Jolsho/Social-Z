@@ -45,13 +45,14 @@ int client_get_public_key(const struct Client* cli, uint8_t public_key[32]);
 /// Buffer is used as a reference to WASM buffers.
 /// They represent ownership of a block of memory.
 struct Buffer;
-// Return the original outgoing buffer after sending or copying its bytes.
+// Return the original outgoing buffer once the host no longer needs its bytes.
+// A response does not release the outgoing buffer.
 // Return outstanding buffers before destroying the client.
 void client_return_buffer(struct Client* cli, struct Buffer* buff);
 
 
-/// Implementors are given ownership of the buffer and must manage.
-/// Expected to be asynchronous and implementors can call client_parse_response() after.
+// The host retains the buffer asynchronously until client_return_buffer.
+// Returning from send_request does not release it or complete the request.
 extern void send_request(struct Client* cli, ContextID id, struct Buffer* buff);
 
 

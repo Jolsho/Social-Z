@@ -5,8 +5,8 @@
  */
 
 #include "client.h"
-#include "netwrk/context.h"
-#include "netwrk/networker.h"
+#include "networking/context.h"
+#include "networking/networker.h"
 #include <stdlib.h>
 
 int init_networker(Networker* net) {
@@ -99,4 +99,25 @@ int client_parse_response(struct Client* cli, ContextID id, uint8_t* b, uint64_t
         !cli->net.parsers[state.parser_id]) return CLIENT_ERR;
 
     return cli->net.parsers[state.parser_id](cli, id, b, l);
+}
+
+void client_return_buffer(struct Client* cli, struct Buffer* buff) {
+    if (!cli || !buff || !cli->net.send_buffers) {
+        return;
+    }
+
+    for (ContextID id = 1; id < MAX_CONNS; id++) {
+        ConState* state = &cli->net.states[id];
+        if (buff != &cli->net.send_buffers[id] || !state->send_owned) {
+            continue;
+        }
+
+        state->send_owned = false;
+        context_release_send_buffer(cli, id);
+
+        if (state->release_pending) {
+            client_free_context(cli, id);
+        }
+        return;
+    }
 }

@@ -25,7 +25,8 @@ Login and blob response parsers are enabled while the feed format is being repai
 
 Post metadata views, packed FeedPage storage, and a Feed vector of loaded pages.
 Feed navigation is still a placeholder.
-Request and reply code lives under netwrk.
+Networking handles contexts, buffers, and dispatch.
+Login request preparation and response handling live together under operations.
 
 ### codec
 
@@ -38,9 +39,10 @@ The node receives encrypted blobs and does not interpret these fields.
 ### [networking](networking.md)
 
 Request contexts, connection state, and response dispatch.
-marshalers/ builds outgoing requests and parsers/ handles replies.
-client/src/login.c coordinates login without mixing that workflow into record codecs.
-netwrk/login.c keeps the small lookup and fetch message helpers private to the client.
+requests/ contains the unfinished legacy post request.
+operations/login.c coordinates login, prepares its requests, and handles its replies.
+codec/login.c keeps the username request and response metadata helpers private to the client.
+networking/client.c handles returned send buffers independently of login replies.
 
 ### [world](world.md)
 

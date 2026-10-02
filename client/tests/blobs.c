@@ -5,11 +5,11 @@
  */
 
 #include "client.h"
+#include "codec/blob.h"
 #include "sz_common/hash.h"
 #include <assert.h>
 #include <stdlib.h>
 
-int parse_blob(struct Client*, ContextID, uint8_t*, uint64_t);
 void client_free_context(struct Client*, ContextID);
 static Parser parsers[] = {parse_blob};
 

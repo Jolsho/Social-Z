@@ -41,8 +41,8 @@ FeedPage owns packed post storage, its size and capacity, and a page_number.
 Feed owns a vector of loaded pages and tracks the current page number.
 Its navigation functions are declared but not implemented yet.
 codec/ holds the plaintext formats understood only by the client.
-netwrk/marshalers/ builds requests and netwrk/parsers/ processes replies.
-login.c owns the login workflow.
+operations/login.c owns login requests and response handling.
+networking/ owns transfer assembly, context buffers, and dispatch.
 
 ## User data
 
@@ -74,21 +74,21 @@ Callers need to account for that when returning network buffers to the pool.
 - [client/src/content/post.h:55](../../client/src/content/post.h#L55) rejects zero blob counts.
 - [client/src/content/feed_page.h](../../client/src/content/feed_page.h) defines the page and direct post access.
 - [client/src/content/feed_page.c](../../client/src/content/feed_page.c) appends entries and owns their storage.
-- [client/src/netwrk/marshalers/post.c:13](../../client/src/netwrk/marshalers/post.c#L13) builds the request with a key and feed offset.
-- [client/src/netwrk/parsers/post.c:11](../../client/src/netwrk/parsers/post.c#L11) parses a feed response.
-- [client/src/netwrk/parsers/blob.c:11](../../client/src/netwrk/parsers/blob.c#L11) parses a blob into the local store.
+- [client/src/networking/marshalers/post.c:13](../../client/src/networking/marshalers/post.c#L13) builds the request with a key and feed offset.
+- [client/src/networking/parsers/post.c:11](../../client/src/networking/parsers/post.c#L11) parses a feed response.
+- [client/src/codec/blob.c:11](../../client/src/codec/blob.c#L11) parses a blob into the local store.
 - [client/src/utils/store.h:23](../../client/src/utils/store.h#L23) defines the store's memory and priority state.
 - [client/src/utils/store.h:40](../../client/src/utils/store.h#L40) documents ownership when assigning an item.
-- [client/src/netwrk/marshalers/user.c:10](../../client/src/netwrk/marshalers/user.c#L10) marshals username lookup and blob fetch requests.
-- [client/src/netwrk/parsers/user.c:10](../../client/src/netwrk/parsers/user.c#L10) parses lookup replies and unlocks verified user data.
+- [client/src/operations/login.c](../../client/src/operations/login.c) marshals the username request for encrypted account-header retrieval.
+- [client/src/operations/login.c](../../client/src/operations/login.c) parses lookup replies and unlocks verified user data.
 
 ## TODO
 
 - Queue marshaled requests for sending.
-  [client/src/netwrk/marshalers/post.c:44](../../client/src/netwrk/marshalers/post.c#L44)
+  [client/src/networking/marshalers/post.c:44](../../client/src/networking/marshalers/post.c#L44)
 
 - Implement node username lookup and account-header retrieval.
   [login](login.md)
 
 - Use the response pagination flag to continue fetching feed pages.
-  [client/src/netwrk/parsers/post.c:20](../../client/src/netwrk/parsers/post.c#L20)
+  [client/src/networking/parsers/post.c:20](../../client/src/networking/parsers/post.c#L20)

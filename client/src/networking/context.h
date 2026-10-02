@@ -7,7 +7,7 @@
 #pragma once
 #include "sz_client/client.h"
 #include "utils/buffers.h"
-#include "netwrk/networker.h"
+#include "networking/networker.h"
 
 #define ID_CAP MAX_CONNS
 

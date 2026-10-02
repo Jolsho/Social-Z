@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-#include "netwrk/context.h"
+#include "networking/context.h"
 #include "client.h"
 
 int context_release_recv_buffer(struct Client* cli, ContextID id) {

@@ -6,7 +6,7 @@
 
 #pragma  once
 #include "wrld/wrld.h"
-#include "netwrk/networker.h"
+#include "networking/networker.h"
 #include "utils/store.h"
 #include "content/feed.h"
 #include "codec/account.h"
@@ -35,10 +35,10 @@ struct Client {
     bool            logged_in;
     struct {
         ContextID id;
-        bool lookup_ready, fetching;
+        bool metadata_ready;
         char username[LOGIN_USERNAME_MAX + 1];
         Buffer password;
-        LoginLookup lookup;
+        AccountResponseMetadata metadata;
     } login;
 
     ///////// DATA STORES ///////////
