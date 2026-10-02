@@ -170,22 +170,9 @@ bool client_update_wrld(struct Client* cli) {
             ScrollState* ss = &wrld->scrolls[wrld->view_state];
             ss->scroll_height += wrld->input.mouse.wheel;
 
-            for (
-                int i = ss->anchor_item_idx; 
-                i < feed_get_size(&cli->post_feed); 
-                wrld->input.mouse.wheel > 0 ? i++ : i--
-            ) {
-                //  TODO
-                // if (post_offset <=  ss->offset <= post_offset + height,)
-                // Dont know how to determine the height of the fucking thing.
-                // have an array of heights?
-                // i mean it should be that and if we dont have the height
-                // that initiates entitizing the thing.
-                //
-                // this may cause a fetch.
-                // in the case we are fetching and try to render beyond.
-                // add a loading icon past last post and hold scroll_offset there.
-            }
+            // TODO: Resolve the current feed page, then lay out its visible posts.
+            // Missing pages will need a pending state while retrieval is scheduled.
+
         }
     }
 

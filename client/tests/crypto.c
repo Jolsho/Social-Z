@@ -4,7 +4,7 @@
  */
 
 #include "utils/crypto.h"
-#include "codec/feed.h"
+#include "codec/feed_page.h"
 #include <sodium.h>
 #include <assert.h>
 
@@ -166,15 +166,15 @@ static void multiple_records(void) {
 
 static void feed_record(void) {
     FeedPage page = {0}, parsed = {0};
-    assert(feed_page_init(&page, 7) == FEED_OK);
+    assert(feed_page_init(&page, 7) == FEED_PAGE_OK);
     uint8_t post[POST_SIZE] = {0};
     uint32_t blobs = 1;
     memcpy(post + POST_BLOB_COUNT_OFFSET, &blobs, sizeof(blobs));
-    assert(feed_page_append_posts(&page, post, sizeof(post)) == FEED_OK);
+    assert(feed_page_append_posts(&page, post, sizeof(post)) == FEED_PAGE_OK);
 
     uint8_t bytes[FEED_PAGE_HEADER_SIZE + sizeof(post) + CRYPT_RECORD_OVERHEAD];
     size_t size;
-    assert(marshal_feed_page(bytes, sizeof(bytes), &size, &page) == FEED_OK);
+    assert(marshal_feed_page(bytes, sizeof(bytes), &size, &page) == FEED_PAGE_OK);
     Buffer buffer = {bytes, sizeof(bytes), size};
     CryptCtx writer = {0}, reader = {0};
     uint8_t header[CRYPT_HEADER_SIZE];
@@ -182,10 +182,10 @@ static void feed_record(void) {
     assert(encrypt(&writer, &buffer, NULL, 0, true) == 0);
     assert(crypt_init_decrypt(&reader, header, &key) == 0);
     assert(decrypt(&reader, &buffer, NULL, 0, true) == 0);
-    assert(parse_feed_page(&parsed, buffer.b, buffer.size) == FEED_OK);
+    assert(parse_feed_page(&parsed, buffer.b, buffer.size) == FEED_PAGE_OK);
     memset(bytes, 0, sizeof(bytes));
-    assert(parsed.index == 7 && parsed.posts.size == 1);
-    assert(memcmp(parsed.posts.data, post, sizeof(post)) == 0);
+    assert(parsed.page_number == 7 && parsed.size == 1);
+    assert(memcmp(parsed.posts, post, sizeof(post)) == 0);
 
     feed_page_destroy(&page);
     feed_page_destroy(&parsed);

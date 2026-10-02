@@ -35,12 +35,25 @@ static void test_setup_and_allocation_failures(void)
     struct Client* cli = init_client();
     assert(cli);
     size_t allocations = allocation_count;
-    assert(cli->post_feed.index && cli->post_feed.data && !cli->post_feed.size);
+    assert(!cli->feed.pages && !cli->feed.size && !cli->feed.cap);
+    assert(cli->feed.current_page_number == 0);
     assert(cli->blob_store.table.nodes && cli->net.recv_buffers && cli->net.send_buffers);
     assert(cli->wrld.bvh.root == BVH_NULL && !cli->wrld.bvh.nodes);
     assert(cli->wrld.focused == ENTITY_ID_INVALID);
     KeyPair empty_keys = {0};
     assert(memcmp(&cli->keys, &empty_keys, sizeof(empty_keys)) == 0);
+    // Client shutdown owns all loaded pages, including their package keys.
+    cli->feed.pages = calloc(2, sizeof(FeedPage));
+    assert(cli->feed.pages);
+    cli->feed.size = cli->feed.cap = 2;
+    for (size_t i = 0; i < cli->feed.size; i++) {
+        assert(feed_page_init(&cli->feed.pages[i], i + 7) == FEED_PAGE_OK);
+        uint8_t post[POST_SIZE] = {0};
+        uint32_t blobs = 1;
+        memset(post + POST_PACKAGE_KEY_OFFSET, 0xaa, KEY_SIZE);
+        memcpy(post + POST_BLOB_COUNT_OFFSET, &blobs, sizeof(blobs));
+        assert(feed_page_append_posts(&cli->feed.pages[i], post, sizeof(post)) == FEED_PAGE_OK);
+    }
     destroy_client(cli);
     destroy_client(NULL);
     for (size_t failed = 1; failed <= allocations; failed++) {

@@ -9,10 +9,10 @@ It is written in C and built as the sz_client library.
 Its public interface is in include/sz_client/client.h.
 
 The Client structure brings the main pieces together.
-It holds user keys, a post feed, a blob store, and reusable buffers.
+It holds user keys, a Feed of loaded pages, a blob store, and reusable buffers.
 It also holds network state and the visual world.
 
-init_client() initializes the pool, cache, feed, and networking.
+init_client() initializes the pool, cache, and networking with an empty Feed.
 destroy_client() releases those resources.
 Rendering startup initializes the world separately.
 Username/password login uses the existing request marshaler, send_request hook, and response parser.
@@ -21,15 +21,17 @@ Login and blob response parsers are enabled while the feed format is being repai
 
 ## Components
 
-### [data](data.md)
+### [content](content.md)
 
-In-memory post views and packed feed storage.
+Post metadata views, packed FeedPage storage, and a Feed vector of loaded pages.
+Feed navigation is still a placeholder.
 Request and reply code lives under netwrk.
 
 ### codec
 
 Client-only plaintext marshaling and parsing.
 The [account header](account.md) and [feed pages](feed.md) are encoded here.
+Feed-page encoding lives in codec/feed_page.*; storage and paging live in content.
 The node receives encrypted blobs and does not interpret these fields.
 
 ### [networking](networking.md)

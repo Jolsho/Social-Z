@@ -8,7 +8,7 @@
 #include "wrld/wrld.h"
 #include "netwrk/networker.h"
 #include "utils/store.h"
-#include "data/feed.h"
+#include "content/feed.h"
 #include "codec/account.h"
 
 #ifdef NATIVE
@@ -42,7 +42,7 @@ struct Client {
     } login;
 
     ///////// DATA STORES ///////////
-    Feed            post_feed;
+    Feed            feed;
     Store           blob_store;
 
 

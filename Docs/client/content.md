@@ -1,12 +1,12 @@
-# Client data
+# Client content
 
-The data layer is supposed to hold useful content independently of its display.
+The content layer is supposed to hold useful content independently of its display.
 A post can stay in a feed while its image or other content is fetched separately.
 The same stored item can later be used by different views.
 
 Data is kept separately from the entities used to display it.
-A feed holds raw entries in a byte buffer.
-An index records the offset and size of each entry.
+A feed page holds fixed-size entries in one packed byte buffer.
+An entry is found directly at its position multiplied by POST_SIZE.
 This lets the client refer to entries without a separate allocation for each one.
 
 ## Posts
@@ -33,7 +33,10 @@ Packed feed data is wiped before replacement or destruction because it contains 
 
 ## Where the code lives
 
-The data directory holds post views and packed feed storage.
+The content directory holds PostView and FeedPage.
+FeedPage owns packed post storage, its size and capacity, and a page_number.
+Feed owns a vector of loaded pages and tracks the current page number.
+Its navigation functions are declared but not implemented yet.
 codec/ holds the plaintext formats understood only by the client.
 netwrk/marshalers/ builds requests and netwrk/parsers/ processes replies.
 login.c owns the login workflow.
@@ -47,14 +50,14 @@ The password stays local.
 See [login](login.md) for the bootstrap format and ownership rules.
 
 The post request includes a user key and a feed offset.
-The legacy response parser appends posts to the feed, but is currently disabled.
+The legacy response parser is disabled and rejects calls until feed-page retrieval is connected.
 Encrypted feed-page retrieval is not wired yet.
 
 ## How content is represented
 
 A post is a compact description of who published something and when.
 Its package hash identifies the encrypted content rather than embedding it.
-The feed index lets layout code find an entry in the packed byte storage.
+Fixed-size addressing lets layout code find an entry without an offset index.
 The blob store provides the bytes behind a content hash.
 
 The store has a memory limit and priority information for eviction.
@@ -64,10 +67,10 @@ Callers need to account for that when returning network buffers to the pool.
 
 ## References
 
-- [client/src/data/post.h:17](../../client/src/data/post.h#L17) defines the post field offsets.
-- [client/src/data/post.h:55](../../client/src/data/post.h#L55) rejects zero blob counts.
-- [client/src/data/feed.h:19](../../client/src/data/feed.h#L19) defines packed feed storage and its index.
-- [client/src/data/feed.c:41](../../client/src/data/feed.c#L41) implements entry appending.
+- [client/src/content/post.h:17](../../client/src/content/post.h#L17) defines the post field offsets.
+- [client/src/content/post.h:55](../../client/src/content/post.h#L55) rejects zero blob counts.
+- [client/src/content/feed_page.h](../../client/src/content/feed_page.h) defines the page and direct post access.
+- [client/src/content/feed_page.c](../../client/src/content/feed_page.c) appends entries and owns their storage.
 - [client/src/netwrk/marshalers/post.c:13](../../client/src/netwrk/marshalers/post.c#L13) builds the request with a key and feed offset.
 - [client/src/netwrk/parsers/post.c:11](../../client/src/netwrk/parsers/post.c#L11) parses a feed response.
 - [client/src/netwrk/parsers/blob.c:11](../../client/src/netwrk/parsers/blob.c#L11) parses a blob into the local store.

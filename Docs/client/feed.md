@@ -42,8 +42,11 @@ The development layout changed directly; its version remains 1 because the proje
 
 ## Ownership and paging
 
-FeedPage wraps the existing packed Feed with a page index.
-Parsing copies the borrowed bytes and rebuilds the local offset/size index.
+FeedPage owns one packed post allocation, size and capacity in posts, and a page_number.
+Post lookup uses the fixed POST_SIZE stride, without a separate index allocation.
+Storage and page operations live in client/src/content.
+The plaintext codec lives separately in client/src/codec/feed_page.*.
+Parsing copies the borrowed bytes into owned storage.
 It converts stored timestamps and blob counts to their native representation used by PostView.
 Replaced and destroyed packed data is wiped before freeing it, including the package keys.
 Malformed input or allocation failure leaves the old page unchanged.
@@ -54,12 +57,23 @@ If a valid batch cannot fit, append returns FEED_PAGE_FULL without changing the 
 Publishing can then create a new page with the next index and append the new post there.
 The codec itself does not advance indices or update the account header.
 
+## Feed manager
+
+Feed owns a vector of loaded FeedPage values, size and capacity, and current_page_number.
+Loaded page numbers need not match their vector positions.
+The client starts with an empty Feed and releases all loaded pages on shutdown.
+feed_get_current_page() and feed_next_page() are declarations only.
+Their pending-load behavior is still undecided.
+They may initiate client requests or queue tasks for the networker.
+Callers must not use them until that contract is defined and implemented.
+Page views will be borrowed and may move when the vector grows.
+
 ## References
 
-- [client/src/codec/feed.h:15](../../client/src/codec/feed.h#L15) defines the page and ownership contract.
-- [client/src/codec/feed.c:68](../../client/src/codec/feed.c#L68) enforces the page limit when appending.
-- [client/src/codec/feed.c:87](../../client/src/codec/feed.c#L87) writes the plaintext page.
-- [client/src/codec/feed.c:138](../../client/src/codec/feed.c#L138) validates and copies incoming plaintext.
+- [client/src/content/feed.h](../../client/src/content/feed.h) outlines feed ownership and future navigation.
+- [client/src/content/feed_page.h](../../client/src/content/feed_page.h) defines the page and ownership contract.
+- [client/src/content/feed_page.c](../../client/src/content/feed_page.c) enforces page limits and owns page lifecycle.
+- [client/src/codec/feed_page.c](../../client/src/codec/feed_page.c) marshals and parses plaintext pages.
 - [client/tests/feed_page.c](../../client/tests/feed_page.c) checks the format and failure paths.
 
 ## TODO
