@@ -43,6 +43,18 @@ Treat assembled contents as provisional until parsing and whole-package authenti
 The parser performs no authentication.
 The caller supplies the plaintext byte limit and must check the feed metadata's expected blob count.
 
+## Writing
+
+Start with a zero-initialized PackageMarshaler.
+marshal_package() fills a caller-owned output buffer and reports written bytes.
+Call it again with the same marshaler and package until PACKAGE_DONE.
+Headers, size fields, and payloads may split across output chunks.
+Keep the package and its descriptors unchanged until writing finishes.
+The output buffer must not overlap package storage or marshaler state.
+The writer allocates no memory and performs no encryption.
+It checks descriptor lengths before writing the first chunk.
+Invalid input leaves output and progress unchanged.
+
 ## Stored contents
 
 Package owns an array of PackageBlob descriptors and one fixed-size plaintext buffer.
@@ -75,5 +87,5 @@ The package hash and key remain in post metadata.
 ## TODO
 
 - Define the post-data blob and attachment reference format.
-- Add package construction and the encrypted envelope.
+- Add post-data construction and the encrypted envelope.
 - Connect authenticated input and client content storage.

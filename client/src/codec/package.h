@@ -14,6 +14,7 @@
 typedef struct PackageParser {
     // Maximum complete plaintext size, including framing; set before parsing.
     size_t max_size;
+    // Partial header or size field, retained when an input chunk ends mid-field.
     uint8_t field[8];
     size_t field_size;
     uint32_t blob_index;
@@ -45,3 +46,22 @@ int parse_package_contents(
 );
 
 int finish_package(PackageParser* parser);
+
+typedef struct PackageMarshaler {
+    size_t offset;       // Bytes emitted across the complete wire package.
+    uint32_t blob_index; // Current payload; unused while writing the size table.
+    size_t blob_offset;  // Bytes emitted within that payload.
+} PackageMarshaler;
+
+/* Start with a zeroed marshaler and keep the Package unchanged until DONE.
+ * Fill a caller-owned output chunk without allocation; return MORE, DONE, or ERR.
+ * Output must not overlap the package storage or marshaler.
+ * Invalid input leaves output, written, and progress unchanged.
+ */
+int marshal_package(
+    PackageMarshaler* marshaler,
+    const Package* package,
+    uint8_t* bytes,
+    size_t capacity,
+    size_t* written
+);
