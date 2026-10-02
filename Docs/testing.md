@@ -65,9 +65,11 @@ It checks that failed calls preserve their outputs and that full u64 indices rou
 Encrypted account-header retrieval is covered by the login test through the host hook.
 The actual node resolver and transport remain unverified.
 
-The feed-page test checks mixed post sizes, exact bytes, and rebuilt entry indices.
+The feed-page test checks fixed package metadata, exact bytes, and rebuilt entry indices.
 It rejects malformed records and preserves the old page on allocation failure.
-It checks borrowed and aliased input, empty pages, and a full page containing 336 posts.
+It checks borrowed and aliased input, empty pages, and a full page containing 606 entries.
+It covers the full u32 blob-count range and rejects zero counts.
+It checks that metadata storage is wiped before growth, replacement, and destruction.
 A full-page append leaves the page unchanged.
 Feed encryption, publication, and node retrieval are not exercised yet.
 

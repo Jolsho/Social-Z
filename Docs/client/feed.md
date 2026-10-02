@@ -17,29 +17,35 @@ All integers use big-endian byte order.
 | Page index | 8 |
 | Post count | 4 |
 
-Variable-size posts follow directly after the header.
-Each contains an originator key, a signed 64-bit creation time, a hash count, and the hashes.
-Each hash identifies a data blob.
-The first hash always points to the blob containing the remaining post data.
-That blob currently holds mostly text and can hold richer post data later.
-Private post-data blobs use user_data_key, so owner feed entries need no separate decryption key.
-Publishing groups the plaintext contents of every referenced blob into one package.
-The whole package is encrypted under one delivery key and waits for retrieval.
-Its ciphertext has its own whole-blob hash and does not expose user_data_key.
-Each recipient voucher contains the package delivery key.
-Only its key subsection is encrypted using the sender's shared key with that recipient.
-Signed node-readable fields identify the recipient, package, and permission.
-The sender's signature binds those fields and the encrypted subsection.
-Permissions and vouchers allow transfer with both users' consent and deferred retrieval.
-One to five hashes make an entry 73 to 201 bytes long.
-There are no empty slots or fixed post-count limit.
-The whole plaintext page is limited to 64 KiB.
+Fixed-size metadata entries follow directly after the header.
+Each entry occupies 108 bytes.
+
+| Post field | Bytes |
+| --- | --- |
+| Originator public key | 32 |
+| Signed creation time | 8 |
+| Encrypted package hash | 32 |
+| Package decryption key | 32 |
+| Blob count inside the package | 4 |
+
+Blob count must be nonzero and uses the full u32 range.
+The package hash identifies one opaque encrypted package.
+Its internal content layout is a separate design step.
+A recipient obtains its key from the voucher and retains it in their encrypted feed metadata.
+The feed is protected by that user's data_key.
+The package keeps its original package key and need not be rebuilt for private storage or delivery.
+
+There are no empty slots or fixed post-count policy.
+The plaintext page is limited to 64 KiB, including its 16-byte header.
+That fits 606 complete entries, with a little unused room.
+The development layout changed directly; its version remains 1 because the project is not deployed.
 
 ## Ownership and paging
 
 FeedPage wraps the existing packed Feed with a page index.
 Parsing copies the borrowed bytes and rebuilds the local offset/size index.
-It converts stored timestamps to the native representation used by PostView.
+It converts stored timestamps and blob counts to their native representation used by PostView.
+Replaced and destroyed packed data is wiped before freeing it, including the package keys.
 Malformed input or allocation failure leaves the old page unchanged.
 The destination must be zero-initialized or initialized with feed_page_init().
 Initialize a fresh page and release it with feed_page_destroy().
@@ -51,9 +57,9 @@ The codec itself does not advance indices or update the account header.
 ## References
 
 - [client/src/codec/feed.h:15](../../client/src/codec/feed.h#L15) defines the page and ownership contract.
-- [client/src/codec/feed.c:78](../../client/src/codec/feed.c#L78) enforces the page limit when appending.
-- [client/src/codec/feed.c:95](../../client/src/codec/feed.c#L95) writes the plaintext page.
-- [client/src/codec/feed.c:142](../../client/src/codec/feed.c#L142) validates and copies incoming plaintext.
+- [client/src/codec/feed.c:68](../../client/src/codec/feed.c#L68) enforces the page limit when appending.
+- [client/src/codec/feed.c:87](../../client/src/codec/feed.c#L87) writes the plaintext page.
+- [client/src/codec/feed.c:138](../../client/src/codec/feed.c#L138) validates and copies incoming plaintext.
 - [client/tests/feed_page.c](../../client/tests/feed_page.c) checks the format and failure paths.
 
 ## TODO

@@ -23,8 +23,8 @@ void feed_page_destroy(FeedPage* page);
 // FULL leaves the page unchanged; publication decides when to start the next page.
 int feed_page_append_posts(FeedPage* page, uint8_t* bytes, size_t size);
 
-/* V1, kind 3: page index:u64, post count:u32, then packed variable-size posts.
- * Wire timestamps are big-endian; PostView timestamps remain native in memory.
+/* V1, kind 3: page index:u64, post count:u32, then fixed-size package metadata.
+ * Wire timestamps and blob counts are big-endian; PostView timestamps remain native in memory.
  * The offset/size index is rebuilt locally and is never serialized.
  * Parse output must be zero-initialized or initialized with feed_page_init().
  * Parsing copies borrowed input and replaces the old page only on success.

@@ -17,7 +17,7 @@ struct Client* init_client(void) {
     cs->wrld.focused = ENTITY_ID_INVALID;
     if (buffer_pool_init(&cs->pool, 256, 1024, 4096, 256, 65536, 64) != 0 ||
         store_setup(&cs->blob_store, 25 * 1024 * 1024) != STORE_OK ||
-        feed_init(&cs->post_feed, MINIMUM_POST_SIZE) != FEED_OK ||
+        feed_init(&cs->post_feed, POST_SIZE) != FEED_OK ||
         init_networker(&cs->net) != CLIENT_OK) {
         destroy_client(cs);
         return NULL;
@@ -32,8 +32,7 @@ void destroy_client(struct Client* cli) {
     destroy_networker(cli);
     store_destroy(&cli->blob_store);
     buffer_pool_destroy(&cli->pool);
-    free(cli->post_feed.index);
-    free(cli->post_feed.data);
+    feed_destroy(&cli->post_feed);
     free(cli->wrld.bvh.nodes);
     free(cli->wrld.bvh.entity_to_leaf);
     volatile uint8_t* bytes = (volatile uint8_t*)cli;

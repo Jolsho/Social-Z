@@ -5,6 +5,7 @@
  */
 
 #include "data/feed.h"
+#include <sodium.h>
 
 int feed_init(Feed* f, size_t min_item_len) {
     if (!f) return FEED_ERR;
@@ -23,6 +24,18 @@ int feed_init(Feed* f, size_t min_item_len) {
     f->cap = 100;
     f->data_cap = 100 * min_item_len;
     return FEED_OK;
+}
+
+void feed_destroy(Feed* f) {
+    if (!f) {
+        return;
+    }
+    if (f->data) {
+        sodium_memzero(f->data, f->data_cap);
+    }
+    free(f->data);
+    free(f->index);
+    memset(f, 0, sizeof(*f));
 }
 
 int feed_append(
@@ -66,7 +79,10 @@ int feed_append(
         if (cap < size) cap = size;
         index = malloc(cap * sizeof(ItemIndex));
         if (!index) {
-            if (data != f->data) free(data);
+            if (data != f->data) {
+                sodium_memzero(data, data_cap);
+                free(data);
+            }
             return FEED_ERR;
         }
         memcpy(index, f->index, f->size * sizeof(ItemIndex));
@@ -74,7 +90,10 @@ int feed_append(
 
     // Copy before freeing old storage, including when b is a view into it.
     memmove(data + f->data_size, b, (size_t)len);
-    if (data != f->data) free(f->data);
+    if (data != f->data) {
+        sodium_memzero(f->data, f->data_cap);
+        free(f->data);
+    }
     if (index != f->index) free(f->index);
     f->data = data;
     f->data_cap = data_cap;

@@ -3,7 +3,8 @@
 The account header unlocks the user's identity and locates their private pages.
 It contains the signing seed, data_key, feed-page indices, recipient-page indices, and inbox locator.
 The password-derived key encrypts the whole header.
-data_key encrypts the private pages and content blobs.
+data_key encrypts private pages and account data.
+Post packages keep their own keys, retained in encrypted feed metadata.
 Login retrieves and decrypts this single header.
 
 ## Plaintext format

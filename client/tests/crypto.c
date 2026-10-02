@@ -167,8 +167,9 @@ static void multiple_records(void) {
 static void feed_record(void) {
     FeedPage page = {0}, parsed = {0};
     assert(feed_page_init(&page, 7) == FEED_OK);
-    uint8_t post[MINIMUM_POST_SIZE] = {0};
-    post[POST_HASH_COUNT_OFFSET] = 1;
+    uint8_t post[POST_SIZE] = {0};
+    uint32_t blobs = 1;
+    memcpy(post + POST_BLOB_COUNT_OFFSET, &blobs, sizeof(blobs));
     assert(feed_page_append_posts(&page, post, sizeof(post)) == FEED_OK);
 
     uint8_t bytes[FEED_PAGE_HEADER_SIZE + sizeof(post) + CRYPT_RECORD_OVERHEAD];

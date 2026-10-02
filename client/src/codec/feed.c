@@ -29,23 +29,16 @@ static int count_posts(const uint8_t* bytes, size_t size, size_t* count) {
 
     *count = 0;
 
-    for (size_t offset = 0; offset < size;) {
-        size_t remaining = size - offset;
-        if (remaining < MINIMUM_POST_SIZE) {
+    if (size % POST_SIZE != 0) {
+        return FEED_ERR;
+    }
+
+    for (size_t offset = 0; offset < size; offset += POST_SIZE) {
+        uint32_t blobs;
+        memcpy(&blobs, bytes + offset + POST_BLOB_COUNT_OFFSET, sizeof(blobs));
+        if (blobs == 0) {
             return FEED_ERR;
         }
-
-        uint8_t hashes = bytes[offset + POST_HASH_COUNT_OFFSET];
-        if (hashes == 0 || hashes > 5) {
-            return FEED_ERR;
-        }
-
-        size_t post_size = POST_HASH_OFFSET + hashes * HASH_SIZE;
-        if (post_size > remaining) {
-            return FEED_ERR;
-        }
-
-        offset += post_size;
         (*count)++;
     }
 
@@ -60,7 +53,7 @@ int feed_page_init(FeedPage* page, uint64_t index) {
     memset(page, 0, sizeof(*page));
     page->index = index;
 
-    return feed_init(&page->posts, MINIMUM_POST_SIZE);
+    return feed_init(&page->posts, POST_SIZE);
 }
 
 void feed_page_destroy(FeedPage* page) {
@@ -68,8 +61,7 @@ void feed_page_destroy(FeedPage* page) {
         return;
     }
 
-    free(page->posts.index);
-    free(page->posts.data);
+    feed_destroy(&page->posts);
     memset(page, 0, sizeof(*page));
 }
 
@@ -122,7 +114,7 @@ int marshal_feed_page(
 
     for (size_t offset = 0; offset < page->posts.data_size;) {
         const uint8_t* post = page->posts.data + offset;
-        size_t post_size = POST_HASH_OFFSET + post[POST_HASH_COUNT_OFFSET] * HASH_SIZE;
+        size_t post_size = POST_SIZE;
         uint8_t* encoded = out + FEED_PAGE_HEADER_SIZE + offset;
 
         memcpy(encoded, post, post_size);
@@ -131,6 +123,10 @@ int marshal_feed_page(
         uint64_t timestamp;
         memcpy(&timestamp, post + POST_CREATED_AT_OFFSET, sizeof(timestamp));
         write_uint(encoded + POST_CREATED_AT_OFFSET, timestamp, sizeof(timestamp));
+
+        uint32_t blobs;
+        memcpy(&blobs, post + POST_BLOB_COUNT_OFFSET, sizeof(blobs));
+        write_uint(encoded + POST_BLOB_COUNT_OFFSET, blobs, sizeof(blobs));
 
         offset += post_size;
     }
@@ -165,7 +161,7 @@ int parse_feed_page(
     FeedPage page = {0};
     page.index = read_uint(bytes + 4, 8);
     page.posts.cap = count ? count : 1;
-    page.posts.data_cap = payload_size ? payload_size : MINIMUM_POST_SIZE;
+    page.posts.data_cap = payload_size ? payload_size : POST_SIZE;
     page.posts.index = calloc(page.posts.cap, sizeof(ItemIndex));
     page.posts.data = malloc(page.posts.data_cap);
 
@@ -177,12 +173,15 @@ int parse_feed_page(
     size_t offset = 0;
     for (size_t i = 0; i < count; i++) {
         const uint8_t* post = payload + offset;
-        size_t post_size = POST_HASH_OFFSET + post[POST_HASH_COUNT_OFFSET] * HASH_SIZE;
+        size_t post_size = POST_SIZE;
 
         memcpy(page.posts.data + offset, post, post_size);
 
         uint64_t timestamp = read_uint(post + POST_CREATED_AT_OFFSET, 8);
         memcpy(page.posts.data + offset + POST_CREATED_AT_OFFSET, &timestamp, sizeof(timestamp));
+
+        uint32_t blobs = (uint32_t)read_uint(post + POST_BLOB_COUNT_OFFSET, sizeof(blobs));
+        memcpy(page.posts.data + offset + POST_BLOB_COUNT_OFFSET, &blobs, sizeof(blobs));
 
         page.posts.index[i] = (ItemIndex){(uint32_t)offset, (uint32_t)post_size};
         offset += post_size;

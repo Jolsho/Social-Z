@@ -4,7 +4,8 @@ Login retrieves the encrypted account header rather than asking the node to chec
 The username identifies the account.
 Authenticated decryption unlocks its signing seed, data_key, and private page references.
 The password-derived key protects this header.
-data_key protects owner-managed pages and content blobs.
+data_key protects owner-managed pages and private account data.
+Post packages have their own keys retained in encrypted feed metadata.
 
 ## Host interface
 

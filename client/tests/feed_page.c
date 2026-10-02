@@ -5,107 +5,121 @@
 
 #undef malloc
 #undef calloc
+#undef free
 #include "codec/feed.h"
 #include <assert.h>
+#include <sodium.h>
 
 static size_t allocation_count, fail_at;
+static uint8_t* watched_data;
+static size_t watched_size;
 
 void* feed_page_test_malloc(size_t size) {
-    if (++allocation_count == fail_at) {
-        return NULL;
+    if (++allocation_count == fail_at) return NULL;
+    void* memory = malloc(size);
+    // When index growth will fail next, watch the temporary copy of secret metadata.
+    if (fail_at == 2 && allocation_count == 1) {
+        watched_data = memory;
+        watched_size = size;
     }
-
-    return malloc(size);
+    return memory;
 }
 
 void* feed_page_test_calloc(size_t count, size_t size) {
-    if (++allocation_count == fail_at) {
-        return NULL;
-    }
-
-    return calloc(count, size);
+    return ++allocation_count == fail_at ? NULL : calloc(count, size);
 }
 
-static size_t write_post(uint8_t* bytes, uint8_t hashes, int64_t timestamp) {
-    size_t size = POST_HASH_OFFSET + hashes * HASH_SIZE;
+void feed_page_test_free(void* memory) {
+    if (memory && memory == watched_data) {
+        assert(sodium_is_zero(memory, watched_size));
+        watched_data = NULL;
+    }
+    free(memory);
+}
 
+static void watch(const FeedPage* page) {
+    watched_data = page->posts.data;
+    watched_size = page->posts.data_cap;
+}
+
+static void write_post(uint8_t* bytes, uint32_t blobs, int64_t timestamp) {
     memset(bytes, 0xaa, KEY_SIZE);
     memcpy(bytes + POST_CREATED_AT_OFFSET, &timestamp, sizeof(timestamp));
-    bytes[POST_HASH_COUNT_OFFSET] = hashes;
-    memset(bytes + POST_HASH_OFFSET, 0xcc, hashes * HASH_SIZE);
-
-    return size;
+    memset(bytes + POST_PACKAGE_HASH_OFFSET, 0xcc, HASH_SIZE);
+    memset(bytes + POST_PACKAGE_KEY_OFFSET, 0xdd, KEY_SIZE);
+    memcpy(bytes + POST_BLOB_COUNT_OFFSET, &blobs, sizeof(blobs));
 }
 
-static void variable_posts_and_wire(void) {
+static void metadata_and_wire(void) {
     FeedPage page = {0}, parsed = {0};
+    assert(POST_SIZE == 108);
     assert(feed_page_init(&page, UINT64_C(0x1112131415161718)) == FEED_OK);
-
-    uint8_t posts[2 * (POST_HASH_OFFSET + 5 * HASH_SIZE)];
-    size_t first_size = write_post(posts, 1, INT64_C(0x0102030405060708));
-    size_t second_size = write_post(posts + first_size, 5, INT64_MIN);
-    size_t payload_size = first_size + second_size;
-
-    assert(feed_page_append_posts(&page, posts, payload_size) == FEED_OK);
-    assert(page.posts.size == 2);
+    uint8_t posts[2 * POST_SIZE];
+    write_post(posts, 2, INT64_C(0x0102030405060708));
+    write_post(posts + POST_SIZE, UINT32_MAX, INT64_MIN);
+    assert(feed_page_append_posts(&page, posts, sizeof(posts)) == FEED_OK);
 
     uint8_t bytes[FEED_PAGE_MAX_SIZE];
     size_t size;
     assert(marshal_feed_page(bytes, sizeof(bytes), &size, &page) == FEED_OK);
-    assert(size == FEED_PAGE_HEADER_SIZE + payload_size);
-
+    assert(size == FEED_PAGE_HEADER_SIZE + sizeof(posts));
     const uint8_t header[] = {
         0, 1, 0, 3,
         0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
         0, 0, 0, 2,
     };
-    const uint8_t first_time[] = {1, 2, 3, 4, 5, 6, 7, 8};
-    const uint8_t second_time[] = {0x80, 0, 0, 0, 0, 0, 0, 0};
-
     assert(memcmp(bytes, header, sizeof(header)) == 0);
-    assert(memcmp(bytes + 16, posts, KEY_SIZE) == 0);
-    assert(memcmp(bytes + 48, first_time, sizeof(first_time)) == 0);
-    assert(bytes[56] == 1);
-    assert(memcmp(bytes + 57, posts + POST_HASH_OFFSET, HASH_SIZE) == 0);
-    assert(memcmp(bytes + 16 + first_size, posts + first_size, KEY_SIZE) == 0);
-    assert(memcmp(bytes + 48 + first_size, second_time, sizeof(second_time)) == 0);
-    assert(bytes[56 + first_size] == 5);
-    assert(memcmp(bytes + 57 + first_size, posts + first_size + POST_HASH_OFFSET, 5 * HASH_SIZE) == 0);
-
+    uint8_t expected[2 * POST_SIZE];
+    memcpy(expected, posts, sizeof(posts));
+    const uint8_t times[][8] = {{1, 2, 3, 4, 5, 6, 7, 8}, {0x80, 0, 0, 0, 0, 0, 0, 0}};
+    const uint8_t counts[][4] = {{0, 0, 0, 2}, {0xff, 0xff, 0xff, 0xff}};
+    for (size_t i = 0; i < 2; i++) {
+        memcpy(expected + i * POST_SIZE + POST_CREATED_AT_OFFSET, times[i], 8);
+        memcpy(expected + i * POST_SIZE + POST_BLOB_COUNT_OFFSET, counts[i], 4);
+    }
+    assert(memcmp(bytes + FEED_PAGE_HEADER_SIZE, expected, sizeof(expected)) == 0);
     assert(parse_feed_page(&parsed, bytes, size) == FEED_OK);
     memset(bytes, 0, size);
-
     assert(parsed.index == page.index && parsed.posts.size == 2);
-    assert(parsed.posts.data_size == payload_size);
-    assert(memcmp(parsed.posts.data, posts, payload_size) == 0);
-    assert(parsed.posts.index[0].offset == 0 && parsed.posts.index[0].size == first_size);
-    assert(parsed.posts.index[1].offset == first_size && parsed.posts.index[1].size == second_size);
+    assert(memcmp(parsed.posts.data, posts, sizeof(posts)) == 0);
 
     uint8_t* view;
     assert(feed_get_item(&parsed.posts, 1, &view) == FEED_OK);
     assert(post_get_created_at(view) == INT64_MIN);
+    assert(post_get_blob_count(view) == UINT32_MAX);
+    Key origin, key;
+    HashT hash;
+    post_get_originator(view, &origin);
+    post_get_package_hash(view, &hash);
+    post_get_package_key(view, &key);
+    assert(memcmp(origin.b, posts, KEY_SIZE) == 0);
+    assert(memcmp(hash.b, posts + POST_PACKAGE_HASH_OFFSET, HASH_SIZE) == 0);
+    assert(memcmp(key.b, posts + POST_PACKAGE_KEY_OFFSET, KEY_SIZE) == 0);
+    assert(parsed.posts.index[1].offset == POST_SIZE && parsed.posts.index[1].size == POST_SIZE);
 
-    // Replacing a page may consume a borrowed view into its own old allocation.
+    // Parsing can replace its own old allocation after copying the borrowed input.
     assert(marshal_feed_page(bytes, sizeof(bytes), &size, &parsed) == FEED_OK);
     assert(page.posts.data_cap >= size);
     memcpy(page.posts.data, bytes, size);
+    watch(&page);
     assert(parse_feed_page(&page, page.posts.data, size) == FEED_OK);
-    assert(memcmp(page.posts.data, posts, payload_size) == 0);
-
+    assert(watched_data == NULL);
+    assert(memcmp(page.posts.data, posts, sizeof(posts)) == 0);
+    watch(&parsed);
     feed_page_destroy(&parsed);
+    assert(watched_data == NULL);
     feed_page_destroy(&page);
 }
 
 static void rejected(FeedPage* page, const uint8_t* bytes, size_t size) {
     FeedPage before = *page;
-    uint8_t post[MINIMUM_POST_SIZE];
+    uint8_t post[POST_SIZE];
     ItemIndex item = page->posts.index[0];
     memcpy(post, page->posts.data, sizeof(post));
-
     assert(parse_feed_page(page, bytes, size) == FEED_ERR);
-    assert(page->index == before.index);
-    assert(page->posts.index == before.posts.index && page->posts.data == before.posts.data);
-    assert(page->posts.size == before.posts.size && page->posts.data_size == before.posts.data_size);
+    assert(page->index == before.index && page->posts.index == before.posts.index);
+    assert(page->posts.data == before.posts.data && page->posts.size == before.posts.size);
+    assert(page->posts.data_size == before.posts.data_size);
     assert(memcmp(page->posts.data, post, sizeof(post)) == 0);
     assert(memcmp(&page->posts.index[0], &item, sizeof(item)) == 0);
 }
@@ -113,20 +127,13 @@ static void rejected(FeedPage* page, const uint8_t* bytes, size_t size) {
 static void malformed_and_allocation_failure(void) {
     FeedPage page = {0};
     assert(feed_page_init(&page, 7) == FEED_OK);
-
-    uint8_t post[MINIMUM_POST_SIZE];
+    uint8_t post[POST_SIZE];
     write_post(post, 1, 23);
     assert(feed_page_append_posts(&page, post, sizeof(post)) == FEED_OK);
-
     uint8_t bytes[FEED_PAGE_HEADER_SIZE + sizeof(post) + 1];
     size_t size;
     assert(marshal_feed_page(bytes, sizeof(bytes), &size, &page) == FEED_OK);
-
-    for (size_t n = 0; n < size; n++) {
-        rejected(&page, bytes, n);
-    }
-
-    bytes[size] = 0;
+    for (size_t n = 0; n < size; n++) rejected(&page, bytes, n);
     rejected(&page, bytes, size + 1);
     rejected(&page, bytes, FEED_PAGE_MAX_SIZE + 1);
     rejected(&page, NULL, size);
@@ -138,14 +145,14 @@ static void malformed_and_allocation_failure(void) {
         rejected(&page, bytes, size);
         bytes[fields[i]] ^= 1;
     }
-
-    bytes[16 + POST_HASH_COUNT_OFFSET] = 0;
+    bytes[1] = 2; // Unsupported versions are still rejected.
     rejected(&page, bytes, size);
-    bytes[16 + POST_HASH_COUNT_OFFSET] = 6;
+    FeedPage empty = {0};
+    assert(parse_feed_page(&empty, bytes, FEED_PAGE_HEADER_SIZE) == FEED_ERR);
+    bytes[1] = 1;
+    memset(bytes + FEED_PAGE_HEADER_SIZE + POST_BLOB_COUNT_OFFSET, 0, 4);
     rejected(&page, bytes, size);
-    bytes[16 + POST_HASH_COUNT_OFFSET] = 5;
-    rejected(&page, bytes, size);
-    bytes[16 + POST_HASH_COUNT_OFFSET] = 1;
+    bytes[FEED_PAGE_HEADER_SIZE + POST_BLOB_COUNT_OFFSET + 3] = 1;
 
     for (size_t failure = 1; failure <= 2; failure++) {
         allocation_count = 0;
@@ -153,77 +160,75 @@ static void malformed_and_allocation_failure(void) {
         rejected(&page, bytes, size);
         fail_at = 0;
     }
-
-    memset(bytes, 0xa5, sizeof(bytes));
-    size = 999;
-    assert(marshal_feed_page(bytes, FEED_PAGE_HEADER_SIZE + sizeof(post) - 1, &size, &page) == FEED_ERR);
-    assert(size == 999);
-    for (size_t i = 0; i < sizeof(bytes); i++) {
-        assert(bytes[i] == 0xa5);
-    }
-
+    uint8_t out[sizeof(bytes)];
+    memset(out, 0xa5, sizeof(out));
+    size_t unchanged_size = 999;
+    assert(marshal_feed_page(out, size - 1, &unchanged_size, &page) == FEED_ERR);
+    assert(unchanged_size == 999);
+    for (size_t i = 0; i < sizeof(out); i++) assert(out[i] == 0xa5);
     page.posts.size++;
-    assert(marshal_feed_page(bytes, sizeof(bytes), &size, &page) == FEED_ERR);
+    assert(marshal_feed_page(out, sizeof(out), &unchanged_size, &page) == FEED_ERR);
     page.posts.size--;
-
     assert(feed_page_append_posts(&page, post, sizeof(post) - 1) == FEED_ERR);
     assert(page.posts.size == 1);
+
+    uint8_t batch[100 * POST_SIZE];
+    for (size_t i = 0; i < 100; i++) write_post(batch + i * POST_SIZE, 1, (int64_t)i);
+    FeedPage before = page;
+    allocation_count = 0;
+    fail_at = 2; // Data grows first; index allocation then fails.
+    assert(feed_page_append_posts(&page, batch, sizeof(batch)) == FEED_ERR);
+    fail_at = 0;
+    assert(watched_data == NULL);
+    assert(page.posts.data == before.posts.data && page.posts.index == before.posts.index);
+    assert(page.posts.size == 1 && page.posts.data_size == POST_SIZE);
+    assert(memcmp(page.posts.data, post, sizeof(post)) == 0);
     feed_page_destroy(&page);
 }
 
-static void byte_limit_and_empty_page(void) {
+static void page_capacity(void) {
     FeedPage page = {0}, parsed = {0};
     assert(feed_page_init(&page, UINT64_MAX) == FEED_OK);
-
     uint8_t bytes[FEED_PAGE_MAX_SIZE];
     size_t size;
     assert(marshal_feed_page(bytes, sizeof(bytes), &size, &page) == FEED_OK);
     assert(size == FEED_PAGE_HEADER_SIZE);
     assert(parse_feed_page(&parsed, bytes, size) == FEED_OK);
-    assert(parsed.index == UINT64_MAX && parsed.posts.size == 0);
+    assert(parsed.posts.size == 0 && parsed.index == UINT64_MAX);
     assert(feed_page_append_posts(&parsed, NULL, 0) == FEED_OK);
 
-    // Mix 336 variable-size posts to fill the 65,520-byte payload exactly.
-    uint8_t posts[FEED_PAGE_MAX_SIZE - FEED_PAGE_HEADER_SIZE];
-    size_t payload_size = 0;
-    for (size_t i = 0; i < 336; i++) {
-        uint8_t hashes = i < 320 ? 5 : (i == 320 ? 2 : 1);
-        payload_size += write_post(posts + payload_size, hashes, (int64_t)i);
-    }
-
-    assert(payload_size == sizeof(posts));
-    assert(feed_page_append_posts(&page, posts, payload_size) == FEED_OK);
-    assert(page.posts.size == 336);
+    enum { COUNT = (FEED_PAGE_MAX_SIZE - FEED_PAGE_HEADER_SIZE) / POST_SIZE };
+    uint8_t posts[COUNT * POST_SIZE];
+    for (size_t i = 0; i < COUNT; i++) write_post(posts + i * POST_SIZE, (uint32_t)i + 1, (int64_t)i);
+    watch(&page); // Growth also wipes the old metadata allocation before releasing it.
+    assert(feed_page_append_posts(&page, posts, sizeof(posts)) == FEED_OK);
+    assert(watched_data == NULL);
+    assert(page.posts.size == COUNT && COUNT == 606);
     assert(marshal_feed_page(bytes, sizeof(bytes), &size, &page) == FEED_OK);
-    assert(size == FEED_PAGE_MAX_SIZE);
+    assert(size == FEED_PAGE_HEADER_SIZE + sizeof(posts));
     assert(parse_feed_page(&parsed, bytes, size) == FEED_OK);
-    assert(parsed.posts.size == 336 && memcmp(parsed.posts.data, posts, payload_size) == 0);
-
-    uint8_t next[MINIMUM_POST_SIZE];
-    write_post(next, 1, 337);
-    uint8_t* data = page.posts.data;
-    ItemIndex* index = page.posts.index;
-
+    assert(memcmp(parsed.posts.data, posts, sizeof(posts)) == 0);
+    uint8_t next[POST_SIZE];
+    write_post(next, 8, 42);
+    FeedPage before = page;
     assert(feed_page_append_posts(&page, next, sizeof(next)) == FEED_PAGE_FULL);
-    assert(page.index == UINT64_MAX && page.posts.size == 336 && page.posts.data_size == payload_size);
-    assert(page.posts.data == data && page.posts.index == index);
-    assert(memcmp(page.posts.data, posts, payload_size) == 0);
+    assert(page.index == UINT64_MAX && page.posts.size == COUNT);
+    assert(page.posts.data == before.posts.data && page.posts.index == before.posts.index);
+    assert(memcmp(page.posts.data, posts, sizeof(posts)) == 0);
 
-    FeedPage new_page = {0};
-    assert(feed_page_init(&new_page, 8) == FEED_OK);
-    assert(feed_page_append_posts(&new_page, next, sizeof(next)) == FEED_OK);
-    assert(new_page.posts.size == 1 && new_page.posts.data_size == sizeof(next));
-
-    feed_page_destroy(&new_page);
+    FeedPage next_page = {0};
+    assert(feed_page_init(&next_page, 8) == FEED_OK);
+    assert(feed_page_append_posts(&next_page, next, sizeof(next)) == FEED_OK);
+    assert(next_page.posts.size == 1);
+    feed_page_destroy(&next_page);
     feed_page_destroy(&parsed);
     feed_page_destroy(&page);
     feed_page_destroy(&page);
 }
 
 int main(void) {
-    variable_posts_and_wire();
+    metadata_and_wire();
     malformed_and_allocation_failure();
-    byte_limit_and_empty_page();
-
+    page_capacity();
     return 0;
 }

@@ -34,6 +34,8 @@ typedef struct {
 
 
 int feed_init(Feed* f, size_t min_item_len);
+// Wipe packed data, including package keys, before releasing its storage.
+void feed_destroy(Feed* f);
 
 static inline int feed_get_item(Feed* f, uint32_t idx, uint8_t** item_view) {
     if (!f || !item_view || !f->index || !f->data || idx >= f->size)
@@ -55,5 +57,5 @@ int feed_append(
 );
 
 static inline int feed_append_posts(Feed* f, uint8_t* b, uint64_t len) {
-    return feed_append(f, b, len, MINIMUM_POST_SIZE, post_is_valid, post_get_size);
+    return feed_append(f, b, len, POST_SIZE, post_is_valid, post_get_size);
 }

@@ -7,32 +7,31 @@
 #include "data/feed.h"
 #include <assert.h>
 
-static size_t write_post(uint8_t* bytes, uint8_t hashes, uint8_t value)
+static size_t write_post(uint8_t* bytes, uint32_t blobs, uint8_t value)
 {
-    size_t size = POST_HASH_OFFSET + hashes * HASH_SIZE;
+    size_t size = POST_SIZE;
     memset(bytes, value, size);
-    bytes[POST_HASH_COUNT_OFFSET] = hashes;
+    memcpy(bytes + POST_BLOB_COUNT_OFFSET, &blobs, sizeof(blobs));
     return size;
 }
 
 static void release_feed(Feed* feed)
 {
-    free(feed->index);
-    free(feed->data);
+    feed_destroy(feed);
 }
 
 static void test_append_and_growth(void)
 {
     Feed feed = {0};
-    assert(feed_init(&feed, MINIMUM_POST_SIZE) == FEED_OK);
-    uint8_t first[MINIMUM_POST_SIZE];
+    assert(feed_init(&feed, POST_SIZE) == FEED_OK);
+    uint8_t first[POST_SIZE];
     write_post(first, 1, 17);
     assert(feed_append_posts(&feed, first, sizeof(first)) == FEED_OK);
     assert(feed.size == 1 && feed.data_size == sizeof(first));
     assert(feed.index[0].offset == 0);
     assert(memcmp(feed.data, first, sizeof(first)) == 0);
 
-    uint8_t batch[140 * (POST_HASH_OFFSET + 5 * HASH_SIZE)];
+    uint8_t batch[140 * POST_SIZE];
     size_t batch_size = 0;
     for (size_t i = 0; i < 140; i++)
         batch_size += write_post(batch + batch_size, (uint8_t)(i % 5 + 1), (uint8_t)i);
@@ -46,7 +45,7 @@ static void test_append_and_growth(void)
     for (size_t i = 0; i < 140; i++) {
         uint8_t* view = NULL;
         assert(feed_get_item(&feed, (uint32_t)(i + 1), &view) == FEED_OK);
-        size_t size = POST_HASH_OFFSET + (i % 5 + 1) * HASH_SIZE;
+        size_t size = POST_SIZE;
         assert(feed.index[i + 1].offset == offset);
         assert(feed.index[i + 1].size == size);
         assert(memcmp(view, batch + offset - sizeof(first), size) == 0);
@@ -63,18 +62,18 @@ static void test_append_and_growth(void)
 static void test_rejects_malformed_batch(void)
 {
     Feed feed = {0};
-    assert(feed_init(&feed, MINIMUM_POST_SIZE) == FEED_OK);
-    uint8_t valid[MINIMUM_POST_SIZE];
+    assert(feed_init(&feed, POST_SIZE) == FEED_OK);
+    uint8_t valid[POST_SIZE];
     write_post(valid, 1, 27);
     assert(feed_append_posts(&feed, valid, sizeof(valid)) == FEED_OK);
 
-    uint8_t batch[2 * MINIMUM_POST_SIZE];
+    uint8_t batch[2 * POST_SIZE];
     memcpy(batch, valid, sizeof(valid));
     memcpy(batch + sizeof(valid), valid, sizeof(valid));
-    batch[sizeof(valid) + POST_HASH_COUNT_OFFSET] = 5;
+    memset(batch + sizeof(valid) + POST_BLOB_COUNT_OFFSET, 0, sizeof(uint32_t));
     assert(feed_append_posts(&feed, batch, sizeof(batch)) == FEED_ERR);
     assert(feed_append_posts(&feed, valid, sizeof(valid) - 1) == FEED_ERR);
-    batch[POST_HASH_COUNT_OFFSET] = 0;
+    memset(batch + POST_BLOB_COUNT_OFFSET, 0, sizeof(uint32_t));
     assert(feed_append_posts(&feed, batch, sizeof(valid)) == FEED_ERR);
     assert(feed_append_posts(&feed, valid, 1) == FEED_ERR);
     assert(feed_append_posts(&feed, valid, (uint64_t)UINT32_MAX + 1) == FEED_ERR);
@@ -90,10 +89,10 @@ static void test_empty_and_invalid_access(void)
     uint8_t* view = NULL;
     assert(feed_init(&feed, 0) == FEED_ERR);
     assert(feed_init(&feed, UINT32_MAX) == FEED_ERR);
-    assert(feed_init(&feed, MINIMUM_POST_SIZE) == FEED_OK);
+    assert(feed_init(&feed, POST_SIZE) == FEED_OK);
     assert(feed_append_posts(&feed, NULL, 0) == FEED_OK);
     assert(feed_get_item(&feed, 0, &view) == FEED_ERR);
-    uint8_t post[MINIMUM_POST_SIZE];
+    uint8_t post[POST_SIZE];
     write_post(post, 1, 9);
     assert(feed_append_posts(&feed, post, sizeof(post)) == FEED_OK);
     assert(feed_get_item(&feed, 1, &view) == FEED_ERR);

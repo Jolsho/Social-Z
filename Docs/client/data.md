@@ -11,27 +11,25 @@ This lets the client refer to entries without a separate allocation for each one
 
 ## Posts
 
-A post contains an originator key and a creation time.
-It also contains hashes which refer to data blobs.
-The first hash always refers to the blob containing the remaining post data.
-That blob currently holds mostly text.
-Richer post data can be added there later without embedding it in feed metadata.
-The current format allows between one and five hashes.
-An entry occupies 73 to 201 bytes.
+A post entry is metadata for one encrypted package.
+It holds the originator, creation time, package hash, package key, and blob count.
+Each entry occupies 108 bytes.
 The [feed-page codec](feed.md) packs these entries within a page byte limit.
-The post itself does not contain all of that content.
+The feed's encryption under the user's data_key protects the retained package keys.
 
-## Blobs
+## Packages and blobs
 
-Blobs hold the content referred to by hashes.
-Private post-data blobs are encrypted using user_data_key.
-Publishing groups all referenced plaintext blob contents into one delivery package.
-It encrypts the whole package under one delivery key.
-That package waits for authorized retrieval through permissions and vouchers.
-The feed metadata does not need a separate key for each post.
-The client has a local store indexed by hash.
+The package contains the actual post data and its enclosed blobs.
+Its internal format and creation are still separate work.
+The node serves the encrypted package by its whole-blob hash without interpreting it.
+A recipient recovers the package key from a voucher's encrypted subsection.
+They retain that key with the post metadata rather than rebuilding the package under data_key.
+Both author and recipients can keep the same encrypted package.
+
+The client has a local ciphertext store indexed by hash.
 The blob parser looks for an existing item before assigning storage.
 The store and buffer pool manage the memory behind these items.
+Packed feed data is wiped before replacement or destruction because it contains package keys.
 
 ## Where the code lives
 
@@ -55,7 +53,7 @@ Encrypted feed-page retrieval is not wired yet.
 ## How content is represented
 
 A post is a compact description of who published something and when.
-Its hashes identify the associated content rather than embedding it.
+Its package hash identifies the encrypted content rather than embedding it.
 The feed index lets layout code find an entry in the packed byte storage.
 The blob store provides the bytes behind a content hash.
 
@@ -66,10 +64,10 @@ Callers need to account for that when returning network buffers to the pool.
 
 ## References
 
-- [client/src/data/post.h:18](../../client/src/data/post.h#L18) defines the post field offsets.
-- [client/src/data/post.h:49](../../client/src/data/post.h#L49) checks the permitted hash count.
+- [client/src/data/post.h:17](../../client/src/data/post.h#L17) defines the post field offsets.
+- [client/src/data/post.h:55](../../client/src/data/post.h#L55) rejects zero blob counts.
 - [client/src/data/feed.h:19](../../client/src/data/feed.h#L19) defines packed feed storage and its index.
-- [client/src/data/feed.c:9](../../client/src/data/feed.c#L9) implements entry appending.
+- [client/src/data/feed.c:41](../../client/src/data/feed.c#L41) implements entry appending.
 - [client/src/netwrk/marshalers/post.c:13](../../client/src/netwrk/marshalers/post.c#L13) builds the request with a key and feed offset.
 - [client/src/netwrk/parsers/post.c:11](../../client/src/netwrk/parsers/post.c#L11) parses a feed response.
 - [client/src/netwrk/parsers/blob.c:11](../../client/src/netwrk/parsers/blob.c#L11) parses a blob into the local store.
