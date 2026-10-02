@@ -4,6 +4,7 @@
  */
 
 #include "codec/account.h"
+#include "utils/crypto.h"
 #include <stdbool.h>
 #include <sodium.h>
 
@@ -150,11 +151,10 @@ int encrypt_account_header(
         !password || !password_size || password_size > LOGIN_PASSWORD_MAX || sodium_init() < 0)
         return -1;
 
-    uint8_t blob[LOGIN_BLOB_SIZE] = {0},
-            plain[PLAIN_SIZE] = {0},
-            key[KEY_SIZE] = {0};
+    uint8_t blob[LOGIN_BLOB_SIZE] = {0};
+    Key key = {0};
     uint8_t ad[HEADER_SIZE + 2 + LOGIN_USERNAME_MAX];
-    crypto_secretstream_xchacha20poly1305_state stream = {0};
+    CryptCtx crypto = {0};
     int r = -1;
 
     write_uint(blob, 1, 2);
@@ -166,23 +166,23 @@ int encrypt_account_header(
     write_uint(blob + 60, CIPHER_SIZE, 4);
 
     size_t plain_size;
-    if (marshal_account_header(plain, sizeof(plain), &plain_size, header) != 0)
+    if (marshal_account_header(blob + HEADER_SIZE, PLAIN_SIZE, &plain_size, header) != 0)
         goto done;
 
-    if (password_key(key, password, password_size, blob) == 0 &&
-        crypto_secretstream_xchacha20poly1305_init_push(&stream, blob + 36, key) == 0) {
+    if (password_key(key.b, password, password_size, blob) == 0 &&
+        crypt_init_encrypt(&crypto, blob + 36, &key) == 0) {
         size_t ad_size = associated_data(ad, blob, username);
-        if (crypto_secretstream_xchacha20poly1305_push(&stream, blob + HEADER_SIZE, NULL,
-            plain, sizeof(plain), ad, ad_size, crypto_secretstream_xchacha20poly1305_TAG_FINAL) == 0) {
+        Buffer record = {blob + HEADER_SIZE, CIPHER_SIZE, PLAIN_SIZE};
+        if (encrypt(&crypto, &record, ad, ad_size, true) == 0) {
             memcpy(out, blob, sizeof(blob));
             r = 0;
         }
     }
 
 done:
-    sodium_memzero(key, sizeof(key));
-    sodium_memzero(plain, sizeof(plain));
-    sodium_memzero(&stream, sizeof(stream));
+    sodium_memzero(&key, sizeof(key));
+    sodium_memzero(blob, sizeof(blob));
+    crypt_clear(&crypto);
 
     return r;
 }
@@ -201,24 +201,23 @@ int decrypt_account_header(
         !login_username_size(username) || sodium_init() < 0)
         return -1;
 
-    uint8_t key[KEY_SIZE] = {0},
-            plain[PLAIN_SIZE] = {0},
-            tag = 0;
+    Key key = {0};
+    uint8_t plain[CIPHER_SIZE] = {0};
     uint8_t ad[HEADER_SIZE + 2 + LOGIN_USERNAME_MAX];
     KeyPair recovered = {0};
     AccountHeader parsed = {0};
     Key converted;
-    unsigned long long size = 0;
-    crypto_secretstream_xchacha20poly1305_state stream = {0};
+    CryptCtx crypto = {0};
     size_t ad_size = associated_data(ad, blob, username);
     int r = -1;
 
-    if (password_key(key, password, password_size, blob) == 0 &&
-        crypto_secretstream_xchacha20poly1305_init_pull(&stream, blob + 36, key) == 0 &&
-        crypto_secretstream_xchacha20poly1305_pull(&stream, plain, &size, &tag,
-            blob + HEADER_SIZE, CIPHER_SIZE, ad, ad_size) == 0 &&
-        size == PLAIN_SIZE && tag == crypto_secretstream_xchacha20poly1305_TAG_FINAL &&
-        parse_account_header(&parsed, plain, sizeof(plain)) == 0 &&
+    memcpy(plain, blob + HEADER_SIZE, sizeof(plain));
+    Buffer record = {plain, sizeof(plain), sizeof(plain)};
+
+    if (password_key(key.b, password, password_size, blob) == 0 &&
+        crypt_init_decrypt(&crypto, blob + 36, &key) == 0 &&
+        decrypt(&crypto, &record, ad, ad_size, true) == 0 &&
+        parse_account_header(&parsed, plain, record.size) == 0 &&
         crypto_sign_seed_keypair(recovered.pub.b, recovered.priv.b, parsed.signing_seed.b) == 0 &&
         sodium_memcmp(recovered.pub.b, account->b, KEY_SIZE) == 0 &&
         crypto_sign_ed25519_pk_to_curve25519(converted.b, recovered.pub.b) == 0) {
@@ -227,11 +226,11 @@ int decrypt_account_header(
         r = 0;
     }
 
-    sodium_memzero(key, sizeof(key));
+    sodium_memzero(&key, sizeof(key));
     sodium_memzero(plain, sizeof(plain));
     sodium_memzero(&recovered, sizeof(recovered));
     sodium_memzero(&parsed, sizeof(parsed));
-    sodium_memzero(&stream, sizeof(stream));
+    crypt_clear(&crypto);
 
     return r;
 }

@@ -49,7 +49,7 @@ Rendering commands and an interface for graphics backends.
 
 ### math / utils
 
-Geometry helpers, buffer pools, cryptography, and cached storage.
+Geometry helpers, buffer pools, [buffer encryption](crypto.md), and cached storage.
 
 The intended frame loop updates the world and then renders it.
 A host application supplies input and the platform integration.

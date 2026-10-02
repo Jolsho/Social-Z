@@ -31,6 +31,7 @@ Both the complete header and signing keys are installed only after success.
 Failed calls leave outputs unchanged.
 Borrowed inputs are never retained.
 None of these functions allocate memory.
+The password wrapper uses the general [buffer encryption](crypto.md) helper for its final record.
 
 The encrypted blob is 213 bytes.
 It uses the existing bounded Argon2id password profile and a single final secretstream record.
@@ -47,9 +48,9 @@ Node username resolution and actual transport routing remain unfinished.
 ## References
 
 - [client/src/codec/account.h:16](../../client/src/codec/account.h#L16) defines the complete account header.
-- [client/src/codec/account.c:73](../../client/src/codec/account.c#L73) marshals the plaintext record.
-- [client/src/codec/account.c:108](../../client/src/codec/account.c#L108) parses and validates its fields.
-- [client/src/codec/account.c:142](../../client/src/codec/account.c#L142) encrypts the header with the password-derived key.
+- [client/src/codec/account.c:74](../../client/src/codec/account.c#L74) marshals the plaintext record.
+- [client/src/codec/account.c:109](../../client/src/codec/account.c#L109) parses and validates its fields.
+- [client/src/codec/account.c:143](../../client/src/codec/account.c#L143) encrypts the header with the password-derived key.
 - [client/src/codec/account.c:190](../../client/src/codec/account.c#L190) decrypts it and verifies the recovered identity.
 - [client/tests/account.c:9](../../client/tests/account.c#L9) checks exact plaintext bytes and borrowed-input lifetime.
 - [client/tests/login.c](../../client/tests/login.c) checks encrypted retrieval and failure handling.

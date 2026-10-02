@@ -71,6 +71,13 @@ It checks borrowed and aliased input, empty pages, and a full page containing 33
 A full-page append leaves the page unchanged.
 Feed encryption, publication, and node retrieval are not exercised yet.
 
+The client blob-crypto test checks the general in-place record helper.
+It compares overlapping encryption with independent libsodium output.
+It covers empty and 64 KiB records, exact capacity, wrong keys, altered data, and unexpected tags.
+Multi-record tests reject reordered and replayed records.
+A feed page uses the same helper and parses back into copied client-owned storage.
+Existing login tests exercise account-header reuse and unchanged password-encrypted wire format.
+
 ## Memory checks
 
 For GCC or Clang builds, use the sanitizer preset.
