@@ -5,47 +5,43 @@
 
 #pragma once
 
-#include <stddef.h>
-#include <stdint.h>
+#include "content/package.h"
 
 #define PACKAGE_ERR -1
 #define PACKAGE_MORE 0
-#define PACKAGE_BLOB 1
 #define PACKAGE_DONE 2
 
 typedef struct PackageParser {
+    // Maximum complete plaintext size, including framing; set before parsing.
+    size_t max_size;
     uint8_t field[8];
     size_t field_size;
-    uint32_t blob_count;
     uint32_t blob_index;
-    uint64_t blob_size;
-    uint64_t blob_offset;
-    enum { PACKAGE_HEADER, PACKAGE_LENGTH, PACKAGE_DATA, PACKAGE_END, PACKAGE_FAILED } state;
+    size_t blob_offset;
+    enum {
+        PACKAGE_HEADER,
+        PACKAGE_SIZES,
+        PACKAGE_DATA,
+        PACKAGE_END,
+        PACKAGE_FAILED
+    } state;
 } PackageParser;
 
-typedef struct PackageSlice {
-    uint32_t index;
-    uint64_t total_size;
-    uint64_t offset;
-    const uint8_t* bytes;
-    size_t size;
-} PackageSlice;
-
-/* Plaintext V1: version:u16, blob_count:u32, then length:u64 and bytes per blob.
- * Integers are big-endian; count is nonzero. Blob zero is the post-data blob.
- * Start with a zero-initialized parser. No allocation or payload retention occurs.
- * Each call consumes input up to one borrowed blob slice; resume with remaining bytes.
- * Empty blobs yield one zero-size slice. MORE means another input chunk is needed.
- * Call finish_package() at end of input to reject truncation; trailing bytes are errors.
- * Slices must be copied if retained. They are provisional until parsing and authentication finish.
- * ERR is terminal; reset the parser before reading another package.
+/* V1 plaintext: version:u16, count:u32, all sizes:u64, then all payloads in order.
+ * Integers are big-endian; count is nonzero and empty blobs are allowed.
+ * Start with an otherwise zeroed parser whose max_size is the caller's byte limit,
+ * and a zeroed staging Package. Keep both objects for the entire stream.
+ * Each call copies input chunks into owned storage; input must not overlap that storage.
+ * Descriptors are allocated after the header and one buffer after the complete size table.
+ * Return MORE, DONE, or ERR. Call finish_package() at the actual end of input.
+ * ERR is terminal. Destroy staging contents on failure; reset the parser before reuse.
+ * Contents remain provisional until parsing and authentication finish.
  */
-int parse_package(
+int parse_package_contents(
     PackageParser* parser,
+    Package* package,
     const uint8_t* bytes,
-    size_t size,
-    size_t* consumed,
-    PackageSlice* blob
+    size_t size
 );
 
 int finish_package(PackageParser* parser);
