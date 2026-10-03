@@ -17,3 +17,7 @@ target_link_libraries(sz_owner_test PRIVATE sodium blake3)
 sz_add_test(common blob_requests blob_requests.c ../src/requests/requests.c
     ../src/requests/blob.c ../src/crypto/crypto.c ../src/hash/hash.c)
 target_link_libraries(sz_blob_requests_test PRIVATE sodium blake3)
+
+sz_add_test(common hash_batches hash_batches.c ../src/requests/requests.c
+    ../src/requests/hash_batch.c ../src/crypto/crypto.c ../src/hash/hash.c)
+target_link_libraries(sz_hash_batches_test PRIVATE sodium blake3)

@@ -90,6 +90,40 @@ size_t marshal_blob_request(uint8_t* out, const Request* request) {
     return size;
 }
 
+size_t marshal_hash_batch_request(uint8_t* out, const Request* request) {
+    if (request->kind != REQUEST_NEW_PERMISSIONS &&
+        request->kind != REQUEST_PUBLISH_VOUCHERS &&
+        request->kind != REQUEST_REVOKE_PERMISSIONS) {
+        return 0;
+    }
+
+    const HashBatch* batch = &request->data.hash_batch;
+    size_t expiry_size = request->kind == REQUEST_PUBLISH_VOUCHERS ? 8 : 0;
+    uint64_t size = HASH_BATCH_REQUEST_BASE_SIZE + expiry_size
+        + (uint64_t)batch->count * HASH_SIZE;
+    if (size > SIZE_MAX) {
+        return 0;
+    }
+
+    write_uint(out, 1, 2);
+    write_uint(out + 2, request->kind, 2);
+    memcpy(out + 4, batch->owner.b, KEY_SIZE);
+    write_uint(out + 36, batch->count, 4);
+
+    uint8_t* hashes = out + HASH_BATCH_HEADER_SIZE;
+    if (expiry_size) {
+        write_uint(hashes, batch->expires, expiry_size);
+        hashes += expiry_size;
+    }
+
+    size_t hash_size = (size_t)batch->count * HASH_SIZE;
+    if (hash_size) {
+        memcpy(hashes, batch->hashes, hash_size);
+    }
+    memcpy(hashes + hash_size, batch->signature.b, SIGNATURE_SIZE);
+    return (size_t)size;
+}
+
 int parse_request(Request* out, const uint8_t* bytes, size_t size) {
     if (!out || !bytes || size < REQUEST_HEADER_SIZE || read_uint(bytes, 2) != 1) {
         return -1;
@@ -136,6 +170,33 @@ int parse_request(Request* out, const uint8_t* bytes, size_t size) {
         }
 
         out->data.blob = blob;
+        break;
+    }
+    case REQUEST_NEW_PERMISSIONS:
+    case REQUEST_PUBLISH_VOUCHERS:
+    case REQUEST_REVOKE_PERMISSIONS: {
+        size_t expiry_size = kind == REQUEST_PUBLISH_VOUCHERS ? 8 : 0;
+        if (size < HASH_BATCH_REQUEST_BASE_SIZE + expiry_size) {
+            return -1;
+        }
+
+        uint32_t count = read_uint(bytes + 36, 4);
+        size_t payload_size = size - HASH_BATCH_REQUEST_BASE_SIZE - expiry_size;
+        HashBatch* batch = &out->data.hash_batch;
+        if (payload_size % HASH_SIZE || payload_size / HASH_SIZE != count ||
+            count > batch->capacity || (count && !batch->hashes)) {
+            return -1;
+        }
+
+        const uint8_t* hashes = bytes + HASH_BATCH_HEADER_SIZE + expiry_size;
+        if (count) {
+            memcpy(batch->hashes, hashes, payload_size);
+        }
+        batch->expires = expiry_size
+            ? read_uint(bytes + HASH_BATCH_HEADER_SIZE, expiry_size) : 0;
+        memcpy(batch->owner.b, bytes + 4, KEY_SIZE);
+        memcpy(batch->signature.b, hashes + payload_size, SIGNATURE_SIZE);
+        batch->count = count;
         break;
     }
     default:

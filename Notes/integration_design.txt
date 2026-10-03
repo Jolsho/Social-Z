@@ -133,6 +133,14 @@ ENCRYPTION AND TRANSFER CHUNKS
 
 
 PERMISSIONS AND VOUCHERS
+    Register batches of permission hashes and publish batches of voucher hashes in FS state.
+    Shared requests support permission registration, permission revocation, and voucher publication.
+    Each batch carries the owner key, count, hashes, and a signature covering the request.
+    Voucher publication carries one UTC expiry in seconds for the whole batch.
+    TODO: adapt node handlers and FS voucher state to this batch expiry when integrating these requests.
+    The client's private permission list remains an ordinary encrypted blob.
+    The remote presents the plaintext record when using a permission or voucher.
+    The local node hashes that record and checks its registered hashes; registration needs no record lookup.
     AGREED: permissions record recipient consent to incoming voucher delivery.
     Sender publication and voucher issuance record sender consent to transfer.
     A voucher offers later retrieval of one complete prepared package.
