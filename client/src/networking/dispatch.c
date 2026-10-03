@@ -10,8 +10,20 @@
 #include "operations/feed_page.h"
 
 const ParserEntry parsers[PARSER_ID_CAP] = {
-    [PARSER_ID_USER_DATA] = {login_handle_response, login_cleanup},
-    [PARSER_ID_BLOB] = {blob_handle_response, blob_cleanup},
-    [PARSER_ID_PACKAGE] = {package_handle_response, package_cleanup},
-    [PARSER_ID_FEED_PAGE] = {feed_page_handle_response, feed_page_cleanup},
+    [PARSER_ID_USER_DATA] = {
+        .parse_response = login_handle_response,
+        .cleanup = login_cleanup,
+    },
+    [PARSER_ID_BLOB] = {
+        .parse_response = blob_handle_response,
+        .cleanup = blob_cleanup,
+    },
+    [PARSER_ID_PACKAGE] = {
+        .parse_response = package_handle_response,
+        .cleanup = package_cleanup,
+    },
+    [PARSER_ID_FEED_PAGE] = {
+        .parse_response = feed_page_handle_response,
+        .cleanup = feed_page_cleanup,
+    },
 };

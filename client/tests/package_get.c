@@ -36,7 +36,7 @@ void request_abort(struct Client* cli, ContextID id) {
 
 int request_write(struct Client* cli, ContextID id, struct Buffer* buffer) {
     assert(!pending && buffer == &cli->net.send_buffers[id]);
-    assert(cli->net.states[id].operation && cli->net.states[id].send_owned);
+    assert(cli->net.states[id].context && cli->net.states[id].send_owned);
     Request request;
     assert(parse_request(&request, buffer->b, buffer->size) == 0);
     assert(request.kind == REQUEST_BLOB_GET);
@@ -133,7 +133,7 @@ static void successful_load(size_t size, size_t encrypted_chunk, size_t fragment
     }
     StoreItem* cached = store_get_item(&cli->blob_store, &hash);
     assert(cached && memcmp(cached->b, wire.b, wire.size) == 0);
-    assert(!cli->net.states[id].operation && cli->net.states[id].release_pending);
+    assert(!cli->net.states[id].context && cli->net.states[id].release_pending);
     assert(memcmp(pending->b, request, sizeof(request)) == 0);
     client_return_buffer(cli, pending);
     pending = NULL;
@@ -170,14 +170,14 @@ static void failed_loads(void) {
         size_t limit = failure == 3 ? wire.size - 1 : wire.size;
         int result = deliver(cli, id, &wire, &advertised, 5, limit);
         if (failure == 3) {
-            assert(result == CLIENT_OK && cli->net.states[id].operation);
+            assert(result == CLIENT_OK && cli->net.states[id].context);
             client_free_context(cli, id);
             assert(!ht_lookup(&cli->blob_store.table, &hash));
         } else {
             assert(result == CLIENT_ERR);
         }
         assert(memcmp(&destination, &before, sizeof(destination)) == 0);
-        assert(destination.bytes[0] == 0xdd && !cli->net.states[id].operation);
+        assert(destination.bytes[0] == 0xdd && !cli->net.states[id].context);
         client_return_buffer(cli, pending);
         pending = NULL;
         package_destroy(&destination);

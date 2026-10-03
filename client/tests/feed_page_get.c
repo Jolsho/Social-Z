@@ -36,7 +36,7 @@ void request_abort(struct Client* cli, ContextID id) {
 
 int request_write(struct Client* cli, ContextID id, struct Buffer* buffer) {
     assert(!pending[id] && buffer == &cli->net.send_buffers[id]);
-    assert(cli->net.states[id].operation && cli->net.states[id].send_owned);
+    assert(cli->net.states[id].context && cli->net.states[id].send_owned);
     Request request;
     assert(parse_request(&request, buffer->b, buffer->size) == 0);
     assert(request.kind == REQUEST_BLOB_GET);
@@ -117,7 +117,7 @@ static int reply(struct Client* cli, ContextID id, const Buffer* wire,
 }
 
 static void return_request(struct Client* cli, ContextID id) {
-    assert(!cli->net.states[id].operation);
+    assert(!cli->net.states[id].context);
     client_return_buffer(cli, pending[id]);
     pending[id] = NULL;
 }

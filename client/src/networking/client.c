@@ -73,12 +73,12 @@ void client_free_context(struct Client* cli, ContextID id) {
         // Cleanup runs once, even if the context must wait for the host's send buffer.
         state->state = CON_DEAD;
         if (net->parsers && state->parser_id < net->parsers_count) {
-            ParserCleanup cleanup = net->parsers[state->parser_id].cleanup;
+            ParseStateCleanup cleanup = net->parsers[state->parser_id].cleanup;
             if (cleanup) {
                 cleanup(cli, id);
             }
         }
-        state->operation = NULL;
+        state->context = NULL;
     }
 
     context_release_recv_buffer(cli, id);
@@ -107,11 +107,11 @@ int client_parse_response(struct Client* cli, ContextID id, uint8_t* b, uint64_t
 
     const ConState* state = &cli->net.states[id];
     if (state->state == CON_DEAD || state->parser_id >= cli->net.parsers_count ||
-        !cli->net.parsers[state->parser_id].parse) {
+        !cli->net.parsers[state->parser_id].parse_response) {
         return CLIENT_ERR;
     }
 
-    return cli->net.parsers[state->parser_id].parse(cli, id, b, l);
+    return cli->net.parsers[state->parser_id].parse_response(cli, id, b, l);
 }
 
 void client_return_buffer(struct Client* cli, struct Buffer* buff) {

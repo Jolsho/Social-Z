@@ -21,7 +21,7 @@ typedef struct FeedPageLoad {
 } FeedPageLoad;
 
 void feed_page_cleanup(struct Client* cli, ContextID id) {
-    FeedPageLoad* load = cli->net.states[id].operation;
+    FeedPageLoad* load = cli->net.states[id].context;
     if (load) {
         encrypted_blob_clear(cli, id, &load->blob);
         if (load->plaintext.b) {
@@ -39,7 +39,7 @@ static int feed_page_plaintext(
     const uint8_t* bytes,
     size_t size
 ) {
-    FeedPageLoad* load = cli->net.states[id].operation;
+    FeedPageLoad* load = cli->net.states[id].context;
     Buffer* plaintext = &load->plaintext;
     if (size > FEED_PAGE_MAX_SIZE - plaintext->size) {
         return CLIENT_ERR;
@@ -72,7 +72,7 @@ int feed_page_get(
     ConState* state = &cli->net.states[context];
     state->parser_id = PARSER_ID_FEED_PAGE;
     FeedPageLoad* load = calloc(1, sizeof(*load));
-    state->operation = load;
+    state->context = load;
     if (!load) {
         client_free_context(cli, context);
         return CLIENT_ERR;
@@ -91,7 +91,7 @@ int feed_page_get(
 }
 
 int feed_page_handle_response(struct Client* cli, ContextID id, uint8_t* bytes, uint64_t size) {
-    FeedPageLoad* load = cli->net.states[id].operation;
+    FeedPageLoad* load = cli->net.states[id].context;
     int result = encrypted_blob_read(cli, id, &load->blob, bytes, size, feed_page_plaintext);
     if (result == CLIENT_OK) {
         return result;

@@ -133,14 +133,14 @@ typedef struct TestOperation {
 } TestOperation;
 
 static void cleanup_operation(struct Client* cli, ContextID id) {
-    TestOperation* operation = cli->net.states[id].operation;
+    TestOperation* operation = cli->net.states[id].context;
     assert(operation);
     operation->cleanups++;
 }
 
 static int parse_operation(struct Client* cli, ContextID id, uint8_t* bytes, uint64_t size) {
     (void)bytes;
-    TestOperation* operation = cli->net.states[id].operation;
+    TestOperation* operation = cli->net.states[id].context;
     assert(operation);
     operation->replies++;
     if (size) {
@@ -161,17 +161,17 @@ static void test_operation_cleanup(void) {
     TestOperation operation = {0};
     ContextID id = client_new_context(&cli.net);
     cli.net.states[id].parser_id = 1;
-    cli.net.states[id].operation = &operation;
+    cli.net.states[id].context = &operation;
     assert(client_parse_response(&cli, id, NULL, 0) == CLIENT_OK);
     client_free_context(&cli, id);
     client_free_context(&cli, id);
     assert(operation.replies == 1 && operation.cleanups == 1);
-    assert(!cli.net.states[id].operation);
+    assert(!cli.net.states[id].context);
 
     // Completion cleans operation state immediately, while the host still owns the send buffer.
     id = client_new_context(&cli.net);
     cli.net.states[id].parser_id = 1;
-    cli.net.states[id].operation = &operation;
+    cli.net.states[id].context = &operation;
     size_t capacity = 256;
     Buffer* buffer = &cli.net.send_buffers[id];
     buffer->b = buffer_pool_pop(&cli.pool, &capacity);
@@ -180,7 +180,7 @@ static void test_operation_cleanup(void) {
     cli.net.states[id].send_owned = true;
     assert(client_parse_response(&cli, id, NULL, 1) == CLIENT_PARSE_DONE);
     assert(operation.replies == 2 && operation.cleanups == 2);
-    assert(!cli.net.states[id].operation && cli.net.states[id].release_pending);
+    assert(!cli.net.states[id].context && cli.net.states[id].release_pending);
     assert(cli.pool.buckets[0].available == 0);
     client_free_context(&cli, id);
     client_return_buffer(&cli, buffer);
@@ -189,7 +189,7 @@ static void test_operation_cleanup(void) {
     // Shutdown follows the same registered cleanup path.
     id = client_new_context(&cli.net);
     cli.net.states[id].parser_id = 1;
-    cli.net.states[id].operation = &operation;
+    cli.net.states[id].context = &operation;
     destroy_networker(&cli);
     assert(operation.cleanups == 3);
     buffer_pool_destroy(&cli.pool);

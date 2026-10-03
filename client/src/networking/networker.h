@@ -8,14 +8,17 @@
 #include "sz_client/client.h"
 #include "utils/buffers.h"
 
-typedef int (*Parser) (struct Client* cli, ContextID id, uint8_t* b, uint64_t l);
-typedef void (*ParserCleanup)(struct Client* cli, ContextID id);
+typedef int (*ResponseParser)(
+    struct Client* cli, ContextID id, uint8_t* bytes, uint64_t size
+);
+typedef void (*ParseStateCleanup)(struct Client* cli, ContextID id);
 
 typedef struct ParserEntry {
-    Parser parse;
+    ResponseParser parse_response;
+
     // Runs once at context close, before networking buffers are released.
-    // Release operation resources here; do not free the context recursively.
-    ParserCleanup cleanup;
+    // Release context resources here; do not free the context recursively.
+    ParseStateCleanup cleanup;
 } ParserEntry;
 
 typedef struct __attribute__((packed)) {
@@ -25,8 +28,8 @@ typedef struct __attribute__((packed)) {
     bool        send_owned, release_pending;
     bool        request_started; // The host accepted begin; cancellation must abort its transport.
 
-    // Client-selected state; the registered cleanup handler releases any owned resources.
-    void*       operation;
+    // Shared state for response parsing and sending; cleanup releases its owned resources.
+    void*       context;
 
 #ifndef PLATFORM_WASM
     int         fd;

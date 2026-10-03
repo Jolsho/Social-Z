@@ -13,7 +13,7 @@
 
 void login_cleanup(struct Client* cli, ContextID id) {
     if (cli->login_id == id) {
-        LoginOperation* login = cli->net.states[id].operation;
+        LoginOperation* login = cli->net.states[id].context;
         blob_discard_partial(cli, id, &login->blob);
 
         Buffer* password = &login->password;
@@ -29,7 +29,7 @@ void login_cleanup(struct Client* cli, ContextID id) {
 
 static int login_send_request(struct Client* cli, ContextID id) {
     ConState* state = &cli->net.states[id];
-    LoginOperation* login = state->operation;
+    LoginOperation* login = state->context;
     if (state->state != CON_IDLE || state->send_owned) {
         return CLIENT_CONN_BUSY;
     }
@@ -81,7 +81,7 @@ int client_login(
         return CLIENT_ERR;
     }
     cli->net.states[context].parser_id = PARSER_ID_USER_DATA;
-    cli->net.states[context].operation = login;
+    cli->net.states[context].context = login;
     cli->login_id = context;
 
     size_t capacity = password_size;
@@ -138,7 +138,7 @@ int login_handle_response(
         return CLIENT_ERR;
     }
 
-    LoginOperation* login = cli->net.states[id].operation;
+    LoginOperation* login = cli->net.states[id].context;
     int r = CLIENT_ERR;
 
     if (!b) {

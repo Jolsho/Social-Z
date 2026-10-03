@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 void blob_cleanup(struct Client* cli, ContextID id) {
-    BlobTransfer* transfer = cli->net.states[id].operation;
+    BlobTransfer* transfer = cli->net.states[id].context;
     if (transfer) {
         blob_discard_partial(cli, id, transfer);
         free(transfer);
@@ -35,8 +35,8 @@ int blob_get(
 
     ConState* state = &cli->net.states[context];
     state->parser_id = PARSER_ID_BLOB;
-    state->operation = calloc(1, sizeof(BlobTransfer));
-    if (!state->operation) {
+    state->context = calloc(1, sizeof(BlobTransfer));
+    if (!state->context) {
         client_free_context(cli, context);
         return CLIENT_ERR;
     }
@@ -66,7 +66,7 @@ int blob_handle_response(
     uint8_t* bytes,
     uint64_t size
 ) {
-    BlobTransfer* transfer = cli->net.states[id].operation;
+    BlobTransfer* transfer = cli->net.states[id].context;
     int result = parse_blob(cli, id, transfer, bytes, size);
     if (result != CLIENT_OK) {
         client_free_context(cli, id);

@@ -13,7 +13,7 @@ static bool return_early, reply_at_end, return_on_abort;
 static Buffer* pending;
 
 int request_begin(struct Client* cli, ContextID id) {
-    assert(phase == 0 && cli->net.states[id].operation);
+    assert(phase == 0 && cli->net.states[id].context);
     assert(!cli->net.states[id].send_owned);
     phase = 1;
     return fail_phase == phase ? CLIENT_ERR : CLIENT_OK;
@@ -36,7 +36,7 @@ int request_write(struct Client* cli, ContextID id, Buffer* buffer) {
 }
 
 int request_end(struct Client* cli, ContextID id) {
-    assert(phase == 2 && cli->net.states[id].operation);
+    assert(phase == 2 && cli->net.states[id].context);
     phase = 3;
     if (fail_phase == phase) {
         return CLIENT_ERR;
@@ -76,11 +76,11 @@ static void test_request(int failure, bool early, bool synchronous) {
     assert(aborts == (failure > 1 ? 1 : 0));
 
     if (!failure && !synchronous) {
-        assert(cli->net.states[id].operation);
+        assert(cli->net.states[id].context);
         assert(client_request_failed(cli, id) == CLIENT_ERR);
         assert(aborts == 0);
     }
-    assert(!cli->net.states[id].operation);
+    assert(!cli->net.states[id].context);
     assert(cli->net.states[id].state == CON_DEAD);
 
     if (pending) {
@@ -106,7 +106,7 @@ static void test_cancel(bool release) {
     ContextID id;
     assert(blob_get(cli, &owner, &label, &id) == CLIENT_OK);
     assert(client_cancel_request(cli, id) == CLIENT_OK);
-    assert(aborts == 1 && !cli->net.states[id].operation);
+    assert(aborts == 1 && !cli->net.states[id].context);
     assert(client_parse_response(cli, id, NULL, 0) == CLIENT_ERR);
     assert(client_cancel_request(cli, id) == CLIENT_ERR);
     if (pending) {

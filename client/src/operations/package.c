@@ -26,7 +26,7 @@ typedef struct PackageLoad {
 } PackageLoad;
 
 void package_cleanup(struct Client* cli, ContextID id) {
-    PackageLoad* load = cli->net.states[id].operation;
+    PackageLoad* load = cli->net.states[id].context;
     if (load) {
         // Keep completed ciphertext cached; discard partial transfer and provisional plaintext.
         encrypted_blob_clear(cli, id, &load->blob);
@@ -58,7 +58,7 @@ int package_get(
     ConState* state = &cli->net.states[context];
     state->parser_id = PARSER_ID_PACKAGE;
     PackageLoad* load = calloc(1, sizeof(*load));
-    state->operation = load;
+    state->context = load;
     if (!load) {
         client_free_context(cli, context);
         return CLIENT_ERR;
@@ -77,14 +77,14 @@ static int package_plaintext(
     const uint8_t* bytes,
     size_t size
 ) {
-    PackageLoad* load = cli->net.states[id].operation;
+    PackageLoad* load = cli->net.states[id].context;
     // The content parser copies this authenticated slice into its owned staging allocation.
     return parse_package_contents(&load->parser, &load->staging, bytes, size) == PACKAGE_ERR
         ? CLIENT_ERR : CLIENT_OK;
 }
 
 int package_handle_response(struct Client* cli, ContextID id, uint8_t* bytes, uint64_t size) {
-    PackageLoad* load = cli->net.states[id].operation;
+    PackageLoad* load = cli->net.states[id].context;
     int result = encrypted_blob_read(cli, id, &load->blob, bytes, size, package_plaintext);
     if (result == CLIENT_OK) {
         return result;

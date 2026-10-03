@@ -12,11 +12,11 @@
 
 void client_free_context(struct Client*, ContextID);
 static int parse_transfer(struct Client* cli, ContextID id, uint8_t* bytes, uint64_t size) {
-    return parse_blob(cli, id, cli->net.states[id].operation, bytes, size);
+    return parse_blob(cli, id, cli->net.states[id].context, bytes, size);
 }
 
 static void cleanup_transfer(struct Client* cli, ContextID id) {
-    BlobTransfer* transfer = cli->net.states[id].operation;
+    BlobTransfer* transfer = cli->net.states[id].context;
     blob_discard_partial(cli, id, transfer);
     free(transfer);
 }
@@ -32,8 +32,8 @@ static void setup(struct Client* cli)
     assert(client_new_context(&cli->net) == 1);
     assert(client_new_context(&cli->net) == 2);
     for (ContextID id = 1; id <= 2; id++) {
-        cli->net.states[id].operation = calloc(1, sizeof(BlobTransfer));
-        assert(cli->net.states[id].operation);
+        cli->net.states[id].context = calloc(1, sizeof(BlobTransfer));
+        assert(cli->net.states[id].context);
     }
     cli->net.parsers = parsers;
     cli->net.parsers_count = 1;
@@ -96,7 +96,7 @@ static void test_large_blob(void)
         assert(chunk(&cli, 1, hash, size, false, bytes + offset, length) == expected);
         offset += length;
     }
-    assert(item->received == size && !((BlobTransfer*)cli.net.states[1].operation)->active);
+    assert(item->received == size && !((BlobTransfer*)cli.net.states[1].context)->active);
     assert(memcmp(item->b, bytes, size) == 0 && cli.blob_store.mem == size);
     assert(store_copy_from_item(&cli.blob_store, &hash, 0, output, &count) == STORE_OK);
     assert(memcmp(output, bytes, sizeof(output)) == 0);
@@ -113,9 +113,9 @@ static void test_bounds_and_final_hash(void)
     uint8_t bytes[] = {1, 2, 3, 4, 5, 6, 7};
     HashT hash = blob_hash(bytes, sizeof(bytes));
     assert(parse_blob(NULL, 0, NULL, NULL, 0) == CLIENT_INVALID_ID);
-    assert(parse_blob(&cli, 1, cli.net.states[1].operation, NULL, 0) == CLIENT_ERR);
+    assert(parse_blob(&cli, 1, cli.net.states[1].context, NULL, 0) == CLIENT_ERR);
     for (size_t length = 0; length < HASH_SIZE + sizeof(uint64_t); length++)
-        assert(parse_blob(&cli, 1, cli.net.states[1].operation, hash.b, length) == CLIENT_SMALL_BUFFER);
+        assert(parse_blob(&cli, 1, cli.net.states[1].context, hash.b, length) == CLIENT_SMALL_BUFFER);
     const uint64_t invalid[] = {0, 2, UINT64_MAX, 200000};
     for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++)
         assert(chunk(&cli, 1, hash, invalid[i], true, bytes, 3) == CLIENT_ERR);
@@ -128,7 +128,7 @@ static void test_bounds_and_final_hash(void)
     assert(chunk(&cli, 1, hash, 7, false, bytes, 0) == CLIENT_SMALL_BUFFER);
     assert(chunk(&cli, 2, hash, 7, false, bytes + 3, 4) == CLIENT_CONN_BUSY);
     assert(chunk(&cli, 1, hash, 7, false, bytes, 5) == CLIENT_ERR);
-    assert(!cli.blob_store.mem && !((BlobTransfer*)cli.net.states[1].operation)->active);
+    assert(!cli.blob_store.mem && !((BlobTransfer*)cli.net.states[1].context)->active);
 
     assert(chunk(&cli, 1, hash, 7, true, bytes, 3) == CLIENT_OK);
     bytes[6] ^= 1;
@@ -154,8 +154,8 @@ static void test_interleaving_eviction_and_cancel(void)
 
     cli.blob_store.mem_max = 64;
     assert(client_new_context(&cli.net) == 1);
-    cli.net.states[1].operation = calloc(1, sizeof(BlobTransfer));
-    assert(cli.net.states[1].operation);
+    cli.net.states[1].context = calloc(1, sizeof(BlobTransfer));
+    assert(cli.net.states[1].context);
     assert(chunk(&cli, 1, ha, 4, true, a, 2) == CLIENT_OK);
     /* A new blob evicts this partial assembly; its continuation must not become a first chunk. */
     store_erase_item(&cli.blob_store, &hb);
@@ -180,7 +180,7 @@ static void test_pool_limit_and_exhaustion(void)
     unavailable.b[0] ^= 1;
     assert(chunk(&cli, 2, unavailable, 4096, true, bytes, 3) == CLIENT_ERR);
     assert(cli.blob_store.table.size == 1 && cli.blob_store.mem == 4096);
-    assert(!((BlobTransfer*)cli.net.states[2].operation)->active);
+    assert(!((BlobTransfer*)cli.net.states[2].context)->active);
     assert(chunk(&cli, 2, large, sizeof(bytes), true, bytes, 3) == CLIENT_OK);
     item = ht_lookup(&cli.blob_store.table, &large);
     assert(item && !item->pool && item->capacity == sizeof(bytes));

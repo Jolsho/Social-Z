@@ -156,7 +156,7 @@ static void password_stays_local(void) {
         Host host = new_host();
         host.retain = true;
         begin(&host, passwords[i], sizes[i]);
-        LoginOperation* login = host.cli->net.states[host.id].operation;
+        LoginOperation* login = host.cli->net.states[host.id].context;
         assert(host.pending->b != login->password.b);
         assert(host.size == sizeof(expected_request));
         assert(memcmp(host.request, expected_request, sizeof(expected_request)) == 0);
@@ -178,12 +178,12 @@ static void success_and_retry(void) {
     memset(supplied, 0, sizeof(supplied));
     assert(client_login(host.cli, "bob", password, sizeof(password) - 1, &host.id) == CLIENT_CONN_BUSY);
     resolve(&host, blob, &identity.pub);
-    LoginOperation* login = host.cli->net.states[host.id].operation;
+    LoginOperation* login = host.cli->net.states[host.id].context;
     uint8_t* retained_password = login->password.b;
     size_t retained_capacity = login->password.cap;
     assert(deliver_blob(&host, blob, 7) == CLIENT_PARSE_DONE);
     assert(client_is_logged_in(host.cli));
-    assert(!host.cli->login_id && !host.cli->net.states[host.id].operation);
+    assert(!host.cli->login_id && !host.cli->net.states[host.id].context);
     /* Pool free-list pointers occupy the prefix; the rest of the released buffer is wiped. */
     assert(sodium_is_zero(retained_password + sizeof(void*), retained_capacity - sizeof(void*)));
     assert(client_get_public_key(host.cli, public_key) == CLIENT_OK);
@@ -344,7 +344,7 @@ static void retained_requests(void) {
     reply_metadata(reply, blob, &identity.pub);
     assert(client_parse_response(host.cli, first, reply, sizeof(reply)) == CLIENT_OK);
     memset(reply, 0, sizeof(reply));
-    LoginOperation* login = host.cli->net.states[host.id].operation;
+    LoginOperation* login = host.cli->net.states[host.id].context;
     assert(host.calls == 1 && login->metadata_ready);
     assert(memcmp(request->b + 6, "alice", 5) == 0);
     ContextID retry;
