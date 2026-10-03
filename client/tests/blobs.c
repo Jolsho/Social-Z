@@ -11,7 +11,7 @@
 #include <stdlib.h>
 
 void client_free_context(struct Client*, ContextID);
-static Parser parsers[] = {parse_blob};
+static const ParserEntry parsers[] = {{parse_blob, blob_discard_partial}};
 
 static void setup(struct Client* cli)
 {

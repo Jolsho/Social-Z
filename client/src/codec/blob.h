@@ -9,3 +9,6 @@
 
 // Assemble transfer chunks and verify the whole ciphertext hash before completing.
 int parse_blob(struct Client* cli, ContextID id, uint8_t* bytes, uint64_t size);
+
+// Discard only this context's partial transfer; completed cached blobs remain available.
+void blob_discard_partial(struct Client* cli, ContextID id);

@@ -11,4 +11,4 @@
 #define PARSER_ID_BLOB 1
 #define PARSER_ID_CAP 2
 
-extern const Parser parsers[PARSER_ID_CAP];
+extern const ParserEntry parsers[PARSER_ID_CAP];

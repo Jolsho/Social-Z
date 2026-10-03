@@ -9,6 +9,19 @@
 #include "sz_common/hash.h"
 #include <stdlib.h>
 
+void blob_discard_partial(struct Client* cli, ContextID id) {
+    ConState* state = &cli->net.states[id];
+    if (!state->blob_active) {
+        return;
+    }
+
+    StoreItem* item = ht_lookup(&cli->blob_store.table, &state->blob_hash);
+    if (item && item->context == id && item->received < item->size) {
+        store_erase_item(&cli->blob_store, &state->blob_hash);
+    }
+    state->blob_active = false;
+}
+
 int parse_blob(struct Client* cli, ContextID id, uint8_t* b, uint64_t len) {
     if (!valid_id(id)) return CLIENT_INVALID_ID;
     if (!cli || !b) return CLIENT_ERR;

@@ -103,7 +103,7 @@ static void test_setup_failures_and_dispatch(void)
     assert(client_parse_response(NULL, 1, NULL, 0) == CLIENT_ERR);
     assert(client_new_context(&cli.net) == 1);
     assert(client_parse_response(&cli, 1, NULL, 0) == CLIENT_ERR);
-    const Parser empty[] = {NULL};
+    const ParserEntry empty[] = {{0}};
     cli.net.parsers = empty;
     cli.net.parsers_count = 1;
     assert(client_parse_response(&cli, 1, NULL, 0) == CLIENT_ERR);
@@ -127,6 +127,74 @@ static void test_shutdown_returns_buffers(void)
     buffer_pool_destroy(&cli.pool);
 }
 
+typedef struct TestOperation {
+    size_t replies;
+    size_t cleanups;
+} TestOperation;
+
+static void cleanup_operation(struct Client* cli, ContextID id) {
+    TestOperation* operation = cli->net.states[id].operation;
+    assert(operation);
+    operation->cleanups++;
+}
+
+static int parse_operation(struct Client* cli, ContextID id, uint8_t* bytes, uint64_t size) {
+    (void)bytes;
+    TestOperation* operation = cli->net.states[id].operation;
+    assert(operation);
+    operation->replies++;
+    if (size) {
+        client_free_context(cli, id);
+        return CLIENT_PARSE_DONE;
+    }
+    return CLIENT_OK;
+}
+
+static void test_operation_cleanup(void) {
+    struct Client cli = {0};
+    assert(init_networker(&cli.net) == CLIENT_OK);
+    assert(buffer_pool_init(&cli.pool, 256, 1, 4096, 1, 65536, 1) == 0);
+    const ParserEntry handlers[] = {{0}, {parse_operation, cleanup_operation}};
+    cli.net.parsers = handlers;
+    cli.net.parsers_count = 2;
+
+    TestOperation operation = {0};
+    ContextID id = client_new_context(&cli.net);
+    cli.net.states[id].parser_id = 1;
+    cli.net.states[id].operation = &operation;
+    assert(client_parse_response(&cli, id, NULL, 0) == CLIENT_OK);
+    client_free_context(&cli, id);
+    client_free_context(&cli, id);
+    assert(operation.replies == 1 && operation.cleanups == 1);
+    assert(!cli.net.states[id].operation);
+
+    // Completion cleans operation state immediately, while the host still owns the send buffer.
+    id = client_new_context(&cli.net);
+    cli.net.states[id].parser_id = 1;
+    cli.net.states[id].operation = &operation;
+    size_t capacity = 256;
+    Buffer* buffer = &cli.net.send_buffers[id];
+    buffer->b = buffer_pool_pop(&cli.pool, &capacity);
+    assert(buffer->b);
+    buffer->cap = capacity;
+    cli.net.states[id].send_owned = true;
+    assert(client_parse_response(&cli, id, NULL, 1) == CLIENT_PARSE_DONE);
+    assert(operation.replies == 2 && operation.cleanups == 2);
+    assert(!cli.net.states[id].operation && cli.net.states[id].release_pending);
+    assert(cli.pool.buckets[0].available == 0);
+    client_free_context(&cli, id);
+    client_return_buffer(&cli, buffer);
+    assert(operation.cleanups == 2 && cli.pool.buckets[0].available == 1);
+
+    // Shutdown follows the same registered cleanup path.
+    id = client_new_context(&cli.net);
+    cli.net.states[id].parser_id = 1;
+    cli.net.states[id].operation = &operation;
+    destroy_networker(&cli);
+    assert(operation.cleanups == 3);
+    buffer_pool_destroy(&cli.pool);
+}
+
 int main(void)
 {
     test_invalid_contexts();
@@ -134,6 +202,7 @@ int main(void)
     test_exhaustion_and_reuse();
     test_setup_failures_and_dispatch();
     test_shutdown_returns_buffers();
+    test_operation_cleanup();
     puts("Context tests passed.");
     return 0;
 }

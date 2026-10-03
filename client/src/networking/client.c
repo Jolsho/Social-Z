@@ -55,50 +55,59 @@ ContextID client_new_context(Networker* net) {
 }
 
 void client_free_context(struct Client* cli, ContextID id) {
-    if (!cli || !valid_id(id)) return;
-    Networker* net = &cli->net;
-    if (net->states[id].state == CON_DEAD && !net->states[id].release_pending) return;
-    if (cli->login.id == id) {
-        volatile uint8_t* secret = cli->login.password.b;
-        for (size_t i = 0; i < cli->login.password.cap; i++) secret[i] = 0;
-        if (secret) buffer_pool_push(&cli->pool, cli->login.password.b, cli->login.password.cap);
-        memset(&cli->login, 0, sizeof(cli->login));
+    if (!cli || !valid_id(id)) {
+        return;
     }
 
-    if (net->states[id].blob_active) {
-        HashT hash = net->states[id].blob_hash;
-        StoreItem* item = ht_lookup(&cli->blob_store.table, &hash);
-        if (item && item->context == id && item->received < item->size)
-            store_erase_item(&cli->blob_store, &hash);
+    Networker* net = &cli->net;
+    ConState* state = &net->states[id];
+    if (state->state == CON_DEAD && !state->release_pending) {
+        return;
     }
+
+    if (state->state != CON_DEAD) {
+        // Cleanup runs once, even if the context must wait for the host's send buffer.
+        state->state = CON_DEAD;
+        if (net->parsers && state->parser_id < net->parsers_count) {
+            ParserCleanup cleanup = net->parsers[state->parser_id].cleanup;
+            if (cleanup) {
+                cleanup(cli, id);
+            }
+        }
+        state->operation = NULL;
+    }
+
     context_release_recv_buffer(cli, id);
 
     // The host may still be sending. Keep this context reserved until it returns the buffer.
-    if (net->states[id].send_owned) {
-        net->states[id].release_pending = true;
-        net->states[id].state = CON_DEAD;
+    if (state->send_owned) {
+        state->release_pending = true;
         return;
     }
     context_release_send_buffer(cli, id);
 
     net->since_used_last[id] = 0;
 
-    ConState* c = &net->states[id];
-    memset(c, 0, sizeof(ConState));
-
-    c->next_free = net->free_head;
-
+    memset(state, 0, sizeof(*state));
+    state->next_free = net->free_head;
     net->free_head = id;
 }
 
 int client_parse_response(struct Client* cli, ContextID id, uint8_t* b, uint64_t l) {
-    if (!valid_id(id)) return CLIENT_INVALID_ID;
-    if (!cli || !cli->net.parsers) return CLIENT_ERR;
-    ConState state = cli->net.states[id];
-    if (state.state == CON_DEAD || state.parser_id >= cli->net.parsers_count ||
-        !cli->net.parsers[state.parser_id]) return CLIENT_ERR;
+    if (!valid_id(id)) {
+        return CLIENT_INVALID_ID;
+    }
+    if (!cli || !cli->net.parsers) {
+        return CLIENT_ERR;
+    }
 
-    return cli->net.parsers[state.parser_id](cli, id, b, l);
+    const ConState* state = &cli->net.states[id];
+    if (state->state == CON_DEAD || state->parser_id >= cli->net.parsers_count ||
+        !cli->net.parsers[state->parser_id].parse) {
+        return CLIENT_ERR;
+    }
+
+    return cli->net.parsers[state->parser_id].parse(cli, id, b, l);
 }
 
 void client_return_buffer(struct Client* cli, struct Buffer* buff) {

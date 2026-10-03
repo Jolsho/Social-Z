@@ -9,3 +9,4 @@
 
 // Response dispatch advances the username request through metadata and header chunks.
 int login_handle_response(struct Client* cli, ContextID id, uint8_t* bytes, uint64_t size);
+void login_cleanup(struct Client* cli, ContextID id);

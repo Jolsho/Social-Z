@@ -10,6 +10,14 @@
 #include "sz_common/codec.h"
 
 typedef int (*Parser) (struct Client* cli, ContextID id, uint8_t* b, uint64_t l);
+typedef void (*ParserCleanup)(struct Client* cli, ContextID id);
+
+typedef struct ParserEntry {
+    Parser parse;
+    // Runs once at context close, before networking buffers are released.
+    // Release operation resources here; do not free the context recursively.
+    ParserCleanup cleanup;
+} ParserEntry;
 
 typedef struct __attribute__((packed)) {
     uint8_t     state;
@@ -18,6 +26,9 @@ typedef struct __attribute__((packed)) {
     bool        send_owned, release_pending;
     bool        blob_active;
     HashT       blob_hash;
+
+    // Client-selected state; the registered cleanup handler releases any owned resources.
+    void*       operation;
 
 #ifndef PLATFORM_WASM
     int         fd;
@@ -42,7 +53,7 @@ typedef struct {
     Buffer*     send_buffers;
 
     /* Parsers */
-    const Parser* parsers;
+    const ParserEntry* parsers;
     uint16_t    parsers_count;
 
 } Networker;

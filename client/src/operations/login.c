@@ -8,6 +8,20 @@
 #include "operations/login.h"
 #include "networking/dispatch.h"
 #include "codec/blob.h"
+#include <sodium.h>
+
+void login_cleanup(struct Client* cli, ContextID id) {
+    if (cli->login.id == id) {
+        Buffer* password = &cli->login.password;
+        if (password->b) {
+            sodium_memzero(password->b, password->cap);
+            buffer_pool_push(&cli->pool, password->b, password->cap);
+        }
+        memset(&cli->login, 0, sizeof(cli->login));
+    }
+
+    blob_discard_partial(cli, id);
+}
 
 static int login_send_request(struct Client* cli, ContextID id) {
     ConState* state = &cli->net.states[id];

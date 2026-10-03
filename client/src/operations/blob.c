@@ -9,6 +9,10 @@
 #include "networking/context.h"
 #include "networking/dispatch.h"
 
+void blob_cleanup(struct Client* cli, ContextID id) {
+    blob_discard_partial(cli, id);
+}
+
 int blob_get(
     struct Client* cli,
     const Key* owner,

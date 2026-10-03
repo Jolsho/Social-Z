@@ -12,3 +12,4 @@
 // Completed ciphertext stays in blob_store under the hash carried by the reply.
 int blob_get(struct Client* cli, const Key* owner, const HashT* label, ContextID* id);
 int blob_handle_response(struct Client* cli, ContextID id, uint8_t* bytes, uint64_t size);
+void blob_cleanup(struct Client* cli, ContextID id);
