@@ -20,6 +20,15 @@ typedef struct Feed {
 // A zero-initialized Feed is empty; destruction also releases every loaded page.
 void feed_destroy(Feed* feed);
 
+// Find an already loaded page; NULL means it has not been loaded.
+// The returned view can move when another page grows the vector.
+FeedPage* feed_find_page(Feed* feed, uint64_t page_number);
+
+// Move a parsed page into the feed, replacing the same page number if already loaded.
+// page must be owned staging storage outside this feed's vector.
+// Success empties staging; allocation failure leaves both staging and feed unchanged.
+int feed_store_page(Feed* feed, FeedPage* page);
+
 // TODO: Define navigation and pending-load results before implementing these functions.
 // Missing pages may initiate a request or queue work through the client.
 // Returned page views will be borrowed and may move when the vector grows.

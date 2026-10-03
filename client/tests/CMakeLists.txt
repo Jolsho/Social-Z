@@ -11,6 +11,10 @@ sz_add_test(client context context.c
 target_compile_definitions(sz_context_test PRIVATE calloc=context_test_calloc)
 sz_add_test(client feed_page_storage feed_page_storage.c ../src/content/feed_page.c)
 target_link_libraries(sz_feed_page_storage_test PRIVATE sodium)
+
+sz_add_test(client feed_storage feed_storage.c ../src/content/feed.c ../src/content/feed_page.c)
+target_link_libraries(sz_feed_storage_test PRIVATE sodium)
+target_compile_definitions(sz_feed_storage_test PRIVATE realloc=feed_test_realloc)
 sz_add_test(client account account.c ../src/codec/account.c ../../common/src/requests/requests.c ../src/utils/crypto.c)
 target_link_libraries(sz_account_test PRIVATE sodium)
 sz_add_test(client blobs blobs.c ../src/codec/blob.c ../src/networking/client.c
