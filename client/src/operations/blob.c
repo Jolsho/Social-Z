@@ -57,13 +57,7 @@ int blob_send_get(struct Client* cli, ContextID id, const Key* owner, const Hash
     request.data.blob.label = *label;
     buffer->size = marshal_blob_request(buffer->b, &request);
 
-    ConState* state = &cli->net.states[id];
-    state->state = CON_RECEIVING;
-    state->send_owned = true;
-
-    // Returning from this call does not return ownership of the outgoing buffer.
-    send_request(cli, id, buffer);
-    return CLIENT_OK;
+    return context_send_request(cli, id);
 }
 
 int blob_handle_response(

@@ -60,11 +60,14 @@ AGREED: REQUESTS AND BLOB AUTHORITY
 
 
 AGREED: HOST BOUNDARY AND OWNERSHIP
-    The host implements send_request and supplies responses through client_parse_response.
-    send_request is asynchronous and may retain an outgoing buffer for an arbitrary duration.
+    The host implements request_begin/write/end/abort and supplies responses through client_parse_response.
+    An accepted write may retain its buffer until client_return_buffer; a rejected write retains nothing.
+    Responses begin at end or later; begin/write report immediate errors without response callbacks.
+    Later transport failures stop delivery and call client_request_failed.
+    Cancellation calls request_abort; the host stops delivery and still returns retained buffers.
     Build requests in client-owned networking buffers and encrypt in the same allocation.
     The host receives the original buffer descriptor from the context send-buffer array.
-    Neither returning from send_request nor receiving a response releases that buffer.
+    Neither accepting a write, ending the body, nor receiving a response releases that buffer.
     Only client_return_buffer allows reuse.
     Cancellation and completion reserve the context while the host holds its buffer.
     Return all outstanding buffers before destroying the client.

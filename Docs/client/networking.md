@@ -31,13 +31,23 @@ Their contents are decoded locally by the client.
 
 Create a context.
 Marshal the request into bytes.
-Send it through the host or native transport.
+Open a logical request through request_begin().
+Append its bytes through request_write().
+Close its body through request_end().
 Pass response bytes into client_parse_response().
 Dispatch to the parser registered for that context.
 Return buffers and release the context when finished.
 
 The public API expects sending to be asynchronous.
-It gives the sender ownership of the outgoing buffer.
+An accepted write gives the sender ownership of the outgoing buffer.
+A rejected write retains no buffer.
+The host can return a write buffer immediately.
+Responses begin at request_end() or later.
+Ending the body does not release an outstanding buffer.
+All three hooks report immediate failure through their return value.
+Later transport failures call client_request_failed() after stopping delivery.
+client_cancel_request() calls request_abort() and releases operation state.
+Abort stops delivery but may return a retained buffer later.
 The response parser borrows the bytes passed to it.
 Buffer ownership matters because the pool reuses that memory.
 The sender returns the original outgoing buffer through client_return_buffer().
@@ -72,8 +82,8 @@ A context can then be reused for another exchange.
 
 ## TODO
 
-- Queue outgoing requests instead of sending directly.
-  [client/src/client.h:65](../../client/src/client.h#L65)
+- Define scheduler-driven writes and the browser transport mapping.
+  The host lifecycle supports multiple writes; current operations use one write.
 
 - Complete transport handling for partial responses and buffer lifetimes.
   [client/src/client.h:17](../../client/src/client.h#L17)

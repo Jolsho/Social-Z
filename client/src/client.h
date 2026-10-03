@@ -51,17 +51,3 @@ struct Client {
     /////////// ECS WORLD STATE /////////////
     World           wrld;
 };
-
-#if defined(PLATFORM_LINUX) || defined(PLATFORM_MACOS)
-#include "sys/socket.h"
-
-inline void send_request(struct Client* cli, ContextID id, struct Buffer* b) {
-
-    // TODO --> this is very naive. You need to enqueue these things.
-
-    ssize_t n = send(cli->net.states[id].fd, b->b, b->size, 0);
-    bool failed = n < 0 || (size_t)n != b->size;
-    client_return_buffer(cli, b);
-    if (failed) client_cancel_login(cli);
-}
-#endif

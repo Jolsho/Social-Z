@@ -15,7 +15,7 @@ It also holds network state and the visual world.
 init_client() initializes the pool, cache, and networking with an empty Feed.
 destroy_client() releases those resources.
 Rendering startup initializes the world separately.
-Username/password login uses the existing request marshaler, send_request hook, and response parser.
+Username/password login uses the existing request marshaler, begin/write/end host hooks, and response parser.
 See [login](login.md) for the flow and buffer ownership rules.
 Login and blob response parsers are enabled while the feed format is being repaired.
 

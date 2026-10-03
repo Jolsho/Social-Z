@@ -45,7 +45,7 @@ Context tests use real networking setup and exercise allocation failures and shu
 The client lifecycle test uses the public constructor and destructor with real blob parsing.
 It also forces each startup allocation to fail and checks cleanup.
 
-The login test uses a host implementation of send_request with real marshaling, parsing, and crypto.
+The login test uses a host implementation of the begin/write/end hooks with real marshaling, parsing, and crypto.
 It covers chunked retrieval, wrong passwords, identity binding, malformed records, and cancellation.
 It overwrites borrowed replies and checks deferred buffer returns and context reuse.
 It also covers pool exhaustion, synchronous replies, and password re-encryption preserving the full account header.

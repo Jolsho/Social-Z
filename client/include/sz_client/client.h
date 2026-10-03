@@ -51,13 +51,32 @@ struct Buffer;
 void client_return_buffer(struct Client* cli, struct Buffer* buff);
 
 
-// The host retains the buffer asynchronously until client_return_buffer.
-// Returning from send_request does not release it or complete the request.
-extern void send_request(struct Client* cli, ContextID id, struct Buffer* buff);
+// Host hooks return CLIENT_OK when accepted, CLIENT_ERR on immediate failure.
+// begin opens one logical request; writes append bytes; end closes its body.
+// begin/write must not deliver responses or call client_request_failed.
+// end may deliver a response synchronously; otherwise the host supplies it later.
+extern int request_begin(struct Client* cli, ContextID id);
+extern int request_write(struct Client* cli, ContextID id, struct Buffer* buff);
+extern int request_end(struct Client* cli, ContextID id);
+
+// A successful write retains the original buffer until client_return_buffer.
+// A failed write retains nothing. Only one buffer per context may be outstanding.
+// end may be called while that buffer is retained; it must follow its bytes.
+// An accepted end returns CLIENT_OK even if a synchronous response fails parsing.
+
+// Abort stops further delivery for this context. It may return the send buffer,
+// or retain it until later, but must not deliver responses or failure callbacks.
+extern void request_abort(struct Client* cli, ContextID id);
+int client_cancel_request(struct Client* cli, ContextID id);
+
+// Report a later transport failure after stopping further delivery for this context.
+// Failure cleans operation state; the host must still return any retained buffer.
+int client_request_failed(struct Client* cli, ContextID id);
 
 
 /// Can pass any response from a node into this and it will return CLIENT OUTPUT CODES.
 /// This borrows a view of memory so client does not assume ownership.
+// On completion or error, stop delivering events for this context.
 int client_parse_response(struct Client*, ContextID id, uint8_t* b, uint64_t l);
 
 

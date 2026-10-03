@@ -34,7 +34,11 @@ int init_networker(Networker* net) {
 
 void destroy_networker(struct Client* cli) {
     if (!cli) return;
-    for (ContextID id = 1; id < MAX_CONNS; id++) client_free_context(cli, id);
+    for (ContextID id = 1; id < MAX_CONNS; id++) {
+        if (cli->net.states[id].state != CON_DEAD) {
+            client_cancel_request(cli, id);
+        }
+    }
     free(cli->net.recv_buffers);
     free(cli->net.send_buffers);
     memset(&cli->net, 0, sizeof(cli->net));
@@ -129,4 +133,32 @@ void client_return_buffer(struct Client* cli, struct Buffer* buff) {
         }
         return;
     }
+}
+
+int client_cancel_request(struct Client* cli, ContextID id) {
+    if (!valid_id(id)) {
+        return CLIENT_INVALID_ID;
+    }
+    if (!cli || cli->net.states[id].state == CON_DEAD) {
+        return CLIENT_ERR;
+    }
+
+    // Abort may release a host-held buffer, but cannot reenter response dispatch.
+    if (cli->net.states[id].request_started) {
+        request_abort(cli, id);
+    }
+    client_free_context(cli, id);
+    return CLIENT_OK;
+}
+
+int client_request_failed(struct Client* cli, ContextID id) {
+    if (!valid_id(id)) {
+        return CLIENT_INVALID_ID;
+    }
+    if (!cli || cli->net.states[id].state == CON_DEAD) {
+        return CLIENT_ERR;
+    }
+
+    client_free_context(cli, id);
+    return CLIENT_ERR;
 }

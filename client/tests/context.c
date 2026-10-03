@@ -206,3 +206,28 @@ int main(void)
     puts("Context tests passed.");
     return 0;
 }
+
+// These tests exercise context/storage internals without submitting host requests.
+int request_begin(struct Client* cli, ContextID id) {
+    (void)cli;
+    (void)id;
+    return CLIENT_ERR;
+}
+
+int request_write(struct Client* cli, ContextID id, struct Buffer* buffer) {
+    (void)cli;
+    (void)id;
+    (void)buffer;
+    return CLIENT_ERR;
+}
+
+int request_end(struct Client* cli, ContextID id) {
+    (void)cli;
+    (void)id;
+    return CLIENT_ERR;
+}
+
+void request_abort(struct Client* cli, ContextID id) {
+    (void)cli;
+    (void)id;
+}

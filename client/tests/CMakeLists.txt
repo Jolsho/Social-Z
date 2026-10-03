@@ -36,6 +36,9 @@ target_compile_definitions(sz_lifecycle_test PRIVATE
 sz_add_test(client login login.c ${client_sources})
 target_link_libraries(sz_login_test PRIVATE blake3 sodium)
 
+sz_add_test(client request_lifecycle request_lifecycle.c ${client_sources})
+target_link_libraries(sz_request_lifecycle_test PRIVATE blake3 sodium)
+
 sz_add_test(client blob_get blob_get.c ${client_sources})
 target_link_libraries(sz_blob_get_test PRIVATE blake3 sodium)
 

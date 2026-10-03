@@ -23,3 +23,7 @@ int context_release_send_buffer(struct Client* cli, ContextID id);
 int context_release_recv_buffer(struct Client* cli, ContextID id);
 
 int buffer_ensure_min_cap(struct Client* cli, Buffer* buff, uint32_t min);
+
+// Submit an already marshaled, complete request through the host lifecycle.
+// Streaming operations will use the same hooks across multiple scheduler steps.
+int context_send_request(struct Client* cli, ContextID id);

@@ -17,7 +17,24 @@ static const Key owner = {{4}};
 static const HashT label = {{5}};
 static Buffer* pending[MAX_CONNS];
 
-void send_request(struct Client* cli, ContextID id, struct Buffer* buffer) {
+int request_begin(struct Client* cli, ContextID id) {
+    (void)cli;
+    (void)id;
+    return CLIENT_OK;
+}
+
+int request_end(struct Client* cli, ContextID id) {
+    (void)cli;
+    (void)id;
+    return CLIENT_OK;
+}
+
+void request_abort(struct Client* cli, ContextID id) {
+    (void)cli;
+    (void)id;
+}
+
+int request_write(struct Client* cli, ContextID id, struct Buffer* buffer) {
     assert(!pending[id] && buffer == &cli->net.send_buffers[id]);
     assert(cli->net.states[id].operation && cli->net.states[id].send_owned);
     Request request;
@@ -25,6 +42,7 @@ void send_request(struct Client* cli, ContextID id, struct Buffer* buffer) {
     assert(request.kind == REQUEST_BLOB_GET);
     assert(memcmp(request.data.blob.owner.b, owner.b, KEY_SIZE) == 0);
     pending[id] = buffer;
+    return CLIENT_OK;
 }
 
 static Buffer encrypted_feed(uint64_t page_number, bool malformed, bool oversized) {

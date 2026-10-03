@@ -44,11 +44,9 @@ static int login_send_request(struct Client* cli, ContextID id) {
 
     marshal_account_request(request->b, login->username);
     request->size = size;
-    state->send_owned = true;
-    state->state = CON_RECEIVING;
-
-    // The host owns this buffer until it returns it, independently of replies.
-    send_request(cli, id, request);
+    if (context_send_request(cli, id) != CLIENT_OK) {
+        return CLIENT_ERR;
+    }
 
     if (cli->logged_in) {
         return CLIENT_PARSE_DONE;
@@ -107,7 +105,7 @@ int client_cancel_login(struct Client* cli) {
         return CLIENT_ERR;
     }
     if (cli->login_id) {
-        client_free_context(cli, cli->login_id);
+        return client_cancel_request(cli, cli->login_id);
     }
 
     return CLIENT_OK;

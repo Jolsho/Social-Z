@@ -56,3 +56,29 @@ int buffer_ensure_min_cap(
 
     return CLIENT_OK;
 }
+
+int context_send_request(struct Client* cli, ContextID id) {
+    ConState* state = &cli->net.states[id];
+    state->state = CON_RECEIVING;
+    if (request_begin(cli, id) != CLIENT_OK) {
+        client_free_context(cli, id);
+        return CLIENT_ERR;
+    }
+
+    state->request_started = true;
+
+    // Install ownership before write: the host may return the buffer immediately.
+    state->send_owned = true;
+    if (request_write(cli, id, &cli->net.send_buffers[id]) != CLIENT_OK) {
+        state->send_owned = false;
+        client_cancel_request(cli, id);
+        return CLIENT_ERR;
+    }
+
+    // No responses until end, so returning a write buffer cannot recycle this context.
+    if (request_end(cli, id) != CLIENT_OK) {
+        client_cancel_request(cli, id);
+        return CLIENT_ERR;
+    }
+    return CLIENT_OK;
+}

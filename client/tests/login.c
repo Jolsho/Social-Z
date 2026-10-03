@@ -67,7 +67,7 @@ static int deliver_blob(Host* host, const uint8_t* bytes, size_t chunk_size) {
 
 static Host* active_host;
 
-void send_request(struct Client* cli, ContextID id, struct Buffer* buff) {
+int request_write(struct Client* cli, ContextID id, struct Buffer* buff) {
     Host* host = active_host;
     assert(host && host->cli == cli);
     assert(buff == &cli->net.send_buffers[id]);
@@ -81,26 +81,39 @@ void send_request(struct Client* cli, ContextID id, struct Buffer* buff) {
     assert(parse_request(&request, buff->b, buff->size) == 0);
     assert(request.kind == REQUEST_ACCOUNT);
     assert(strcmp(request.data.username, "alice") == 0);
-    uint8_t operation = buff->b[3];
     if (host->retain) {
         assert(!host->pending);
         host->pending = buff;
     } else client_return_buffer(cli, buff);
+    return CLIENT_OK;
+}
+
+int request_begin(struct Client* cli, ContextID id) {
+    assert(active_host && active_host->cli == cli);
+    (void)id;
+    return CLIENT_OK;
+}
+
+int request_end(struct Client* cli, ContextID id) {
+    Host* host = active_host;
     if (host->fail) {
-        client_cancel_login(cli);
-        return;
+        return CLIENT_ERR;
     }
     if (host->synchronous) {
-        if (operation == 1) {
-            uint8_t reply[ACCOUNT_RESPONSE_METADATA_SIZE];
-            reply_metadata(reply, blob, &identity.pub);
-            host->response = client_parse_response(cli, id, reply, sizeof(reply));
-            memset(reply, 0, sizeof(reply));
-            if (host->response == CLIENT_OK) {
-                host->response = deliver_blob(host, blob, 11);
-            }
+        uint8_t reply[ACCOUNT_RESPONSE_METADATA_SIZE];
+        reply_metadata(reply, blob, &identity.pub);
+        host->response = client_parse_response(cli, id, reply, sizeof(reply));
+        memset(reply, 0, sizeof(reply));
+        if (host->response == CLIENT_OK) {
+            host->response = deliver_blob(host, blob, 11);
         }
     }
+    return CLIENT_OK;
+}
+
+void request_abort(struct Client* cli, ContextID id) {
+    assert(active_host && active_host->cli == cli);
+    (void)id;
 }
 
 static Host new_host(void) {

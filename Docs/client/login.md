@@ -9,7 +9,7 @@ Post packages have their own keys retained in encrypted feed metadata.
 
 ## Host interface
 
-The host implements the existing send_request() hook.
+The host implements the request_begin(), request_write(), and request_end() hooks.
 Call client_login() with the username, password bytes, their length, and an output ContextID.
 The client copies the password into its pool.
 login_send_request() in operations/login.c uses marshal_account_request() and sends one username request.

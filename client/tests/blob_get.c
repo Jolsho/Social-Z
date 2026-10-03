@@ -12,11 +12,29 @@
 static Buffer* pending;
 static Request sent;
 
-void send_request(struct Client* cli, ContextID id, struct Buffer* buffer) {
+int request_begin(struct Client* cli, ContextID id) {
+    (void)cli;
+    (void)id;
+    return CLIENT_OK;
+}
+
+int request_end(struct Client* cli, ContextID id) {
+    (void)cli;
+    (void)id;
+    return CLIENT_OK;
+}
+
+void request_abort(struct Client* cli, ContextID id) {
+    (void)cli;
+    (void)id;
+}
+
+int request_write(struct Client* cli, ContextID id, struct Buffer* buffer) {
     assert(!pending && buffer == &cli->net.send_buffers[id]);
     assert(cli->net.states[id].send_owned);
     assert(parse_request(&sent, buffer->b, buffer->size) == 0);
     pending = buffer;
+    return CLIENT_OK;
 }
 
 int main(void) {

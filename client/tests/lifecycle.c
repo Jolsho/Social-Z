@@ -15,9 +15,27 @@
 #include <assert.h>
 #include <stdlib.h>
 
-void send_request(struct Client* cli, ContextID id, struct Buffer* buff) {
+int request_begin(struct Client* cli, ContextID id) {
+    (void)cli;
+    (void)id;
+    return CLIENT_OK;
+}
+
+int request_end(struct Client* cli, ContextID id) {
+    (void)cli;
+    (void)id;
+    return CLIENT_OK;
+}
+
+void request_abort(struct Client* cli, ContextID id) {
+    (void)cli;
+    (void)id;
+}
+
+int request_write(struct Client* cli, ContextID id, struct Buffer* buff) {
     (void)cli; (void)id; (void)buff;
     assert(!"Lifecycle tests do not send requests");
+    return CLIENT_OK;
 }
 
 static size_t allocation_count, fail_at;
