@@ -42,6 +42,11 @@ target_compile_definitions(sz_feed_page_test PRIVATE
 sz_add_test(client blob_crypto crypto.c ../src/utils/crypto.c ../src/codec/feed_page.c ../src/content/feed_page.c)
 target_link_libraries(sz_blob_crypto_test PRIVATE sodium)
 
+sz_add_test(client encrypted_blob encrypted_blob.c
+    ../src/codec/encrypted_blob.c ../src/utils/crypto.c
+    ../src/codec/package.c ../src/content/package.c)
+target_link_libraries(sz_encrypted_blob_test PRIVATE sodium)
+
 sz_add_test(client package package.c ../src/codec/package.c ../src/content/package.c)
 target_link_libraries(sz_package_test PRIVATE sodium)
 

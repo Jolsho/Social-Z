@@ -121,7 +121,7 @@ ENCRYPTION AND TRANSFER CHUNKS
     Existing assembly uses the pool when the blob fits its largest bucket, otherwise heap storage.
     The complete blob hash is verified after assembly.
     Transport chunks and authenticated encrypted chunks are separate boundaries.
-    PROPOSED stored envelope: version:u16, suite:u16, and a 24-byte secretstream header.
+    Stored envelope: version:u16=1, suite:u16=1, and a 24-byte secretstream header.
     Follow with ciphertext_length:u32 and ciphertext for each encrypted chunk.
     Use a fresh secretstream for each blob and at most 64 KiB plaintext per encrypted chunk.
     Reserve the extra 17 authentication bytes in the networking allocation.
@@ -129,7 +129,9 @@ ENCRYPTION AND TRANSFER CHUNKS
     Require a final tag; reject truncation, invalid tags, and trailing data.
     A transport may split an encrypted chunk across messages.
     Node transfer memory must stay bounded for content larger than its networking buffers.
-    Framing integration and streaming hash/upload finalization remain open.
+    The client framing codec encrypts/decrypts complete chunks in caller-owned buffers.
+    The caller derives final from the declared whole-blob size; the codec verifies the final tag.
+    Transport-fragment assembly, operation integration, and upload finalization remain open.
 
 
 PERMISSIONS AND VOUCHERS
