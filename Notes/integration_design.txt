@@ -131,7 +131,8 @@ ENCRYPTION AND TRANSFER CHUNKS
     Node transfer memory must stay bounded for content larger than its networking buffers.
     The client framing codec encrypts/decrypts complete chunks in caller-owned buffers.
     The caller derives final from the declared whole-blob size; the codec verifies the final tag.
-    Transport-fragment assembly, operation integration, and upload finalization remain open.
+    The incremental encrypted reader assembles split fields/chunks in caller-owned scratch storage.
+    Operation integration and upload finalization remain open.
 
 
 PERMISSIONS AND VOUCHERS

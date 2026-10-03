@@ -47,6 +47,10 @@ sz_add_test(client encrypted_blob encrypted_blob.c
     ../src/codec/package.c ../src/content/package.c)
 target_link_libraries(sz_encrypted_blob_test PRIVATE sodium)
 
+sz_add_test(client encrypted_blob_reader encrypted_blob_reader.c
+    ../src/codec/encrypted_blob_reader.c ../src/codec/encrypted_blob.c ../src/utils/crypto.c)
+target_link_libraries(sz_encrypted_blob_reader_test PRIVATE sodium)
+
 sz_add_test(client package package.c ../src/codec/package.c ../src/content/package.c)
 target_link_libraries(sz_package_test PRIVATE sodium)
 
