@@ -97,8 +97,12 @@ static void test_public_client_blob_flow(void)
     uint64_t size = sizeof(result);
     assert(store_copy_from_item(&cli->blob_store, &hash, 0, result, &size) == STORE_DONE);
     assert(memcmp(result, payload, sizeof(payload)) == 0);
+    assert(cli->net.states[id].state == CON_DEAD);
 
     /* Leave a second assembly and both network buffers owned by the client at shutdown. */
+    id = client_new_context(&cli->net);
+    assert(valid_id(id));
+    cli->net.states[id].parser_id = PARSER_ID_BLOB;
     hash.b[0] ^= 1;
     memcpy(first, hash.b, HASH_SIZE);
     assert(client_parse_response(cli, id, first, sizeof(first)) == CLIENT_OK);

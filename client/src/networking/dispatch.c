@@ -4,10 +4,10 @@
  */
 
 #include "networking/dispatch.h"
-#include "codec/blob.h"
+#include "operations/blob.h"
 #include "operations/login.h"
 
 const Parser parsers[PARSER_ID_CAP] = {
     [PARSER_ID_USER_DATA] = login_handle_response,
-    [PARSER_ID_BLOB] = parse_blob,
+    [PARSER_ID_BLOB] = blob_handle_response,
 };
