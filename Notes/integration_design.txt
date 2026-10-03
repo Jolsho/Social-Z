@@ -33,7 +33,7 @@ CURRENT IMPLEMENTATION
     Legacy post requests and the disabled post-feed response slot are removed.
     Feed-page storage/codecs and incremental package parsing/marshaling are implemented.
     Feed navigation is declared but awaits loading and scheduling decisions.
-    Package retrieval connects blob assembly, encrypted framing, and staged package parsing.
+    Package and feed-page retrieval connect blob assembly, encrypted framing, and staged content parsing.
     Node username resolution, blob request handlers, and client/node integration remain unfinished.
     The old common owner-update codec still uses identifier/index locators and needs reconciliation.
     Focused tests do not establish a complete application build or working end-to-end integration.
@@ -113,7 +113,8 @@ AGREED: FEEDS AND PACKAGES
     Retain the original encrypted package and its key when storing received posts.
     Package retrieval preserves ciphertext in the blob cache and replaces its destination only on success.
     Its caller keeps the destination alive and at a stable address until completion or cancellation.
-    Feed retrieval and broader client-state integration remain unfinished.
+    Feed-page retrieval checks the requested page number and stores the verified page in Feed.
+    Feed label conventions, navigation requests, and broader client-state integration remain unfinished.
 
 
 ENCRYPTION AND TRANSFER CHUNKS
@@ -134,7 +135,7 @@ ENCRYPTION AND TRANSFER CHUNKS
     The client framing codec encrypts/decrypts complete chunks in caller-owned buffers.
     The caller derives final from the declared whole-blob size; the codec verifies the final tag.
     The incremental encrypted reader assembles split fields/chunks in caller-owned scratch storage.
-    Package operations use the incremental reader; feed loading and upload finalization remain open.
+    Package and feed-page operations use the incremental reader; upload finalization remains open.
 
 
 PERMISSIONS AND VOUCHERS

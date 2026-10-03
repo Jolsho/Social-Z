@@ -23,6 +23,7 @@ target_link_libraries(sz_blobs_test PRIVATE blake3)
 set(client_sources ../src/client.c ../src/content/feed.c ../src/content/feed_page.c
     ../src/operations/login.c ../src/operations/blob.c ../src/networking/dispatch.c
     ../src/operations/package.c ../src/codec/encrypted_blob_reader.c
+    ../src/operations/encrypted_blob.c ../src/operations/feed_page.c ../src/codec/feed_page.c
     ../src/codec/encrypted_blob.c ../src/codec/package.c ../src/content/package.c
     ../src/codec/blob.c ../src/networking/client.c ../src/networking/context.c
     ../../common/src/hash/hash.c ../../common/src/requests/requests.c
@@ -40,6 +41,9 @@ target_link_libraries(sz_blob_get_test PRIVATE blake3 sodium)
 
 sz_add_test(client package_get package_get.c ${client_sources})
 target_link_libraries(sz_package_get_test PRIVATE blake3 sodium)
+
+sz_add_test(client feed_page_get feed_page_get.c ${client_sources})
+target_link_libraries(sz_feed_page_get_test PRIVATE blake3 sodium)
 
 set_tests_properties(client.store_eviction PROPERTIES TIMEOUT 10)
 

@@ -10,6 +10,7 @@
 #define PARSER_ID_USER_DATA 0
 #define PARSER_ID_BLOB 1
 #define PARSER_ID_PACKAGE 2
-#define PARSER_ID_CAP 3
+#define PARSER_ID_FEED_PAGE 3
+#define PARSER_ID_CAP 4
 
 extern const ParserEntry parsers[PARSER_ID_CAP];
