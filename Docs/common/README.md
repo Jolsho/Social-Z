@@ -34,8 +34,17 @@ Account requests contain a username; response metadata identifies the encrypted 
 The node parses requests and marshals metadata without knowing the plaintext account fields.
 The client marshals requests and parses metadata before retrieving and decrypting the header.
 Every request starts with a big-endian version:u16 and RequestKind identifier:u16.
-parse_request() is the shared entry point; account retrieval is currently implemented.
-Content retrieval, insertion, and deletion will use generic blob operations.
+parse_request() is the shared entry point for account retrieval and blob get, put, and delete.
+Blob kinds are get=2, put=3, and delete=4; account remains 1.
+Get carries an owner public key and a client-chosen label.
+Delete adds a signature; put adds a ciphertext hash and signature.
+Put describes the insertion; ciphertext chunks and commit handling remain separate work.
+blob_locator() derives BLAKE3(label || owner).
+Deletion signs BLAKE3(label || operation:u16).
+Insertion signs BLAKE3(label || operation:u16 || ciphertext_hash).
+Operation uses big-endian encoding.
+Parsing validates structure; valid_blob_request() verifies mutation signatures separately.
+Get remains unsigned, and upload handlers must still verify the actual ciphertext hash before commit.
 Feeds, packages, voucher lists, and permission lists do not need separate request types.
 The node handles opaque bytes and access rules; the client interprets decrypted contents.
 These helpers use caller-owned buffers and do not allocate, send, or change connection state.
@@ -67,6 +76,7 @@ The single producer single consumer queue supports communication boundaries.
 
 - [common/include/sz_common/codec.h:24](../../common/include/sz_common/codec.h#L24) begins the hash and key types.
 - [common/include/sz_common/requests/requests.h](../../common/include/sz_common/requests/requests.h) declares both sides of account retrieval messages.
+- [common/include/sz_common/requests/blob.h](../../common/include/sz_common/requests/blob.h) declares blob locators and mutation signature helpers.
 - [common/include/sz_common/codec.h:65](../../common/include/sz_common/codec.h#L65) defines permission records.
 - [common/include/sz_common/codec.h:78](../../common/include/sz_common/codec.h#L78) defines voucher records.
 - [common/src/codec/fs.c:19](../../common/src/codec/fs.c#L19) hashes the signed permission fields.

@@ -10,7 +10,7 @@ static void account_requests(void) {
     uint8_t bytes[7 + ACCOUNT_USERNAME_MAX];
     const uint8_t expected[] = {0, 1, 0, 1, 0, 5, 'a', 'l', 'i', 'c', 'e'};
     Request request = {0};
-    char* username = request.username;
+    char* username = request.data.username;
 
     assert(marshal_account_request(bytes, "alice") == sizeof(expected));
     assert(memcmp(bytes, expected, sizeof(expected)) == 0);

@@ -5,6 +5,7 @@
 
 #pragma once
 #include "sz_common/codec.h"
+#include "sz_common/requests/blob.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -13,20 +14,32 @@ extern "C" {
 #define ACCOUNT_USERNAME_MAX 64
 #define ACCOUNT_RESPONSE_METADATA_SIZE 72
 #define REQUEST_HEADER_SIZE 4
+#define BLOB_GET_REQUEST_SIZE (REQUEST_HEADER_SIZE + KEY_SIZE + HASH_SIZE)
+#define BLOB_DELETE_REQUEST_SIZE (BLOB_GET_REQUEST_SIZE + SIGNATURE_SIZE)
+#define BLOB_PUT_REQUEST_SIZE (BLOB_DELETE_REQUEST_SIZE + HASH_SIZE)
 
 typedef enum RequestKind {
     REQUEST_ACCOUNT = 1,
+    REQUEST_BLOB_GET = 2,
+    REQUEST_BLOB_PUT = 3,
+    REQUEST_BLOB_DELETE = 4,
 } RequestKind;
 
 typedef struct Request {
     RequestKind kind;
-    char username[ACCOUNT_USERNAME_MAX + 1];
+    union {
+        char username[ACCOUNT_USERNAME_MAX + 1];
+        BlobRequest blob;
+    } data;
 } Request;
 
 /* Every request starts with version:u16=1 and kind:u16, both big-endian.
  * ACCOUNT: username length:u16, then username bytes.
  * Account replies carry metadata followed by encrypted blob transfer chunks.
- * Content operations will address opaque blobs, not posts or feed offsets.
+ * BLOB_GET: owner:32, label:32.
+ * BLOB_DELETE: owner:32, label:32, signature:64.
+ * BLOB_PUT: owner:32, label:32, ciphertext_hash:32, signature:64.
+ * PUT declares insertion; ciphertext transfer and commit are separate work.
  */
 typedef struct AccountResponseMetadata {
     Key account;
@@ -41,9 +54,17 @@ size_t marshal_account_request(
     uint8_t out[6 + ACCOUNT_USERNAME_MAX],
     const char* username
 );
+// Supply storage for the selected kind (at most BLOB_PUT_REQUEST_SIZE).
+// Returns bytes written, or zero for an unsupported kind. Does not sign or allocate.
+// Arguments must be valid and output must not overlap the request.
+size_t marshal_blob_request(
+    uint8_t* out,
+    const Request* request
+);
 // Dispatch a complete request by its prefix and copy its fields into caller storage.
 // Usernames are NUL-terminated. Failures leave output unchanged.
 // Input and output must not overlap; no input pointers are retained.
+// Parsing checks structure only; verify mutation signatures separately.
 int parse_request(Request* out, const uint8_t* bytes, size_t size);
 
 // The node supplies an opaque blob's identity and size, then sends its chunks.

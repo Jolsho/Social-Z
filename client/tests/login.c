@@ -79,7 +79,7 @@ void send_request(struct Client* cli, ContextID id, struct Buffer* buff) {
     Request request;
     assert(parse_request(&request, buff->b, buff->size) == 0);
     assert(request.kind == REQUEST_ACCOUNT);
-    assert(strcmp(request.username, "alice") == 0);
+    assert(strcmp(request.data.username, "alice") == 0);
     uint8_t operation = buff->b[3];
     if (host->retain) {
         assert(!host->pending);

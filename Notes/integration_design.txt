@@ -27,16 +27,16 @@ CURRENT IMPLEMENTATION
     Signing uses Ed25519; pairwise encryption uses supported Ed25519-to-X25519 conversion.
     Login sends one username request and unlocks the returned encrypted account header locally.
     Account request and response metadata codecs are shared in common.
-    parse_request is the identifier-based request entry point; only account retrieval is implemented.
+    parse_request handles account retrieval and blob get/put/delete request headers.
+    Shared blob locators and mutation signature helpers are implemented.
+    Ciphertext upload framing, commit handling, and client/node blob operations remain unfinished.
     Legacy post requests and the disabled post-feed response slot are removed.
     Feed-page storage/codecs and incremental package parsing/marshaling are implemented.
     Feed navigation is declared but awaits loading and scheduling decisions.
     General in-place chunk encryption is implemented; encrypted-blob framing is not connected.
     Node username resolution, blob request handlers, and client/node integration remain unfinished.
     The old common owner-update codec still uses identifier/index locators and needs reconciliation.
-    The latest checkpoint is c2c4d72.
-    All twenty focused tests pass normally and with sanitizers.
-    These tests do not establish a complete application build or working end-to-end integration.
+    Focused tests do not establish a complete application build or working end-to-end integration.
 
 
 AGREED: REQUESTS AND BLOB AUTHORITY
@@ -47,12 +47,16 @@ AGREED: REQUESTS AND BLOB AUTHORITY
     Dispatch through one parser, not paths.
     Blob locator = H(request_hash || namespace_public_key).
     Retrieval supplies the namespace public key without requiring a client signature.
-    Insertion and deletion sign H(request_hash || operation).
+    Insertion signs H(request_hash || operation || ciphertext_hash).
+    Deletion signs H(request_hash || operation).
     Encode operation as the request kind's big-endian u16, not its native enum representation.
     Verify that signature under the namespace public key before mutation.
+    Before committing an insertion, verify the uploaded ciphertext matches its signed hash.
     Whole-ciphertext hashing remains separate from locator derivation.
     This replaces the older identifier/index locator and complete-frame blob-signature proposals.
-    Exact generic blob request fields and operation numbers are not implemented yet.
+    Request kinds are account=1, blob get=2, blob put=3, and blob delete=4.
+    Blob requests contain owner key and label; mutations add a signature, and put adds ciphertext hash.
+    These headers do not define how ciphertext chunks are uploaded or finalized.
 
 
 AGREED: HOST BOUNDARY AND OWNERSHIP
@@ -183,10 +187,10 @@ PROPOSED: LIMITS AND CLEANUP
 
 
 NEXT STEPS
-    1. Add shared locator and hash-plus-operation signature helpers.
-    2. Settle generic blob request fields, then add get/put/delete codecs to parse_request.
-    3. Connect account resolution and opaque blob operations to FS through proxy and P2P.
-    4. Connect encrypted chunk framing and package/feed loading to client operations.
+    1. Connect shared blob requests to client operations and the existing asynchronous host boundary.
+    2. Connect encrypted chunk framing and package/feed loading on the client.
+    3. Settle upload finalization, replay handling, and retrieval access before wiring node storage.
+    4. Connect account resolution and opaque blob operations to FS through proxy and P2P.
     5. Reconcile permission/voucher formats, authorization, inbox handling, and durable transfer state.
     6. Implement publication/retrieval end to end, then remove the DB actor's remaining dependencies.
     Keep changes small and reviewable, with separate commits where useful.
@@ -194,7 +198,7 @@ NEXT STEPS
 
 
 OPEN DECISIONS
-    Is request_hash a ciphertext hash or a stable logical selector for mutable pages?
+    The client chooses request_hash; determine conventions for stable labels and ciphertext-addressed packages.
     How are those selectors chosen, and how does a client discover the latest content?
     How does unsigned retrieval preserve permission/voucher policy and prevent resource abuse?
     What are insertion chunk framing, expected size, commit, cancellation, and finalization rules?
