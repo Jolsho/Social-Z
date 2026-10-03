@@ -15,7 +15,8 @@ struct Client* init_client(void) {
     if (!cs) return NULL;
     cs->wrld.bvh.root = cs->wrld.bvh.free_list = BVH_NULL;
     cs->wrld.focused = ENTITY_ID_INVALID;
-    if (buffer_pool_init(&cs->pool, 256, 1024, 4096, 256, 65536, 64) != 0 ||
+    // Framed 64 KiB chunks need 21 extra bytes; round up to keep pool entries aligned.
+    if (buffer_pool_init(&cs->pool, 256, 1024, 4096, 256, 65536 + 32, 64) != 0 ||
         store_setup(&cs->blob_store, 25 * 1024 * 1024) != STORE_OK ||
         init_networker(&cs->net) != CLIENT_OK) {
         destroy_client(cs);

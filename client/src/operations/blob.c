@@ -41,9 +41,14 @@ int blob_get(
         return CLIENT_ERR;
     }
 
-    Buffer* buffer = &cli->net.send_buffers[context];
+    *id = context;
+    return blob_send_get(cli, context, owner, label);
+}
+
+int blob_send_get(struct Client* cli, ContextID id, const Key* owner, const HashT* label) {
+    Buffer* buffer = &cli->net.send_buffers[id];
     if (buffer_ensure_min_cap(cli, buffer, BLOB_GET_REQUEST_SIZE) != CLIENT_OK) {
-        client_free_context(cli, context);
+        client_free_context(cli, id);
         return CLIENT_ERR;
     }
 
@@ -52,12 +57,12 @@ int blob_get(
     request.data.blob.label = *label;
     buffer->size = marshal_blob_request(buffer->b, &request);
 
+    ConState* state = &cli->net.states[id];
     state->state = CON_RECEIVING;
     state->send_owned = true;
-    *id = context;
 
     // Returning from this call does not return ownership of the outgoing buffer.
-    send_request(cli, context, buffer);
+    send_request(cli, id, buffer);
     return CLIENT_OK;
 }
 

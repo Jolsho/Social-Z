@@ -15,8 +15,10 @@
 typedef struct EncryptedBlobReader {
     BlobCrypt crypt;
     uint64_t remaining; // Initialize to the complete stored ciphertext size.
+    // Retain a split envelope header or length field without borrowing the host's bytes.
     uint8_t field[ENCRYPTED_BLOB_HEADER_SIZE];
     size_t field_received;
+    // Chunk counters include the length prefix; ciphertext bytes live in caller-owned scratch.
     uint32_t chunk_size;
     uint32_t chunk_received;
     enum {

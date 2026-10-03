@@ -48,6 +48,7 @@ int parse_blob(
 
     StoreItem* item = store_get_item(&cli->blob_store, &h);
     if (item && item->received == item->size) {
+        transfer->hash = h;
         transfer->active = false;
         return CLIENT_PARSE_DONE;
     }

@@ -7,4 +7,5 @@ Keep this codebase concise and easy to review.
 - Use braces for control flow. Avoid compressing several operations onto one line.
 - Wrap long declarations, calls, and conditions so their parts are easy to scan.
 - Add short comments for non-obvious byte layouts, ownership rules, and invariants. Do not narrate every line.
+- Explain complex parser stages and how state structs fit together, especially across asynchronous responses.
 - Improve formatting in code you touch; avoid unrelated project-wide formatting changes.
