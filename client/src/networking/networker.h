@@ -7,7 +7,6 @@
 #pragma once
 #include "sz_client/client.h"
 #include "utils/buffers.h"
-#include "sz_common/codec.h"
 
 typedef int (*Parser) (struct Client* cli, ContextID id, uint8_t* b, uint64_t l);
 typedef void (*ParserCleanup)(struct Client* cli, ContextID id);
@@ -24,8 +23,6 @@ typedef struct __attribute__((packed)) {
     uint8_t     parser_id;
     ContextID   next_free;
     bool        send_owned, release_pending;
-    bool        blob_active;
-    HashT       blob_hash;
 
     // Client-selected state; the registered cleanup handler releases any owned resources.
     void*       operation;

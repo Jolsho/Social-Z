@@ -9,37 +9,41 @@
 #include "networking/dispatch.h"
 #include "codec/blob.h"
 #include <sodium.h>
+#include <stdlib.h>
 
 void login_cleanup(struct Client* cli, ContextID id) {
-    if (cli->login.id == id) {
-        Buffer* password = &cli->login.password;
+    if (cli->login_id == id) {
+        LoginOperation* login = cli->net.states[id].operation;
+        blob_discard_partial(cli, id, &login->blob);
+
+        Buffer* password = &login->password;
         if (password->b) {
             sodium_memzero(password->b, password->cap);
             buffer_pool_push(&cli->pool, password->b, password->cap);
         }
-        memset(&cli->login, 0, sizeof(cli->login));
+        sodium_memzero(login, sizeof(*login));
+        free(login);
+        cli->login_id = 0;
     }
-
-    blob_discard_partial(cli, id);
 }
 
 static int login_send_request(struct Client* cli, ContextID id) {
     ConState* state = &cli->net.states[id];
+    LoginOperation* login = state->operation;
     if (state->state != CON_IDLE || state->send_owned) {
         return CLIENT_CONN_BUSY;
     }
 
     Buffer* request = &cli->net.send_buffers[id];
-    uint32_t size = 6 + account_username_size(cli->login.username);
+    uint32_t size = 6 + account_username_size(login->username);
 
     if (buffer_ensure_min_cap(cli, request, size) != CLIENT_OK) {
         client_free_context(cli, id);
         return CLIENT_ERR;
     }
 
-    marshal_account_request(request->b, cli->login.username);
+    marshal_account_request(request->b, login->username);
     request->size = size;
-    state->parser_id = PARSER_ID_USER_DATA;
     state->send_owned = true;
     state->state = CON_RECEIVING;
 
@@ -50,7 +54,7 @@ static int login_send_request(struct Client* cli, ContextID id) {
         return CLIENT_PARSE_DONE;
     }
 
-    return cli->login.id == id ? CLIENT_OK : CLIENT_ERR;
+    return cli->login_id == id ? CLIENT_OK : CLIENT_ERR;
 }
 
 int client_login(
@@ -64,7 +68,7 @@ int client_login(
         password_size > LOGIN_PASSWORD_MAX || !account_username_size(username)) {
         return CLIENT_ERR;
     }
-    if (cli->logged_in || cli->login.id) {
+    if (cli->logged_in || cli->login_id) {
         return CLIENT_CONN_BUSY;
     }
 
@@ -73,6 +77,15 @@ int client_login(
         return CLIENT_CONN_BUSY;
     }
 
+    LoginOperation* login = calloc(1, sizeof(*login));
+    if (!login) {
+        client_free_context(cli, context);
+        return CLIENT_ERR;
+    }
+    cli->net.states[context].parser_id = PARSER_ID_USER_DATA;
+    cli->net.states[context].operation = login;
+    cli->login_id = context;
+
     size_t capacity = password_size;
     uint8_t* secret = buffer_pool_pop(&cli->pool, &capacity);
     if (!secret) {
@@ -80,10 +93,9 @@ int client_login(
         return CLIENT_ERR;
     }
 
-    cli->login.id = context;
-    cli->login.password = (Buffer){secret, capacity, password_size};
+    login->password = (Buffer){secret, capacity, password_size};
     memcpy(secret, password, password_size);
-    memcpy(cli->login.username, username, account_username_size(username) + 1);
+    memcpy(login->username, username, account_username_size(username) + 1);
 
     *id = context;
 
@@ -94,8 +106,8 @@ int client_cancel_login(struct Client* cli) {
     if (!cli) {
         return CLIENT_ERR;
     }
-    if (cli->login.id) {
-        client_free_context(cli, cli->login.id);
+    if (cli->login_id) {
+        client_free_context(cli, cli->login_id);
     }
 
     return CLIENT_OK;
@@ -124,42 +136,43 @@ int login_handle_response(
     if (!valid_id(id)) {
         return CLIENT_INVALID_ID;
     }
-    if (!cli || cli->login.id != id) {
+    if (!cli || cli->login_id != id) {
         return CLIENT_ERR;
     }
 
+    LoginOperation* login = cli->net.states[id].operation;
     int r = CLIENT_ERR;
 
     if (!b) {
         goto done;
     }
 
-    if (!cli->login.metadata_ready) {
+    if (!login->metadata_ready) {
         if (len != ACCOUNT_RESPONSE_METADATA_SIZE ||
-            parse_account_response_metadata(&cli->login.metadata, b, (size_t)len) != 0 ||
-            cli->login.metadata.size != LOGIN_BLOB_SIZE) {
+            parse_account_response_metadata(&login->metadata, b, (size_t)len) != 0 ||
+            login->metadata.size != LOGIN_BLOB_SIZE) {
             goto done;
         }
-        cli->login.metadata_ready = true;
+        login->metadata_ready = true;
         // The node sends the encrypted header next; no second request is needed.
         return CLIENT_OK;
     }
     if (len < HASH_SIZE || len > HASH_SIZE + sizeof(uint64_t) + LOGIN_BLOB_SIZE ||
-        memcmp(b, cli->login.metadata.hash.b, HASH_SIZE) != 0) {
+        memcmp(b, login->metadata.hash.b, HASH_SIZE) != 0) {
         goto done;
     }
-    if (!cli->net.states[id].blob_active) {
+    if (!login->blob.active) {
         uint64_t size;
         if (len < HASH_SIZE + sizeof(size)) {
             goto done;
         }
         memcpy(&size, b + HASH_SIZE, sizeof(size));
-        if (size != cli->login.metadata.size) {
+        if (size != login->metadata.size) {
             goto done;
         }
     }
 
-    r = parse_blob(cli, id, b, len);
+    r = parse_blob(cli, id, &login->blob, b, len);
     if (r == CLIENT_OK) {
         return r;
     }
@@ -167,15 +180,15 @@ int login_handle_response(
         goto done;
     }
 
-    StoreItem* item = store_get_item(&cli->blob_store, &cli->login.metadata.hash);
+    StoreItem* item = store_get_item(&cli->blob_store, &login->metadata.hash);
     r = CLIENT_ERR;
 
     if (!item || item->size != LOGIN_BLOB_SIZE || item->received != item->size) {
         goto done;
     }
     if (decrypt_account_header(
-        &cli->account, &cli->keys, &cli->login.metadata.account,
-        cli->login.username, cli->login.password.b, cli->login.password.size, item->b, item->size
+        &cli->account, &cli->keys, &login->metadata.account,
+        login->username, login->password.b, login->password.size, item->b, item->size
     ) == 0) {
         cli->logged_in = true;
         r = CLIENT_PARSE_DONE;

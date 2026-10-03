@@ -33,13 +33,7 @@ struct Client {
     KeyPair         keys;
     AccountHeader   account;
     bool            logged_in;
-    struct {
-        ContextID id;
-        bool metadata_ready;
-        char username[ACCOUNT_USERNAME_MAX + 1];
-        Buffer password;
-        AccountResponseMetadata metadata;
-    } login;
+    ContextID       login_id;
 
     ///////// DATA STORES ///////////
     Feed            feed;

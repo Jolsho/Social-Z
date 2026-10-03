@@ -4,6 +4,7 @@
  */
 
 #include "client.h"
+#include "operations/login.h"
 #include "networking/context.h"
 #include "sz_common/hash.h"
 #include <sodium.h>
@@ -128,7 +129,7 @@ static void resolve(Host* host, const uint8_t* bytes, const Key* account) {
 
 static void assert_locked(struct Client* cli) {
     KeyPair zero = {0};
-    assert(!client_is_logged_in(cli) && !cli->login.id && !cli->login.password.b);
+    assert(!client_is_logged_in(cli) && !cli->login_id);
     assert(memcmp(&cli->keys, &zero, sizeof(zero)) == 0);
     assert(sodium_is_zero((const uint8_t*)&cli->account, sizeof(cli->account)));
 }
@@ -142,7 +143,8 @@ static void password_stays_local(void) {
         Host host = new_host();
         host.retain = true;
         begin(&host, passwords[i], sizes[i]);
-        assert(host.pending->b != host.cli->login.password.b);
+        LoginOperation* login = host.cli->net.states[host.id].operation;
+        assert(host.pending->b != login->password.b);
         assert(host.size == sizeof(expected_request));
         assert(memcmp(host.request, expected_request, sizeof(expected_request)) == 0);
         client_return_buffer(host.cli, host.pending);
@@ -163,11 +165,12 @@ static void success_and_retry(void) {
     memset(supplied, 0, sizeof(supplied));
     assert(client_login(host.cli, "bob", password, sizeof(password) - 1, &host.id) == CLIENT_CONN_BUSY);
     resolve(&host, blob, &identity.pub);
-    uint8_t* retained_password = host.cli->login.password.b;
-    size_t retained_capacity = host.cli->login.password.cap;
+    LoginOperation* login = host.cli->net.states[host.id].operation;
+    uint8_t* retained_password = login->password.b;
+    size_t retained_capacity = login->password.cap;
     assert(deliver_blob(&host, blob, 7) == CLIENT_PARSE_DONE);
     assert(client_is_logged_in(host.cli));
-    assert(!host.cli->login.id && !host.cli->login.password.b);
+    assert(!host.cli->login_id && !host.cli->net.states[host.id].operation);
     /* Pool free-list pointers occupy the prefix; the rest of the released buffer is wiped. */
     assert(sodium_is_zero(retained_password + sizeof(void*), retained_capacity - sizeof(void*)));
     assert(client_get_public_key(host.cli, public_key) == CLIENT_OK);
@@ -228,7 +231,7 @@ static void failures_and_cleanup(void) {
     ContextID unrelated = client_new_context(&host.cli->net);
     reply_metadata(reply, blob, &identity.pub);
     assert(client_parse_response(host.cli, unrelated, reply, ACCOUNT_RESPONSE_METADATA_SIZE) == CLIENT_ERR);
-    assert(host.cli->login.id == host.id);
+    assert(host.cli->login_id == host.id);
     client_free_context(host.cli, unrelated);
     resolve(&host, blob, &identity.pub);
     uint8_t first[HASH_SIZE + sizeof(uint64_t) + 1];
@@ -328,7 +331,8 @@ static void retained_requests(void) {
     reply_metadata(reply, blob, &identity.pub);
     assert(client_parse_response(host.cli, first, reply, sizeof(reply)) == CLIENT_OK);
     memset(reply, 0, sizeof(reply));
-    assert(host.calls == 1 && host.cli->login.metadata_ready);
+    LoginOperation* login = host.cli->net.states[host.id].operation;
+    assert(host.calls == 1 && login->metadata_ready);
     assert(memcmp(request->b + 6, "alice", 5) == 0);
     ContextID retry;
     assert(client_login(
@@ -359,7 +363,7 @@ static void retained_requests(void) {
     begin(&host, password, sizeof(password) - 1);
     assert(host.id != first);
     client_return_buffer(host.cli, request);
-    assert(host.cli->login.id == host.id);
+    assert(host.cli->login_id == host.id);
     assert(client_cancel_login(host.cli) == CLIENT_OK);
     client_return_buffer(host.cli, host.pending);
     destroy_client(host.cli);

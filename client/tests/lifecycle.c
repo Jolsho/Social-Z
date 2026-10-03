@@ -9,6 +9,8 @@
 #include "client.h"
 #include "networking/context.h"
 #include "networking/dispatch.h"
+#include "codec/blob.h"
+#include "operations/blob.h"
 #include "sz_common/hash.h"
 #include <assert.h>
 #include <stdlib.h>
@@ -78,6 +80,8 @@ static void test_public_client_blob_flow(void)
     cli->net.states[id].parser_id = PARSER_ID_CAP;
     assert(client_parse_response(cli, id, NULL, 0) == CLIENT_ERR);
     cli->net.states[id].parser_id = PARSER_ID_BLOB;
+    cli->net.states[id].operation = calloc(1, sizeof(BlobTransfer));
+    assert(cli->net.states[id].operation);
 
     const uint8_t payload[] = {1, 2, 3, 4, 5, 6, 7};
     Hasher hasher = new_hasher();
@@ -103,6 +107,8 @@ static void test_public_client_blob_flow(void)
     id = client_new_context(&cli->net);
     assert(valid_id(id));
     cli->net.states[id].parser_id = PARSER_ID_BLOB;
+    cli->net.states[id].operation = calloc(1, sizeof(BlobTransfer));
+    assert(cli->net.states[id].operation);
     hash.b[0] ^= 1;
     memcpy(first, hash.b, HASH_SIZE);
     assert(client_parse_response(cli, id, first, sizeof(first)) == CLIENT_OK);
@@ -115,9 +121,30 @@ static void test_public_client_blob_flow(void)
     destroy_client(cli);
 }
 
+static void test_operation_allocation_failures(void) {
+    struct Client* cli = init_client();
+    assert(cli);
+    ContextID id = 0;
+    Key owner = {{1}};
+    HashT label = {{2}};
+
+    allocation_count = 0;
+    fail_at = 1;
+    assert(client_login(cli, "alice", (const uint8_t*)"password", 8, &id) == CLIENT_ERR);
+    assert(!cli->login_id && cli->net.free_head == 1);
+    assert(!cli->net.states[1].operation);
+
+    allocation_count = 0;
+    assert(blob_get(cli, &owner, &label, &id) == CLIENT_ERR);
+    assert(cli->net.free_head == 1 && !cli->net.states[1].operation);
+    fail_at = 0;
+    destroy_client(cli);
+}
+
 int main(void)
 {
     test_setup_and_allocation_failures();
     test_public_client_blob_flow();
+    test_operation_allocation_failures();
     return 0;
 }
