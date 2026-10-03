@@ -16,7 +16,9 @@ void blob_locator(HashT* out, const HashT* label, const Key* owner) {
 
 int blob_request_signing_hash(HashT* out, const Request* request) {
     if (!out || !request ||
-        (request->kind != REQUEST_BLOB_PUT && request->kind != REQUEST_BLOB_DELETE)) {
+        (request->kind != REQUEST_BLOB_PUT && 
+        request->kind != REQUEST_BLOB_DELETE)
+    ) {
         return -1;
     }
 
@@ -37,7 +39,8 @@ int sign_blob_request(Request* request, const SigningKey* key) {
     HashT hash;
     Signature signature;
     if (!key || blob_request_signing_hash(&hash, request) != 0 ||
-        sign_hash(key, &signature, &hash) != 0) {
+        sign_hash(key, &signature, &hash) != 0
+    ) {
         return -1;
     }
 

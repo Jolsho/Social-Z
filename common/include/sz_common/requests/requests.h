@@ -60,17 +60,13 @@ typedef struct AccountResponseMetadata {
 size_t account_username_size(const char* username);
 
 // Marshal into caller-owned storage of the declared size; no allocation or sending.
-size_t marshal_account_request(
-    uint8_t out[6 + ACCOUNT_USERNAME_MAX],
-    const char* username
-);
+size_t marshal_account_request( uint8_t out[6 + ACCOUNT_USERNAME_MAX], const char* username);
+
 // Supply storage for the selected kind (at most BLOB_PUT_REQUEST_SIZE).
 // Returns bytes written, or zero for an unsupported kind. Does not sign or allocate.
 // Arguments must be valid and output must not overlap the request.
-size_t marshal_blob_request(
-    uint8_t* out,
-    const Request* request
-);
+size_t marshal_blob_request(uint8_t* out, const Request* request);
+
 // Supply BASE_SIZE + count * HASH_SIZE bytes, plus eight expiry bytes for vouchers.
 // Hashes and output must not overlap; no signing, allocation, or sending occurs here.
 // Returns bytes written, or zero for unsupported kind or unrepresentable size.

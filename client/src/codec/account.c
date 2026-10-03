@@ -9,7 +9,11 @@
 #include <sodium.h>
 
 // Password envelope: public KDF profile, salt, stream header, and ciphertext length.
-enum { HEADER_SIZE = 64, PLAIN_SIZE = ACCOUNT_HEADER_SIZE, CIPHER_SIZE = PLAIN_SIZE + 17 };
+enum { 
+    HEADER_SIZE = 64, 
+    PLAIN_SIZE = ACCOUNT_HEADER_SIZE, 
+    CIPHER_SIZE = PLAIN_SIZE + 17 
+};
 _Static_assert(CIPHER_SIZE == PLAIN_SIZE + crypto_secretstream_xchacha20poly1305_ABYTES, "Account ciphertext size");
 _Static_assert(LOGIN_BLOB_SIZE == HEADER_SIZE + CIPHER_SIZE, "Account blob size");
 _Static_assert(crypto_pwhash_SALTBYTES == 16, "Account salt size");

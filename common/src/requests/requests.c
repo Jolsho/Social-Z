@@ -27,9 +27,7 @@ static void write_uint(
 }
 
 size_t account_username_size(const char* username) {
-    if (!username) {
-        return 0;
-    }
+    if (!username) { return 0; }
 
     size_t n = 0;
     while (n <= ACCOUNT_USERNAME_MAX && username[n]) {
