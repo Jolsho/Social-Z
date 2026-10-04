@@ -80,3 +80,8 @@ sz_add_test(client package_storage package_storage.c ../src/content/package.c ..
 target_link_libraries(sz_package_storage_test PRIVATE sodium)
 target_compile_definitions(sz_package_storage_test PRIVATE
     calloc=package_test_calloc free=package_test_free)
+
+sz_add_test(client package_encryption package_encryption.c
+    ../src/codec/package_encryption.c ../src/codec/package.c ../src/content/package.c
+    ../src/codec/encrypted_blob.c ../src/utils/crypto.c ../../common/src/hash/hash.c)
+target_link_libraries(sz_package_encryption_test PRIVATE sodium blake3)

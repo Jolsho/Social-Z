@@ -4,6 +4,7 @@
  */
 
 #include "client.h"
+#include "sz_client/limits.h"
 #include "operations/package.h"
 #include "codec/package.h"
 #include "codec/encrypted_blob.h"
@@ -186,10 +187,30 @@ static void failed_loads(void) {
     free(wire.b);
 }
 
+static void reject_oversized_transfer(void) {
+    struct Client* cli = init_client();
+    assert(cli);
+    Package destination = {0};
+    ContextID id;
+    assert(package_get(cli, &owner, &label, &key, &destination, SIZE_MAX, &id) == CLIENT_OK);
+
+    uint8_t packet[HASH_SIZE + sizeof(uint64_t)] = {0};
+    uint64_t size = SZ_PACKAGE_CIPHERTEXT_MAX + 1;
+    memcpy(packet + HASH_SIZE, &size, sizeof(size));
+    uint64_t memory_before = cli->blob_store.mem;
+    assert(client_parse_response(cli, id, packet, sizeof(packet)) == CLIENT_ERR);
+    assert(cli->blob_store.mem == memory_before && !destination.bytes);
+    client_return_buffer(cli, pending);
+    pending = NULL;
+    destroy_client(cli);
+}
+
 int main(void) {
     successful_load(9, 7, 1);
     successful_load(9, 7, 4096);
     successful_load(CRYPT_RECORD_MAX + 100, CRYPT_RECORD_MAX, 4096);
+    successful_load(26 * 1024 * 1024, CRYPT_RECORD_MAX, CRYPT_RECORD_MAX);
     failed_loads();
+    reject_oversized_transfer();
     return 0;
 }

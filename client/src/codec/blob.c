@@ -47,6 +47,9 @@ int parse_blob(
     }
 
     StoreItem* item = store_get_item(&cli->blob_store, &h);
+    if (item && transfer->max_size && item->size > transfer->max_size) {
+        return CLIENT_ERR;
+    }
     if (item && item->received == item->size) {
         transfer->hash = h;
         transfer->active = false;
@@ -69,7 +72,8 @@ int parse_blob(
         memcpy(&size, b, sizeof(size));
         b += sizeof(size);
         len -= sizeof(size);
-        if (!size || size > SIZE_MAX || size > cli->blob_store.mem_max || len > size) {
+        if (!size || size > SIZE_MAX || size > cli->blob_store.mem_max || len > size ||
+            (transfer->max_size && size > transfer->max_size)) {
             return CLIENT_ERR;
         }
 

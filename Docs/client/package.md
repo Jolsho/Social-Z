@@ -3,7 +3,18 @@
 A package groups the post-data blob and its attachments before encryption.
 The node serves the resulting ciphertext without interpreting these contents.
 The package parser only reads decrypted plaintext.
-It is not connected to retrieval, decryption, or client state yet.
+Package retrieval connects blob transfer, decryption, and staged parsing.
+
+## Memory limits
+
+Encrypted packages are limited to 64 MiB, including encryption and package framing.
+The client ciphertext cache has a 128 MiB budget, with index overhead deducted.
+These settings live in client/include/sz_client/limits.h.
+Plaintext packages occupy separate memory and remain owned by their callers.
+Preparation retains complete ciphertext in caller-owned memory; persistence is deferred.
+package_ciphertext_size() reports the allocation needed, or zero above the limit.
+encrypt_package() fills that allocation using authenticated chunks and returns its complete hash.
+Retrieval checks the ciphertext limit before allocation and keeps the caller's plaintext limit.
 
 ## Format
 

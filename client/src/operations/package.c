@@ -4,6 +4,7 @@
  */
 
 #include "client.h"
+#include "sz_client/limits.h"
 #include "operations/package.h"
 #include "operations/blob.h"
 #include "operations/encrypted_blob.h"
@@ -65,8 +66,11 @@ int package_get(
     }
 
     load->blob.key = *key;
+    load->blob.transfer.max_size = SZ_PACKAGE_CIPHERTEXT_MAX;
     load->destination = destination;
-    load->parser.max_size = max_size;
+    // Ciphertext includes plaintext plus framing, so plaintext cannot exceed this limit.
+    load->parser.max_size = max_size < SZ_PACKAGE_CIPHERTEXT_MAX
+        ? max_size : SZ_PACKAGE_CIPHERTEXT_MAX;
     *id = context;
     return blob_send_get(cli, context, owner, label);
 }

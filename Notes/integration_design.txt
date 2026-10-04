@@ -117,6 +117,9 @@ AGREED: FEEDS AND PACKAGES
     Parse successive slices into staging storage and copy borrowed bytes before returning.
     Keep staging separate from live contents until parsing and authentication complete.
     marshal_package fills caller-owned output chunks without allocation.
+    Prepare and retain complete ciphertext packages in memory for now; persistence is deferred.
+    Limit encrypted packages to 64 MiB and budget 128 MiB for the ciphertext cache.
+    Plaintext package allocations are separate from that cache budget.
     Retain the original encrypted package and its key when storing received posts.
     Package retrieval preserves ciphertext in the blob cache and replaces its destination only on success.
     Its caller keeps the destination alive and at a stable address until completion or cancellation.

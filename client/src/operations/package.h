@@ -14,6 +14,7 @@
 // Destination must be initialized and remain at the same address until completion/cancellation.
 // The operation copies the key. Failure leaves destination unchanged.
 // max_size bounds complete package plaintext, including its framing.
+// Ciphertext is additionally capped at SZ_PACKAGE_CIPHERTEXT_MAX.
 int package_get(
     struct Client* cli,
     const Key* owner,

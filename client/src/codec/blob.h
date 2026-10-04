@@ -9,6 +9,7 @@
 #include "sz_common/codec.h"
 
 typedef struct BlobTransfer {
+    uint64_t max_size; // Optional ciphertext limit, checked before allocation or cached reuse.
     bool active;
     HashT hash;
 } BlobTransfer;
