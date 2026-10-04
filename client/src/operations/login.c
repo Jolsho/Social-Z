@@ -80,7 +80,7 @@ int client_login(
         client_free_context(cli, context);
         return CLIENT_ERR;
     }
-    cli->net.states[context].parser_id = PARSER_ID_USER_DATA;
+    cli->net.states[context].handler_id = HANDLER_ID_USER_DATA;
     cli->net.states[context].context = login;
     cli->login_id = context;
 

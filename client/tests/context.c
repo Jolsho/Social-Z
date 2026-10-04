@@ -103,9 +103,9 @@ static void test_setup_failures_and_dispatch(void)
     assert(client_parse_response(NULL, 1, NULL, 0) == CLIENT_ERR);
     assert(client_new_context(&cli.net) == 1);
     assert(client_parse_response(&cli, 1, NULL, 0) == CLIENT_ERR);
-    const ParserEntry empty[] = {{0}};
-    cli.net.parsers = empty;
-    cli.net.parsers_count = 1;
+    const HandlerEntry empty[] = {{0}};
+    cli.net.handlers = empty;
+    cli.net.handlers_count = 1;
     assert(client_parse_response(&cli, 1, NULL, 0) == CLIENT_ERR);
     destroy_networker(&cli);
 }
@@ -154,13 +154,13 @@ static void test_operation_cleanup(void) {
     struct Client cli = {0};
     assert(init_networker(&cli.net) == CLIENT_OK);
     assert(buffer_pool_init(&cli.pool, 256, 1, 4096, 1, 65536, 1) == 0);
-    const ParserEntry handlers[] = {{0}, {parse_operation, cleanup_operation}};
-    cli.net.parsers = handlers;
-    cli.net.parsers_count = 2;
+    const HandlerEntry handlers[] = {{0}, {parse_operation, cleanup_operation}};
+    cli.net.handlers = handlers;
+    cli.net.handlers_count = 2;
 
     TestOperation operation = {0};
     ContextID id = client_new_context(&cli.net);
-    cli.net.states[id].parser_id = 1;
+    cli.net.states[id].handler_id = 1;
     cli.net.states[id].context = &operation;
     assert(client_parse_response(&cli, id, NULL, 0) == CLIENT_OK);
     client_free_context(&cli, id);
@@ -170,7 +170,7 @@ static void test_operation_cleanup(void) {
 
     // Completion cleans operation state immediately, while the host still owns the send buffer.
     id = client_new_context(&cli.net);
-    cli.net.states[id].parser_id = 1;
+    cli.net.states[id].handler_id = 1;
     cli.net.states[id].context = &operation;
     size_t capacity = 256;
     Buffer* buffer = &cli.net.send_buffers[id];
@@ -188,7 +188,7 @@ static void test_operation_cleanup(void) {
 
     // Shutdown follows the same registered cleanup path.
     id = client_new_context(&cli.net);
-    cli.net.states[id].parser_id = 1;
+    cli.net.states[id].handler_id = 1;
     cli.net.states[id].context = &operation;
     destroy_networker(&cli);
     assert(operation.cleanups == 3);

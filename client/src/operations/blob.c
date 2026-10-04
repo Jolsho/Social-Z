@@ -34,7 +34,7 @@ int blob_get(
     }
 
     ConState* state = &cli->net.states[context];
-    state->parser_id = PARSER_ID_BLOB;
+    state->handler_id = HANDLER_ID_BLOB;
     state->context = calloc(1, sizeof(BlobTransfer));
     if (!state->context) {
         client_free_context(cli, context);

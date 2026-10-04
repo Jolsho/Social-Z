@@ -70,7 +70,7 @@ int feed_page_get(
     }
     // Prepare all operation state before handing the request to the asynchronous host.
     ConState* state = &cli->net.states[context];
-    state->parser_id = PARSER_ID_FEED_PAGE;
+    state->handler_id = HANDLER_ID_FEED_PAGE;
     FeedPageLoad* load = calloc(1, sizeof(*load));
     state->context = load;
     if (!load) {

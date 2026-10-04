@@ -56,7 +56,7 @@ int package_get(
 
     // Install the handler and its state before sending; the host may reply during request_end.
     ConState* state = &cli->net.states[context];
-    state->parser_id = PARSER_ID_PACKAGE;
+    state->handler_id = HANDLER_ID_PACKAGE;
     PackageLoad* load = calloc(1, sizeof(*load));
     state->context = load;
     if (!load) {

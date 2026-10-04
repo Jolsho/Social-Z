@@ -21,7 +21,7 @@ static void cleanup_transfer(struct Client* cli, ContextID id) {
     free(transfer);
 }
 
-static const ParserEntry parsers[] = {{parse_transfer, cleanup_transfer}};
+static const HandlerEntry handlers[] = {{parse_transfer, cleanup_transfer}};
 
 static void setup(struct Client* cli)
 {
@@ -35,8 +35,8 @@ static void setup(struct Client* cli)
         cli->net.states[id].context = calloc(1, sizeof(BlobTransfer));
         assert(cli->net.states[id].context);
     }
-    cli->net.parsers = parsers;
-    cli->net.parsers_count = 1;
+    cli->net.handlers = handlers;
+    cli->net.handlers_count = 1;
 }
 
 static void cleanup(struct Client* cli)

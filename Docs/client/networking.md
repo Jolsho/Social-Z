@@ -61,7 +61,7 @@ The design leaves room for native and WebAssembly integration.
 ## Why contexts exist
 
 Different requests can need different response parsers.
-Recording a parser ID keeps the transport from needing to understand posts.
+Recording a handler ID keeps the transport from needing to understand posts.
 The transport only has to deliver bytes with the matching context ID.
 The data layer handles what those bytes mean.
 
@@ -72,7 +72,7 @@ A context can then be reused for another exchange.
 ## References
 
 - [client/src/networking/networker.h:13](../../client/src/networking/networker.h#L13) defines each connection state record.
-- [client/src/networking/networker.h:32](../../client/src/networking/networker.h#L32) groups states, buffers, and parsers.
+- [client/src/networking/networker.h:32](../../client/src/networking/networker.h#L32) groups states, buffers, and handlers.
 - [client/src/networking/context.h:13](../../client/src/networking/context.h#L13) defines the connection states.
 - [client/src/networking/client.c:44](../../client/src/networking/client.c#L44) allocates a context from the free list.
 - [client/src/networking/client.c:56](../../client/src/networking/client.c#L56) releases a context and its buffers.

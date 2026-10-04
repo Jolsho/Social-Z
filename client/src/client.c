@@ -22,8 +22,8 @@ struct Client* init_client(void) {
         destroy_client(cs);
         return NULL;
     }
-    cs->net.parsers = parsers;
-    cs->net.parsers_count = PARSER_ID_CAP;
+    cs->net.handlers = handlers;
+    cs->net.handlers_count = HANDLER_ID_CAP;
     return cs;
 }
 

@@ -13,17 +13,17 @@ typedef int (*ResponseParser)(
 );
 typedef void (*ParseStateCleanup)(struct Client* cli, ContextID id);
 
-typedef struct ParserEntry {
+typedef struct HandlerEntry {
     ResponseParser parse_response;
 
     // Runs once at context close, before networking buffers are released.
     // Release context resources here; do not free the context recursively.
     ParseStateCleanup cleanup;
-} ParserEntry;
+} HandlerEntry;
 
 typedef struct __attribute__((packed)) {
     uint8_t     state;
-    uint8_t     parser_id;
+    uint8_t     handler_id;
     ContextID   next_free;
     bool        send_owned, release_pending;
     bool        request_started; // The host accepted begin; cancellation must abort its transport.
@@ -53,9 +53,9 @@ typedef struct {
     Buffer*     recv_buffers;
     Buffer*     send_buffers;
 
-    /* Parsers */
-    const ParserEntry* parsers;
-    uint16_t    parsers_count;
+    /* Handlers */
+    const HandlerEntry* handlers;
+    uint16_t    handlers_count;
 
 } Networker;
 
