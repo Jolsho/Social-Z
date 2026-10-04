@@ -6,6 +6,7 @@
 
 #undef calloc
 #include "client.h"
+#include "networker_setup.h"
 #include "networking/context.h"
 #include <assert.h>
 #include <stdio.h>
@@ -27,7 +28,7 @@ static void test_invalid_contexts(void)
         /* No Client memory is needed when the ID is rejected first. */
         assert(context_release_recv_buffer(NULL, id) == CLIENT_INVALID_ID);
         assert(context_release_send_buffer(NULL, id) == CLIENT_INVALID_ID);
-        assert(client_parse_response(NULL, id, NULL, 0) == CLIENT_INVALID_ID);
+        assert(networker_parse_response(NULL, id, NULL, 0) == CLIENT_INVALID_ID);
     }
     assert(valid_id(1));
     assert(valid_id(MAX_CONNS - 1));
@@ -36,6 +37,7 @@ static void test_invalid_contexts(void)
 static void test_buffer_release(void)
 {
     struct Client cli = {0};
+    cli.net.pool = &cli.pool;
     Buffer receive[MAX_CONNS] = {0};
     Buffer send[MAX_CONNS] = {0};
     cli.net.recv_buffers = receive;
@@ -53,13 +55,13 @@ static void test_buffer_release(void)
         send[id].cap = (uint32_t)send_cap;
         receive[id].size = send[id].size = 8;
         assert(cli.pool.buckets[0].available == 0);
-        assert(context_release_recv_buffer(&cli, id) == CLIENT_OK);
-        assert(context_release_send_buffer(&cli, id) == CLIENT_OK);
+        assert(context_release_recv_buffer(&cli.net, id) == CLIENT_OK);
+        assert(context_release_send_buffer(&cli.net, id) == CLIENT_OK);
         assert(!receive[id].b && !receive[id].cap && !receive[id].size);
         assert(!send[id].b && !send[id].cap && !send[id].size);
         assert(cli.pool.buckets[0].available == 2);
-        assert(context_release_recv_buffer(&cli, id) == CLIENT_OK);
-        assert(context_release_send_buffer(&cli, id) == CLIENT_OK);
+        assert(context_release_recv_buffer(&cli.net, id) == CLIENT_OK);
+        assert(context_release_send_buffer(&cli.net, id) == CLIENT_OK);
         assert(cli.pool.buckets[0].available == 2);
     }
     buffer_pool_destroy(&cli.pool);
@@ -68,61 +70,64 @@ static void test_buffer_release(void)
 static void test_exhaustion_and_reuse(void)
 {
     struct Client cli = {0};
+    cli.net.pool = &cli.pool;
     memset(&cli.net, 0xa5, sizeof(cli.net));
-    assert(init_networker(&cli.net) == CLIENT_OK);
+    assert(init_test_networker(&cli) == CLIENT_OK);
     for (ContextID id = 1; id < MAX_CONNS; id++) {
-        assert(client_new_context(&cli.net) == id);
+        assert(networker_new_context(&cli.net) == id);
         assert(cli.net.states[id].state == CON_IDLE);
     }
-    assert(client_new_context(&cli.net) == -1);
-    client_free_context(&cli, MAX_CONNS - 1);
-    client_free_context(&cli, MAX_CONNS - 1);
-    assert(client_new_context(&cli.net) == MAX_CONNS - 1);
-    assert(client_new_context(&cli.net) == -1);
-    destroy_networker(&cli);
-    destroy_networker(&cli);
-    assert(client_new_context(&cli.net) == -1);
+    assert(networker_new_context(&cli.net) == -1);
+    networker_free_context(&cli.net, MAX_CONNS - 1);
+    networker_free_context(&cli.net, MAX_CONNS - 1);
+    assert(networker_new_context(&cli.net) == MAX_CONNS - 1);
+    assert(networker_new_context(&cli.net) == -1);
+    destroy_networker(&cli.net);
+    destroy_networker(&cli.net);
+    assert(networker_new_context(&cli.net) == -1);
     assert(!cli.net.recv_buffers && !cli.net.send_buffers);
 }
 
 static void test_setup_failures_and_dispatch(void)
 {
     struct Client cli = {0};
+    cli.net.pool = &cli.pool;
     assert(init_networker(NULL) == CLIENT_ERR);
-    assert(client_new_context(NULL) == -1);
+    assert(networker_new_context(NULL) == -1);
     for (int failed = 1; failed <= 2; failed++) {
         calloc_calls = 0;
         fail_calloc_at = failed;
-        assert(init_networker(&cli.net) == CLIENT_ERR);
+        assert(init_test_networker(&cli) == CLIENT_ERR);
         assert(!cli.net.recv_buffers && !cli.net.send_buffers);
-        assert(client_new_context(&cli.net) == -1);
-        destroy_networker(&cli);
+        assert(networker_new_context(&cli.net) == -1);
+        destroy_networker(&cli.net);
     }
     fail_calloc_at = 0;
-    assert(init_networker(&cli.net) == CLIENT_OK);
-    assert(client_parse_response(NULL, 1, NULL, 0) == CLIENT_ERR);
-    assert(client_new_context(&cli.net) == 1);
-    assert(client_parse_response(&cli, 1, NULL, 0) == CLIENT_ERR);
+    assert(init_test_networker(&cli) == CLIENT_OK);
+    assert(networker_parse_response(NULL, 1, NULL, 0) == CLIENT_ERR);
+    assert(networker_new_context(&cli.net) == 1);
+    assert(networker_parse_response(&cli.net, 1, NULL, 0) == CLIENT_ERR);
     const HandlerEntry empty[] = {{0}};
     cli.net.handlers = empty;
     cli.net.handlers_count = 1;
-    assert(client_parse_response(&cli, 1, NULL, 0) == CLIENT_ERR);
-    destroy_networker(&cli);
+    assert(networker_parse_response(&cli.net, 1, NULL, 0) == CLIENT_ERR);
+    destroy_networker(&cli.net);
 }
 
 static void test_shutdown_returns_buffers(void)
 {
     struct Client cli = {0};
-    assert(init_networker(&cli.net) == CLIENT_OK);
+    cli.net.pool = &cli.pool;
+    assert(init_test_networker(&cli) == CLIENT_OK);
     assert(buffer_pool_init(&cli.pool, 256, 2, 4096, 1, 65536, 1) == 0);
-    ContextID id = client_new_context(&cli.net);
+    ContextID id = networker_new_context(&cli.net);
     size_t capacity = 256;
     cli.net.recv_buffers[id].b = buffer_pool_pop(&cli.pool, &capacity);
     cli.net.recv_buffers[id].cap = capacity;
     cli.net.send_buffers[id].b = buffer_pool_pop(&cli.pool, &capacity);
     cli.net.send_buffers[id].cap = capacity;
     assert(cli.pool.buckets[0].available == 0);
-    destroy_networker(&cli);
+    destroy_networker(&cli.net);
     assert(cli.pool.buckets[0].available == 2);
     buffer_pool_destroy(&cli.pool);
 }
@@ -144,7 +149,7 @@ static int parse_operation(struct Client* cli, ContextID id, uint8_t* bytes, uin
     assert(operation);
     operation->replies++;
     if (size) {
-        client_free_context(cli, id);
+        networker_free_context(&cli->net, id);
         return CLIENT_PARSE_DONE;
     }
     return CLIENT_OK;
@@ -152,24 +157,25 @@ static int parse_operation(struct Client* cli, ContextID id, uint8_t* bytes, uin
 
 static void test_operation_cleanup(void) {
     struct Client cli = {0};
-    assert(init_networker(&cli.net) == CLIENT_OK);
+    cli.net.pool = &cli.pool;
+    assert(init_test_networker(&cli) == CLIENT_OK);
     assert(buffer_pool_init(&cli.pool, 256, 1, 4096, 1, 65536, 1) == 0);
     const HandlerEntry handlers[] = {{0}, {parse_operation, cleanup_operation}};
     cli.net.handlers = handlers;
     cli.net.handlers_count = 2;
 
     TestOperation operation = {0};
-    ContextID id = client_new_context(&cli.net);
+    ContextID id = networker_new_context(&cli.net);
     cli.net.states[id].handler_id = 1;
     cli.net.states[id].context = &operation;
-    assert(client_parse_response(&cli, id, NULL, 0) == CLIENT_OK);
-    client_free_context(&cli, id);
-    client_free_context(&cli, id);
+    assert(networker_parse_response(&cli.net, id, NULL, 0) == CLIENT_OK);
+    networker_free_context(&cli.net, id);
+    networker_free_context(&cli.net, id);
     assert(operation.replies == 1 && operation.cleanups == 1);
     assert(!cli.net.states[id].context);
 
     // Completion cleans operation state immediately, while the host still owns the send buffer.
-    id = client_new_context(&cli.net);
+    id = networker_new_context(&cli.net);
     cli.net.states[id].handler_id = 1;
     cli.net.states[id].context = &operation;
     size_t capacity = 256;
@@ -178,19 +184,19 @@ static void test_operation_cleanup(void) {
     assert(buffer->b);
     buffer->cap = capacity;
     cli.net.states[id].send_owned = true;
-    assert(client_parse_response(&cli, id, NULL, 1) == CLIENT_PARSE_DONE);
+    assert(networker_parse_response(&cli.net, id, NULL, 1) == CLIENT_PARSE_DONE);
     assert(operation.replies == 2 && operation.cleanups == 2);
     assert(!cli.net.states[id].context && cli.net.states[id].release_pending);
     assert(cli.pool.buckets[0].available == 0);
-    client_free_context(&cli, id);
-    client_return_buffer(&cli, buffer);
+    networker_free_context(&cli.net, id);
+    networker_return_buffer(&cli.net, buffer);
     assert(operation.cleanups == 2 && cli.pool.buckets[0].available == 1);
 
     // Shutdown follows the same registered cleanup path.
-    id = client_new_context(&cli.net);
+    id = networker_new_context(&cli.net);
     cli.net.states[id].handler_id = 1;
     cli.net.states[id].context = &operation;
-    destroy_networker(&cli);
+    destroy_networker(&cli.net);
     assert(operation.cleanups == 3);
     buffer_pool_destroy(&cli.pool);
 }

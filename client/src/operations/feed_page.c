@@ -64,7 +64,7 @@ int feed_page_get(
         return CLIENT_ERR;
     }
 
-    ContextID context = client_new_context(&cli->net);
+    ContextID context = networker_new_context(&cli->net);
     if (!valid_id(context)) {
         return CLIENT_CONN_BUSY;
     }
@@ -74,15 +74,15 @@ int feed_page_get(
     FeedPageLoad* load = calloc(1, sizeof(*load));
     state->context = load;
     if (!load) {
-        client_free_context(cli, context);
+        networker_free_context(&cli->net, context);
         return CLIENT_ERR;
     }
 
     load->blob.key = *key;
     load->page_number = page_number;
     load->destination = destination;
-    if (buffer_ensure_min_cap(cli, &load->plaintext, FEED_PAGE_MAX_SIZE) != CLIENT_OK) {
-        client_free_context(cli, context);
+    if (buffer_ensure_min_cap(&cli->pool, &load->plaintext, FEED_PAGE_MAX_SIZE) != CLIENT_OK) {
+        networker_free_context(&cli->net, context);
         return CLIENT_ERR;
     }
 
@@ -109,6 +109,6 @@ int feed_page_handle_response(struct Client* cli, ContextID id, uint8_t* bytes, 
         feed_page_destroy(&page);
     }
 
-    client_free_context(cli, id);
+    networker_free_context(&cli->net, id);
     return result;
 }

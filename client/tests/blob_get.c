@@ -73,9 +73,9 @@ int main(void) {
     // Completion keeps the host's original buffer and context reserved until return.
     assert(cli->net.states[id].release_pending && cli->net.states[id].send_owned);
     assert(memcmp(pending->b, request, sizeof(request)) == 0);
-    ContextID other = client_new_context(&cli->net);
+    ContextID other = networker_new_context(&cli->net);
     assert(valid_id(other) && other != id);
-    client_free_context(cli, other);
+    networker_free_context(&cli->net, other);
     client_return_buffer(cli, pending);
     pending = NULL;
     assert(client_parse_response(cli, id, chunk, HASH_SIZE + 2) == CLIENT_ERR);

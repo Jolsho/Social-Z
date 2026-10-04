@@ -85,9 +85,9 @@ static void test_request(int failure, bool early, bool synchronous) {
 
     if (pending) {
         assert(cli->net.states[id].release_pending);
-        ContextID other = client_new_context(&cli->net);
+        ContextID other = networker_new_context(&cli->net);
         assert(other != id);
-        client_free_context(cli, other);
+        networker_free_context(&cli->net, other);
         client_return_buffer(cli, pending);
         pending = NULL;
     }

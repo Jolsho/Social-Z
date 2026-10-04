@@ -37,14 +37,14 @@ static int login_send_request(struct Client* cli, ContextID id) {
     Buffer* request = &cli->net.send_buffers[id];
     uint32_t size = 6 + account_username_size(login->username);
 
-    if (buffer_ensure_min_cap(cli, request, size) != CLIENT_OK) {
-        client_free_context(cli, id);
+    if (buffer_ensure_min_cap(&cli->pool, request, size) != CLIENT_OK) {
+        networker_free_context(&cli->net, id);
         return CLIENT_ERR;
     }
 
     marshal_account_request(request->b, login->username);
     request->size = size;
-    if (context_send_request(cli, id) != CLIENT_OK) {
+    if (context_send_request(&cli->net, id) != CLIENT_OK) {
         return CLIENT_ERR;
     }
 
@@ -70,14 +70,14 @@ int client_login(
         return CLIENT_CONN_BUSY;
     }
 
-    ContextID context = client_new_context(&cli->net);
+    ContextID context = networker_new_context(&cli->net);
     if (!valid_id(context)) {
         return CLIENT_CONN_BUSY;
     }
 
     LoginOperation* login = calloc(1, sizeof(*login));
     if (!login) {
-        client_free_context(cli, context);
+        networker_free_context(&cli->net, context);
         return CLIENT_ERR;
     }
     cli->net.states[context].handler_id = HANDLER_ID_USER_DATA;
@@ -87,7 +87,7 @@ int client_login(
     size_t capacity = password_size;
     uint8_t* secret = buffer_pool_pop(&cli->pool, &capacity);
     if (!secret) {
-        client_free_context(cli, context);
+        networker_free_context(&cli->net, context);
         return CLIENT_ERR;
     }
 
@@ -105,7 +105,7 @@ int client_cancel_login(struct Client* cli) {
         return CLIENT_ERR;
     }
     if (cli->login_id) {
-        return client_cancel_request(cli, cli->login_id);
+        return networker_cancel_request(&cli->net, cli->login_id);
     }
 
     return CLIENT_OK;
@@ -193,7 +193,7 @@ int login_handle_response(
     }
 
 done:
-    client_free_context(cli, id);
+    networker_free_context(&cli->net, id);
 
     return r;
 }

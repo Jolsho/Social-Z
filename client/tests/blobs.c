@@ -5,12 +5,12 @@
  */
 
 #include "client.h"
+#include "networker_setup.h"
 #include "codec/blob.h"
 #include "sz_common/hash.h"
 #include <assert.h>
 #include <stdlib.h>
 
-void client_free_context(struct Client*, ContextID);
 static int parse_transfer(struct Client* cli, ContextID id, uint8_t* bytes, uint64_t size) {
     return parse_blob(cli, id, cli->net.states[id].context, bytes, size);
 }
@@ -28,9 +28,9 @@ static void setup(struct Client* cli)
     memset(cli, 0, sizeof(*cli));
     assert(store_setup(&cli->blob_store, 200000) == STORE_OK);
     assert(buffer_pool_init(&cli->pool, 64, 4, 256, 1, 4096, 1) == 0);
-    assert(init_networker(&cli->net) == CLIENT_OK);
-    assert(client_new_context(&cli->net) == 1);
-    assert(client_new_context(&cli->net) == 2);
+    assert(init_test_networker(cli) == CLIENT_OK);
+    assert(networker_new_context(&cli->net) == 1);
+    assert(networker_new_context(&cli->net) == 2);
     for (ContextID id = 1; id <= 2; id++) {
         cli->net.states[id].context = calloc(1, sizeof(BlobTransfer));
         assert(cli->net.states[id].context);
@@ -41,7 +41,7 @@ static void setup(struct Client* cli)
 
 static void cleanup(struct Client* cli)
 {
-    destroy_networker(cli);
+    destroy_networker(&cli->net);
     store_destroy(&cli->blob_store);
     assert(cli->pool.buckets[0].available == 4);
     assert(cli->pool.buckets[1].available == 1);
@@ -68,7 +68,7 @@ static int chunk(struct Client* cli, ContextID id, HashT hash, uint64_t total,
         header += sizeof(total);
     }
     memcpy(packet + header, bytes, size);
-    int result = client_parse_response(cli, id, packet, header + size);
+    int result = networker_parse_response(&cli->net, id, packet, header + size);
     memset(packet, 0xff, sizeof(packet)); /* Responses are borrowed and immediately reused. */
     return result;
 }
@@ -149,11 +149,11 @@ static void test_interleaving_eviction_and_cancel(void)
     assert(chunk(&cli, 2, hb, 4, true, b, 2) == CLIENT_OK);
     assert(chunk(&cli, 1, hb, 4, false, b + 2, 2) == CLIENT_ERR);
     assert(chunk(&cli, 2, hb, 4, false, b + 2, 2) == CLIENT_PARSE_DONE);
-    client_free_context(&cli, 1);
+    networker_free_context(&cli.net, 1);
     assert(!ht_lookup(&cli.blob_store.table, &ha) && cli.blob_store.mem == 64);
 
     cli.blob_store.mem_max = 64;
-    assert(client_new_context(&cli.net) == 1);
+    assert(networker_new_context(&cli.net) == 1);
     cli.net.states[1].context = calloc(1, sizeof(BlobTransfer));
     assert(cli.net.states[1].context);
     assert(chunk(&cli, 1, ha, 4, true, a, 2) == CLIENT_OK);

@@ -60,6 +60,10 @@ AGREED: REQUESTS AND BLOB AUTHORITY
 
 
 AGREED: HOST BOUNDARY AND OWNERSHIP
+    client_poll checks one outgoing context per call, then advances even if its buffer is held.
+    Networking keeps a single linked list; senders leave when their body is complete.
+    Buffer returns only release ownership; responses still parse immediately.
+    Existing retrievals submit directly; streaming uploads remain unwired.
     The host implements request_begin/write/end/abort and supplies responses through client_parse_response.
     An accepted write may retain its buffer until client_return_buffer; a rejected write retains nothing.
     Responses begin at end or later; begin/write report immediate errors without response callbacks.

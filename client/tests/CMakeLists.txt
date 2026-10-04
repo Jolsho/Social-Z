@@ -7,7 +7,8 @@ sz_add_test(client store_eviction store_eviction.c ${store_sources})
 sz_add_test(client store_lifecycle store_lifecycle.c ${store_sources})
 target_compile_definitions(sz_store_lifecycle_test PRIVATE realloc=store_test_realloc)
 sz_add_test(client context context.c
-    ../src/networking/context.c ../src/networking/client.c ${store_sources})
+    ../src/networking/context.c ../src/networking/networker.c
+    ../src/networking/poll.c ${store_sources})
 target_compile_definitions(sz_context_test PRIVATE calloc=context_test_calloc)
 sz_add_test(client feed_page_storage feed_page_storage.c ../src/content/feed_page.c)
 target_link_libraries(sz_feed_page_storage_test PRIVATE sodium)
@@ -17,7 +18,8 @@ target_link_libraries(sz_feed_storage_test PRIVATE sodium)
 target_compile_definitions(sz_feed_storage_test PRIVATE realloc=feed_test_realloc)
 sz_add_test(client account account.c ../src/codec/account.c ../../common/src/requests/requests.c ../src/utils/crypto.c)
 target_link_libraries(sz_account_test PRIVATE sodium)
-sz_add_test(client blobs blobs.c ../src/codec/blob.c ../src/networking/client.c
+sz_add_test(client blobs blobs.c ../src/codec/blob.c ../src/networking/networker.c
+    ../src/networking/poll.c
     ../src/networking/context.c ../../common/src/hash/hash.c ${store_sources})
 target_link_libraries(sz_blobs_test PRIVATE blake3)
 set(client_sources ../src/client.c ../src/content/feed.c ../src/content/feed_page.c
@@ -25,9 +27,13 @@ set(client_sources ../src/client.c ../src/content/feed.c ../src/content/feed_pag
     ../src/operations/package.c ../src/codec/encrypted_blob_reader.c
     ../src/operations/encrypted_blob.c ../src/operations/feed_page.c ../src/codec/feed_page.c
     ../src/codec/encrypted_blob.c ../src/codec/package.c ../src/content/package.c
-    ../src/codec/blob.c ../src/networking/client.c ../src/networking/context.c
+    ../src/codec/blob.c ../src/networking/networker.c ../src/networking/context.c
+    ../src/networking/poll.c
     ../../common/src/hash/hash.c ../../common/src/requests/requests.c
     ../src/codec/account.c ../src/utils/crypto.c ${store_sources})
+sz_add_test(client network_poll network_poll.c ${client_sources})
+target_link_libraries(sz_network_poll_test PRIVATE blake3 sodium)
+
 sz_add_test(client lifecycle lifecycle.c ${client_sources})
 target_link_libraries(sz_lifecycle_test PRIVATE blake3 sodium)
 target_compile_definitions(sz_lifecycle_test PRIVATE

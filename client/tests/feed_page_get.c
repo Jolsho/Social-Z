@@ -182,7 +182,7 @@ static void failed_loads(void) {
         int result = reply(cli, id, &wire, &hash, 0, limit);
         if (failure == 4) {
             assert(result == CLIENT_OK);
-            client_free_context(cli, id);
+            networker_free_context(&cli->net, id);
             assert(!ht_lookup(&cli->blob_store.table, &hash));
         } else {
             assert(result == CLIENT_ERR);

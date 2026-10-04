@@ -46,7 +46,7 @@ int encrypted_blob_read(
         if (capacity > item->size) {
             capacity = item->size;
         }
-        if (buffer_ensure_min_cap(cli, scratch, capacity) != CLIENT_OK) {
+        if (buffer_ensure_min_cap(&cli->pool, scratch, capacity) != CLIENT_OK) {
             return CLIENT_ERR;
         }
 

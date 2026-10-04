@@ -49,7 +49,7 @@ int package_get(
         return CLIENT_ERR;
     }
 
-    ContextID context = client_new_context(&cli->net);
+    ContextID context = networker_new_context(&cli->net);
     if (!valid_id(context)) {
         return CLIENT_CONN_BUSY;
     }
@@ -60,7 +60,7 @@ int package_get(
     PackageLoad* load = calloc(1, sizeof(*load));
     state->context = load;
     if (!load) {
-        client_free_context(cli, context);
+        networker_free_context(&cli->net, context);
         return CLIENT_ERR;
     }
 
@@ -100,6 +100,6 @@ int package_handle_response(struct Client* cli, ContextID id, uint8_t* bytes, ui
         }
     }
 
-    client_free_context(cli, id);
+    networker_free_context(&cli->net, id);
     return result;
 }

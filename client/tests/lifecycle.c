@@ -91,7 +91,7 @@ static void test_public_client_blob_flow(void)
 {
     struct Client* cli = init_client();
     assert(cli);
-    ContextID id = client_new_context(&cli->net);
+    ContextID id = networker_new_context(&cli->net);
     assert(id == 1);
     cli->net.states[id].handler_id = HANDLER_ID_USER_DATA;
     assert(client_parse_response(cli, id, NULL, 0) == CLIENT_ERR);
@@ -122,7 +122,7 @@ static void test_public_client_blob_flow(void)
     assert(cli->net.states[id].state == CON_DEAD);
 
     /* Leave a second assembly and both network buffers owned by the client at shutdown. */
-    id = client_new_context(&cli->net);
+    id = networker_new_context(&cli->net);
     assert(valid_id(id));
     cli->net.states[id].handler_id = HANDLER_ID_BLOB;
     cli->net.states[id].context = calloc(1, sizeof(BlobTransfer));

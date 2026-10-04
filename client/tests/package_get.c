@@ -171,7 +171,7 @@ static void failed_loads(void) {
         int result = deliver(cli, id, &wire, &advertised, 5, limit);
         if (failure == 3) {
             assert(result == CLIENT_OK && cli->net.states[id].context);
-            client_free_context(cli, id);
+            networker_free_context(&cli->net, id);
             assert(!ht_lookup(&cli->blob_store.table, &hash));
         } else {
             assert(result == CLIENT_ERR);

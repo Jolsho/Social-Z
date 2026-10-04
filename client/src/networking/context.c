@@ -5,42 +5,57 @@
  */
 
 #include "networking/context.h"
-#include "client.h"
+#include <string.h>
 
-int context_release_recv_buffer(struct Client* cli, ContextID id) {
-    if (!valid_id(id)) return CLIENT_INVALID_ID;
+int context_release_recv_buffer(Networker* net, ContextID id) {
+    if (!valid_id(id)) {
+        return CLIENT_INVALID_ID;
+    }
 
-    Buffer* b = &cli->net.recv_buffers[id];
-    if (!b->b) return CLIENT_OK;
+    Buffer* b = &net->recv_buffers[id];
+    if (!b->b) {
+        return CLIENT_OK;
+    }
 
-    int r = buffer_pool_push(&cli->pool, b->b, b->cap);
-    if (r != 0) return CLIENT_ERR;
+    int r = buffer_pool_push(net->pool, b->b, b->cap);
+    if (r != 0) {
+        return CLIENT_ERR;
+    }
 
     memset(b, 0, sizeof(Buffer));
     return CLIENT_OK;
 }
 
-int context_release_send_buffer(struct Client* cli, ContextID id) {
-    if (!valid_id(id)) return CLIENT_INVALID_ID;
+int context_release_send_buffer(Networker* net, ContextID id) {
+    if (!valid_id(id)) {
+        return CLIENT_INVALID_ID;
+    }
 
-    if (cli->net.states[id].send_owned) return CLIENT_CONN_BUSY;
-    Buffer* b = &cli->net.send_buffers[id];
-    if (!b->b) return CLIENT_OK;
+    if (net->states[id].send_owned) {
+        return CLIENT_CONN_BUSY;
+    }
+    Buffer* b = &net->send_buffers[id];
+    if (!b->b) {
+        return CLIENT_OK;
+    }
 
-    int r = buffer_pool_push(&cli->pool, b->b, b->cap);
-    if (r != 0) return CLIENT_ERR;
+    int r = buffer_pool_push(net->pool, b->b, b->cap);
+    if (r != 0) {
+        return CLIENT_ERR;
+    }
 
     memset(b, 0, sizeof(Buffer));
     return CLIENT_OK;
 }
 
 int buffer_ensure_min_cap(
-    struct Client* cli, Buffer* buff, uint32_t minimum
+    BufferPool* pool, Buffer* buff, uint32_t minimum
 ) {
 
     if (buff->b && buff->cap < minimum) {
-        if (buffer_pool_push(&cli->pool, buff->b, buff->cap) < 0)
+        if (buffer_pool_push(pool, buff->b, buff->cap) < 0) {
             return CLIENT_ERR;
+        }
         buff->b = NULL;
         buff->cap = 0;
     }
@@ -48,8 +63,10 @@ int buffer_ensure_min_cap(
     if (!buff->b) {
         size_t cap = minimum;
 
-        buff->b = buffer_pool_pop(&cli->pool, &cap);
-        if (!buff->b) return CLIENT_ERR;
+        buff->b = buffer_pool_pop(pool, &cap);
+        if (!buff->b) {
+            return CLIENT_ERR;
+        }
 
         buff->cap = cap;
     }
@@ -57,11 +74,11 @@ int buffer_ensure_min_cap(
     return CLIENT_OK;
 }
 
-int context_send_request(struct Client* cli, ContextID id) {
-    ConState* state = &cli->net.states[id];
+int context_send_request(Networker* net, ContextID id) {
+    ConState* state = &net->states[id];
     state->state = CON_RECEIVING;
-    if (request_begin(cli, id) != CLIENT_OK) {
-        client_free_context(cli, id);
+    if (request_begin(net->client, id) != CLIENT_OK) {
+        networker_free_context(net, id);
         return CLIENT_ERR;
     }
 
@@ -69,15 +86,15 @@ int context_send_request(struct Client* cli, ContextID id) {
 
     // Install ownership before write: the host may return the buffer immediately.
     state->send_owned = true;
-    if (request_write(cli, id, &cli->net.send_buffers[id]) != CLIENT_OK) {
+    if (request_write(net->client, id, &net->send_buffers[id]) != CLIENT_OK) {
         state->send_owned = false;
-        client_cancel_request(cli, id);
+        networker_cancel_request(net, id);
         return CLIENT_ERR;
     }
 
     // No responses until end, so returning a write buffer cannot recycle this context.
-    if (request_end(cli, id) != CLIENT_OK) {
-        client_cancel_request(cli, id);
+    if (request_end(net->client, id) != CLIENT_OK) {
+        networker_cancel_request(net, id);
         return CLIENT_ERR;
     }
     return CLIENT_OK;

@@ -28,7 +28,7 @@ int blob_get(
         return CLIENT_ERR;
     }
 
-    ContextID context = client_new_context(&cli->net);
+    ContextID context = networker_new_context(&cli->net);
     if (!valid_id(context)) {
         return CLIENT_CONN_BUSY;
     }
@@ -37,7 +37,7 @@ int blob_get(
     state->handler_id = HANDLER_ID_BLOB;
     state->context = calloc(1, sizeof(BlobTransfer));
     if (!state->context) {
-        client_free_context(cli, context);
+        networker_free_context(&cli->net, context);
         return CLIENT_ERR;
     }
 
@@ -47,8 +47,8 @@ int blob_get(
 
 int blob_send_get(struct Client* cli, ContextID id, const Key* owner, const HashT* label) {
     Buffer* buffer = &cli->net.send_buffers[id];
-    if (buffer_ensure_min_cap(cli, buffer, BLOB_GET_REQUEST_SIZE) != CLIENT_OK) {
-        client_free_context(cli, id);
+    if (buffer_ensure_min_cap(&cli->pool, buffer, BLOB_GET_REQUEST_SIZE) != CLIENT_OK) {
+        networker_free_context(&cli->net, id);
         return CLIENT_ERR;
     }
 
@@ -57,7 +57,7 @@ int blob_send_get(struct Client* cli, ContextID id, const Key* owner, const Hash
     request.data.blob.label = *label;
     buffer->size = marshal_blob_request(buffer->b, &request);
 
-    return context_send_request(cli, id);
+    return context_send_request(&cli->net, id);
 }
 
 int blob_handle_response(
@@ -69,7 +69,7 @@ int blob_handle_response(
     BlobTransfer* transfer = cli->net.states[id].context;
     int result = parse_blob(cli, id, transfer, bytes, size);
     if (result != CLIENT_OK) {
-        client_free_context(cli, id);
+        networker_free_context(&cli->net, id);
     }
 
     return result;

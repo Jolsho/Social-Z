@@ -241,11 +241,11 @@ static void failures_and_cleanup(void) {
     assert(client_parse_response(host.cli, host.id, reply, ACCOUNT_RESPONSE_METADATA_SIZE) == CLIENT_ERR);
     assert_locked(host.cli);
     begin(&host, password, sizeof(password) - 1);
-    ContextID unrelated = client_new_context(&host.cli->net);
+    ContextID unrelated = networker_new_context(&host.cli->net);
     reply_metadata(reply, blob, &identity.pub);
     assert(client_parse_response(host.cli, unrelated, reply, ACCOUNT_RESPONSE_METADATA_SIZE) == CLIENT_ERR);
     assert(host.cli->login_id == host.id);
-    client_free_context(host.cli, unrelated);
+    networker_free_context(&host.cli->net, unrelated);
     resolve(&host, blob, &identity.pub);
     uint8_t first[HASH_SIZE + sizeof(uint64_t) + 1];
     HashT hash = blob_hash(blob);
@@ -300,7 +300,7 @@ static void failures_and_cleanup(void) {
 static void exhausted_resources(void) {
     Host host = new_host();
     active_host = &host;
-    for (size_t i = 1; i < MAX_CONNS; i++) assert(valid_id(client_new_context(&host.cli->net)));
+    for (size_t i = 1; i < MAX_CONNS; i++) assert(valid_id(networker_new_context(&host.cli->net)));
     assert(client_login(host.cli, "alice", password, sizeof(password) - 1, &host.id) == CLIENT_CONN_BUSY);
     assert_locked(host.cli);
     destroy_client(host.cli);
@@ -339,7 +339,7 @@ static void retained_requests(void) {
     begin(&host, password, sizeof(password) - 1);
     ContextID first = host.id;
     Buffer* request = host.pending;
-    assert(context_release_send_buffer(host.cli, first) == CLIENT_CONN_BUSY);
+    assert(context_release_send_buffer(&host.cli->net, first) == CLIENT_CONN_BUSY);
     uint8_t reply[ACCOUNT_RESPONSE_METADATA_SIZE];
     reply_metadata(reply, blob, &identity.pub);
     assert(client_parse_response(host.cli, first, reply, sizeof(reply)) == CLIENT_OK);

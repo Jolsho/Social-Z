@@ -41,7 +41,7 @@ The node receives encrypted blobs and does not interpret these fields.
 Request contexts, connection state, and response dispatch.
 operations/login.c coordinates login, prepares its requests, and handles its replies.
 common/src/requests contains shared request formats, starting with account retrieval.
-networking/client.c handles returned send buffers independently of login replies.
+networking/networker.c handles returned send buffers independently of login replies.
 
 ### [world](world.md)
 

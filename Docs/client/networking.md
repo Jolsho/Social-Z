@@ -20,7 +20,7 @@ common/src/requests/requests.c holds the username request and response metadata 
 codec/blob.* currently assembles encrypted transfer chunks in client-owned storage.
 codec/ also handles account, feed-page, and package plaintext after decryption.
 networking/dispatch.c contains the response handler table; dispatch.h declares it.
-networking/client.c handles returned send buffers without triggering login requests.
+networking/networker.c handles returned send buffers without triggering login requests.
 Requests share a version and RequestKind prefix and use parse_request().
 Account retrieval is the special case that resolves a username.
 Generic blob operations will retrieve, insert, and delete all other content.
@@ -39,7 +39,7 @@ Dispatch to the parser registered for that context.
 Return buffers and release the context when finished.
 
 The public API expects sending to be asynchronous.
-An accepted write gives the sender ownership of the outgoing buffer.
+An accepted write gives the host ownership of the outgoing buffer.
 A rejected write retains no buffer.
 The host can return a write buffer immediately.
 Responses begin at request_end() or later.
@@ -50,13 +50,38 @@ client_cancel_request() calls request_abort() and releases operation state.
 Abort stops delivery but may return a retained buffer later.
 The response parser borrows the bytes passed to it.
 Buffer ownership matters because the pool reuses that memory.
-The sender returns the original outgoing buffer through client_return_buffer().
+The host returns the original outgoing buffer through client_return_buffer().
 The descriptor remains in the context send-buffer array.
 Incoming bytes may disappear after parsing returns, so retained data is copied.
 Login cancellation wipes its password immediately.
 Context reuse waits until any host-held request buffer is returned.
 
 The design leaves room for native and WebAssembly integration.
+
+The public networking entry points in client.c delegate to networker.c.
+Context ownership, response dispatch, and cancellation stay in networking.
+Networker functions take Networker*.
+The networker keeps references to its owning Client and buffer pool.
+Parser, sender, and cleanup callbacks take Client* directly.
+Host transport hooks receive that same Client*.
+
+## Host poll
+
+Call client_poll(client) after delivering host events, independently of rendering.
+It delegates to networker_poll(), which checks one outgoing context and advances the cursor.
+A context waiting for its host-held buffer is skipped for that turn.
+The result is true while outgoing contexts remain, including waiting ones.
+
+Outgoing contexts form one singly linked list in the networker.
+Links live in context state and require no separate allocations.
+Senders register once and leave the list when their request body is complete.
+Cancellation removes the ID before the context can be reused.
+HandlerEntry groups parse_response, sender, and cleanup callbacks.
+The optional sender performs one bounded outgoing step per turn.
+Returning a buffer only releases it; a later poll resumes sending.
+Response parsing processes supplied bytes immediately.
+Existing login and retrieval operations have no sender and still submit directly.
+Production streaming uploads remain unwired.
 
 ## Why contexts exist
 
@@ -74,15 +99,15 @@ A context can then be reused for another exchange.
 - [client/src/networking/networker.h:13](../../client/src/networking/networker.h#L13) defines each connection state record.
 - [client/src/networking/networker.h:32](../../client/src/networking/networker.h#L32) groups states, buffers, and handlers.
 - [client/src/networking/context.h:13](../../client/src/networking/context.h#L13) defines the connection states.
-- [client/src/networking/client.c:44](../../client/src/networking/client.c#L44) allocates a context from the free list.
-- [client/src/networking/client.c:56](../../client/src/networking/client.c#L56) releases a context and its buffers.
-- [client/src/networking/client.c:94](../../client/src/networking/client.c#L94) dispatches a response to its parser.
+- [client/src/networking/networker.c:52](../../client/src/networking/networker.c#L52) allocates a context from the free list.
+- [client/src/networking/networker.c:68](../../client/src/networking/networker.c#L68) releases a context and its buffers.
+- [client/src/networking/networker.c:107](../../client/src/networking/networker.c#L107) dispatches a response to its parser.
 - [client/src/networking/context.c:36](../../client/src/networking/context.c#L36) ensures a buffer has sufficient capacity.
 - [client/src/networking/dispatch.c](../../client/src/networking/dispatch.c) registers internal response handlers.
 
 ## TODO
 
-- Define scheduler-driven writes and the browser transport mapping.
+- Connect streaming uploads and define the browser transport mapping.
   The host lifecycle supports multiple writes; current operations use one write.
 
 - Complete transport handling for partial responses and buffer lifetimes.

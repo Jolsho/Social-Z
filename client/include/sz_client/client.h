@@ -30,6 +30,12 @@ struct Client;
 struct Client* init_client(void);
 void destroy_client(struct Client* cli);
 
+// Check one outgoing context; send one step if its buffer is available.
+// Advance even when waiting for the host. Never wait for network I/O.
+// True means outgoing contexts remain, including those waiting for buffers.
+// Call after host events, independently of rendering, on the same thread.
+bool client_poll(struct Client* cli);
+
 
 /// An ID for an abstraction over a connection.
 typedef int16_t ContextID;

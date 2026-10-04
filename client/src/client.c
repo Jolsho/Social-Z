@@ -22,14 +22,42 @@ struct Client* init_client(void) {
         destroy_client(cs);
         return NULL;
     }
+    cs->net.pool = &cs->pool;
+    cs->net.client = cs;
     cs->net.handlers = handlers;
     cs->net.handlers_count = HANDLER_ID_CAP;
     return cs;
 }
 
+bool client_poll(struct Client* cli) {
+    if (!cli) {
+        return false;
+    }
+
+    return networker_poll(&cli->net);
+}
+
+int client_parse_response(
+    struct Client* cli, ContextID id, uint8_t* bytes, uint64_t size
+) {
+    return networker_parse_response(cli ? &cli->net : NULL, id, bytes, size);
+}
+
+void client_return_buffer(struct Client* cli, Buffer* buffer) {
+    networker_return_buffer(cli ? &cli->net : NULL, buffer);
+}
+
+int client_cancel_request(struct Client* cli, ContextID id) {
+    return networker_cancel_request(cli ? &cli->net : NULL, id);
+}
+
+int client_request_failed(struct Client* cli, ContextID id) {
+    return networker_request_failed(cli ? &cli->net : NULL, id);
+}
+
 void destroy_client(struct Client* cli) {
     if (!cli) return;
-    destroy_networker(cli);
+    destroy_networker(&cli->net);
     store_destroy(&cli->blob_store);
     buffer_pool_destroy(&cli->pool);
     feed_destroy(&cli->feed);
